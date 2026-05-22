@@ -82,6 +82,16 @@ export class AnimationController {
       case 'gems-spawned':
         await this.animateSpawn(event.spawns)
         return
+      case 'pool-gained':
+      case 'damage-dealt':
+      case 'damage-taken':
+      case 'block-gained':
+      case 'healed':
+      case 'enemy-killed':
+      case 'turn-ended':
+      case 'phase-changed':
+        // HUD reads these straight off state; no Pixi animation in Phase D.
+        return
     }
   }
 

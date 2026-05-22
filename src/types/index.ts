@@ -33,6 +33,7 @@ export type DamageSource =
   | 'self-curse'
   | 'spell-cost'
   | 'environment'
+  | 'player-attack'
 
 export type GameEvent =
   | { kind: 'swap'; from: Pos; to: Pos }
@@ -48,3 +49,48 @@ export type GameEvent =
   | { kind: 'gems-cleared'; cells: Pos[] }
   | { kind: 'gems-fell'; movements: { from: Pos; to: Pos }[] }
   | { kind: 'gems-spawned'; spawns: { at: Pos; color: GemColor }[] }
+  | { kind: 'pool-gained'; color: GemColor; amount: number }
+  | { kind: 'damage-dealt'; targetId: string; amount: number; source: DamageSource }
+  | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }
+  | { kind: 'block-gained'; amount: number }
+  | { kind: 'healed'; amount: number }
+  | { kind: 'enemy-killed'; enemyId: string }
+  | { kind: 'turn-ended' }
+  | { kind: 'phase-changed'; phase: CombatPhase }
+
+export type CombatPhase =
+  | 'player-acting'
+  | 'resolving'
+  | 'player-phase-end'
+  | 'enemy-acting'
+  | 'enemy-end'
+  | 'victory'
+
+export type PhasePools = {
+  red: number
+  blue: number
+  green: number
+}
+
+export type Player = {
+  hp: number
+  maxHp: number
+  block: number
+  mana: number
+  skillCharge: number
+  phasePools: PhasePools
+}
+
+export type Enemy = {
+  id: string
+  name: string
+  hp: number
+  maxHp: number
+}
+
+export type FightState = {
+  phase: CombatPhase
+  player: Player
+  enemies: Enemy[]
+  targetEnemyId: string | null
+}

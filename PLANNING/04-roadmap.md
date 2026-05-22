@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase 3 draft.**
+Status: **Phase D complete.** Working on Phase E next.
 
 Ordered build phases. Each phase ends at a **runnable, demoable state** in the browser. No phase is "done" until you can open it and use it.
 

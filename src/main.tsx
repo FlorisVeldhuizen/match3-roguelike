@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import './index.css'
+import './content/cascade'
 import { App, BOARD_MOUNT_ID } from './ui/App'
 import { BoardScene } from './pixi/BoardScene'
 

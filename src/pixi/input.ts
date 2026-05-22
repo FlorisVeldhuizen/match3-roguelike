@@ -22,6 +22,7 @@ export function createBoardInteraction(opts: {
   const click = async (pos: Pos) => {
     if (opts.isAnimating()) return
     const store = useGameStore.getState()
+    if (store.fight.phase === 'victory') return
     const selected = store.board.selected
     if (!selected) {
       store.selectCell(pos)
@@ -42,7 +43,9 @@ export function createBoardInteraction(opts: {
   const dragSwap = async (from: Pos, to: Pos) => {
     if (opts.isAnimating()) return
     if (!adjacent(from, to)) return
-    useGameStore.getState().selectCell(null)
+    const store = useGameStore.getState()
+    if (store.fight.phase === 'victory') return
+    store.selectCell(null)
     await opts.performSwap(from, to)
   }
 
