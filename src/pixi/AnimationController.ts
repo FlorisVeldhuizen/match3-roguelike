@@ -140,6 +140,10 @@ export class AnimationController {
   // screenshake at heat ≥ 3, flame burst at heat ≥ 4.
   private heat = 0
   private heatLastTimestamp = 0
+  // Current cascade level (0 = initial match, 1+ = chain link). Drives the
+  // particle-count escalation in spawnBurstsForCells so chained matches
+  // visibly read as bigger explosions.
+  private currentCascadeLevel = 0
 
   constructor(opts: {
     parent: Container
@@ -197,11 +201,19 @@ export class AnimationController {
       case 'swap-reverted':
         await this.animateSwap(event.from, event.to)
         return
-      case 'cascade-start':
+      case 'cascade-start': {
+        // Cascade-start fires BEFORE the next round of matches. The cells
+        // we want to anchor the callout to are the ones that just cleared
+        // (the previous step's matches), still sitting in lastMatchCells.
+        // Snapshot the centroid before clearing.
+        const anchor =
+          event.level >= 1 ? this.cascadeAnchorFromLastMatches() : null
         this.cellColor.clear()
         this.lastMatchCells.clear()
-        if (event.level >= 1) this.spawnCascadeCallout(event.level + 1)
+        this.currentCascadeLevel = event.level
+        if (event.level >= 1) this.spawnCascadeCallout(event.level + 1, anchor)
         return
+      }
       case 'match-found':
         for (const c of event.cells) this.cellColor.set(keyOf(c), event.color)
         this.lastMatchCells.set(event.color, event.cells)
@@ -445,18 +457,45 @@ export class AnimationController {
   private spawnBurstsForCells(cells: Pos[]): void {
     const overlay = this.overlay
     if (!overlay) return
+    // Chain links throw bigger explosions: +4 particles per cascade step,
+    // capped so a level-5 RAMPAGE doesn't drown the frame in confetti.
+    const step = Math.min(this.currentCascadeLevel, 4)
+    const count = 9 + step * 4
+    const speedMax = 180 + step * 25
+    const radiusMax = 4.5 + step * 0.4
     for (const cell of cells) {
       const color = this.cellColor.get(keyOf(cell)) ?? 'yellow'
       const at = this.cellScreenCenter(cell)
       if (!at) continue
-      overlay.spawnBurst(at, color, { count: 9 })
+      overlay.spawnBurst(at, color, { count, speedMax, radiusMax })
     }
   }
 
-  private spawnCascadeCallout(displayLevel: number): void {
+  // Compute a screen-space anchor from the cells in lastMatchCells (the
+  // matches that just cleared). Returns null if there's nothing to anchor
+  // to — caller falls back to the fixed position above the board.
+  private cascadeAnchorFromLastMatches(): { x: number; y: number } | null {
+    let sumX = 0
+    let sumY = 0
+    let n = 0
+    for (const cells of this.lastMatchCells.values()) {
+      for (const c of cells) {
+        sumX += c.x
+        sumY += c.y
+        n++
+      }
+    }
+    if (n === 0) return null
+    return this.cellScreenCenter({ x: sumX / n, y: sumY / n })
+  }
+
+  private spawnCascadeCallout(
+    displayLevel: number,
+    anchor: { x: number; y: number } | null,
+  ): void {
     const overlay = this.overlay
     if (!overlay) return
-    const center = this.cellScreenCenter({ x: 3.5, y: -1 })
+    const center = anchor ?? this.cellScreenCenter({ x: 3.5, y: -1 })
     if (!center) return
     const heat = this.bumpHeat()
     // Each link in the chain pops a touch larger. Heat adds a TINY extra
@@ -467,7 +506,7 @@ export class AnimationController {
     const burstHeatBoost = Math.max(0, Math.floor(heat - 1))
     const fontSize = 36 + steps * 4 + fontHeatBoost
     overlay.spawnBurst(center, CASCADE_HEX, {
-      count: 14 + steps * 2 + burstHeatBoost,
+      count: 20 + steps * 3 + burstHeatBoost,
       speedMin: 110,
       speedMax: 220 + steps * 18,
       radiusMin: 3,

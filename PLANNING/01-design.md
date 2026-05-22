@@ -48,16 +48,18 @@ Five gem colors, five pools. Matching gems fills the corresponding pool.
 
 | Color  | Pool    | Persistence | Effect |
 |--------|---------|-------------|--------|
-| Red    | Attack  | Per-phase   | Resolves at end of player phase → damage to targeted enemy |
+| Red    | Attack  | Per-phase meter | Damage commits **per-match** during the cascade (Plan B). Pool stat tracks total dealt this phase for relic hooks |
 | Blue   | Block   | Per-phase   | Resolves at end of player phase → sets block stat (the wall waiting for the enemy) |
-| Green  | Heal    | Per-phase   | Resolves at end of player phase → restores player HP (capped at max HP) |
+| Green  | Heal    | Per-phase meter | Heal commits **per-match** during the cascade (Plan B). Pool stat tracks total healed this phase for relic hooks |
 | Yellow | Mana    | Persistent  | Credited immediately on match; spent by active spells |
 | Purple | Skill   | Persistent  | Credited immediately on match; full charge unlocks ultimate, drained on use |
 
 **Clean split:** combat resources (red/blue/green) are tactical and refresh every player phase — forcing players to plan around enemy intents. Casting resources (yellow/purple) are strategic and accumulate — letting players save for big moments. This split is also where most modifiers will hook in: "block carries over 1 phase", "convert unused red to mana", "yellow auto-converts to skill", etc.
 
 ### End-of-turn = end-of-player-phase
-A **player phase** is the full window from when the player regains control until the enemy is next to act. A 4+ match grants an extra turn, but the phase continues — all extra-turn cycles belong to the same phase. Every effect tagged "end-of-turn" (pool auto-resolve, block decay, Resolute, Bulwark, etc.) fires **once per phase**, at the moment the enemy is up next. Cascade multipliers, pool deltas, and queued spell effects all compound through extra turns into that single resolution.
+A **player phase** is the full window from when the player regains control until the enemy is next to act. A 4+ match grants an extra turn, but the phase continues — all extra-turn cycles belong to the same phase. Effects tagged "end-of-turn" (block snap-into-stat, block decay, Resolute, Bulwark, queued spell effects, etc.) fire **once per phase**, at the moment the enemy is up next.
+
+**Per-match commit for damage and heal (Plan B).** Red (damage) and green (heal) deviate from "everything resolves at EOP": they commit *as each gem match happens* during the cascade. The pip-of-loaded-damage UI that the EOP model implied turned out to feel awkward (transient pre-commit state on the bar with no payoff beat the per-match popups didn't already deliver), and per-match commit also opens up the more interesting relic surface (multi-hit synergies, per-hit DoTs, streak/threshold rewards). Blue (block) keeps the EOP model because it needs to be ready *before* the enemy attack — that timing is load-bearing for defense planning. Cascade multipliers and `onMatch` modifier hooks still apply to red/green deltas the same way; the difference is the delta resolves into a `damage-dealt` / `healed` event immediately rather than queuing into a pool. `phasePools.red` / `phasePools.green` still increment as **running meters** for the phase so relics that want "how much you dealt/healed this phase" can read them at EOP.
 
 ### Match-size scaling
 | Match | Effect |
