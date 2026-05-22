@@ -47,6 +47,26 @@ body {
 .hud-build {
   opacity: 0.55;
   font-size: 0.75rem;
+  flex: 1;
+  text-align: right;
+  margin-right: 0.75rem;
+}
+
+.mute-toggle {
+  background: transparent;
+  border: 1px solid #2a2a3e;
+  border-radius: 0.4rem;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.mute-toggle:hover {
+  border-color: #4a4a6e;
+  background: #22223a;
 }
 
 .board-shell {
@@ -354,4 +374,102 @@ body {
 .victory-restart:hover {
   background: #facc15;
   color: #0e0e15;
+}
+
+/* Feedback animations */
+
+@keyframes shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-6px, 2px, 0); }
+  40% { transform: translate3d(5px, -3px, 0); }
+  60% { transform: translate3d(-4px, 3px, 0); }
+  80% { transform: translate3d(3px, -2px, 0); }
+}
+
+body.shake {
+  animation: shake 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes pool-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+  35% {
+    transform: scale(1.15);
+    box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.45);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+.pool.pulsing,
+.resource.pulsing {
+  animation: pool-pulse 380ms ease-out;
+  border-radius: 999px;
+}
+
+@keyframes block-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 152, 247, 0);
+  }
+  40% {
+    transform: scale(1.12);
+    box-shadow: 0 0 18px 4px rgba(99, 152, 247, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 152, 247, 0);
+  }
+}
+
+.block-badge.pulsing {
+  animation: block-pulse 500ms ease-out;
+}
+
+@keyframes hp-glow {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+  40% {
+    box-shadow: inset 0 0 22px 4px rgba(77, 213, 129, 0.55);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+}
+
+.hp-bar.glow {
+  animation: hp-glow 500ms ease-out;
+}
+
+@keyframes enemy-hit {
+  0% {
+    transform: translate3d(0, 0, 0);
+    filter: brightness(1);
+  }
+  25% {
+    transform: translate3d(-4px, 0, 0);
+    filter: brightness(2.2) saturate(1.6);
+    border-color: #ff7a72;
+  }
+  50% {
+    transform: translate3d(3px, 0, 0);
+    filter: brightness(1.8) saturate(1.4);
+  }
+  75% {
+    transform: translate3d(-2px, 0, 0);
+    filter: brightness(1.3);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+    filter: brightness(1);
+  }
+}
+
+.enemy-frame.hit {
+  animation: enemy-hit 280ms ease-out;
 }

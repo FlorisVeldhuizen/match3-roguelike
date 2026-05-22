@@ -174,7 +174,7 @@ These are **not in v1**, even if tempting:
 - ❌ Board-rule modifiers (diagonal matches, gravity changes, etc.)
 - ❌ Synergy modifiers / relic tagging system
 - ❌ Meta-progression (unlocks between runs)
-- ❌ Audio (sfx, music) — placeholder/none
+- ⚠ Audio: **4 placeholder SFX only** (gem clear, cascade, damage, victory). No music. Carved out during the Phase D→E polish intermission — full audio remains a non-goal.
 - ❌ Multiple acts (one act → boss → end)
 - ❌ Daily seeded runs, leaderboards
 - ❌ Mid-fight save resilience (auto-save only fires at phase boundaries — closing tab mid-cascade rolls back to start of fight)

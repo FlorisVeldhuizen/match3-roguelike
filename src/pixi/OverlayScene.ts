@@ -1,0 +1,460 @@
+import {
+  Application,
+  Container,
+  Graphics,
+  Text,
+  type Ticker,
+} from 'pixi.js'
+import type { GemColor } from '../types'
+
+// Hex matching the CSS color palette in index.css so visuals stay coherent
+// across the React DOM and the Pixi overlay.
+const COLOR_HEX: Record<GemColor, number> = {
+  red: 0xee5e57,
+  blue: 0x4f9dff,
+  green: 0x4dd581,
+  yellow: 0xf5cf3a,
+  purple: 0xb074ff,
+}
+
+export type ScreenPoint = { x: number; y: number }
+export type Attractor = () => ScreenPoint | null
+
+type PhysicsEffect = {
+  kind: 'physics'
+  view: Container
+  x: number
+  y: number
+  vx: number
+  vy: number
+  gravity: number
+  drag: number
+  life: number
+  maxLife: number
+  growBy: number
+  // Optional scale-over-time curve; receives progress (0 at spawn, 1 at end)
+  // and returns a scale multiplier. When set, supersedes growBy. Used for
+  // overshoot/settle pops on callout text.
+  scaleCurve: ((progress: number) => number) | null
+  fadeMode: 'linear' | 'late'
+  baseScale: number
+  rotation: number
+  rotationTarget: number
+  rotationEase: number // per-second ease factor (0 = no rotation animation)
+  alphaScale: number // peak alpha (curve output is multiplied by this)
+}
+
+// Bezier-mode: particle travels a randomized quadratic curve from start to
+// the (dynamically re-sampled) destination. Lands AT the destination when
+// life reaches zero, then disappears. Control point is fixed at spawn so
+// the curve shape stays stable; only the endpoint can drift.
+//
+// `view` is the bright "light source" head; `tail` is a Graphics redrawn
+// each frame from the last `history` positions to produce a true streak
+// fading behind the head — like a glow trail in the dark, not discrete
+// stamps.
+type BezierEffect = {
+  kind: 'bezier'
+  view: Container
+  tail: Graphics
+  history: ScreenPoint[]
+  start: ScreenPoint
+  control: ScreenPoint
+  attractor: Attractor
+  life: number
+  maxLife: number
+  colorHex: number
+}
+
+const TAIL_MAX_LENGTH = 22
+
+type Effect = PhysicsEffect | BezierEffect
+
+// Full-window transparent Pixi overlay used for effects that need to live
+// outside the board's fixed canvas: particle bursts, gem-to-HUD trails, and
+// floating text (damage numbers, cascade callouts).
+export class OverlayScene {
+  private app: Application | null = null
+  private layer: Container | null = null
+  private effects: Effect[] = []
+  private tickerCb: ((ticker: Ticker) => void) | null = null
+  private resizeCb: (() => void) | null = null
+  private disposed = false
+
+  async init(): Promise<void> {
+    const app = new Application()
+    await app.init({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      backgroundAlpha: 0,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+    })
+    if (this.disposed) {
+      app.destroy(true, { children: true, texture: false })
+      return
+    }
+    this.app = app
+    const canvas = app.canvas
+    canvas.style.position = 'fixed'
+    canvas.style.top = '0'
+    canvas.style.left = '0'
+    canvas.style.width = '100vw'
+    canvas.style.height = '100vh'
+    canvas.style.pointerEvents = 'none'
+    canvas.style.zIndex = '5'
+    document.body.appendChild(canvas)
+
+    const layer = new Container()
+    app.stage.addChild(layer)
+    this.layer = layer
+
+    this.tickerCb = (ticker) => this.tick(ticker.deltaMS)
+    app.ticker.add(this.tickerCb)
+
+    this.resizeCb = () => {
+      app.renderer.resize(window.innerWidth, window.innerHeight)
+    }
+    window.addEventListener('resize', this.resizeCb)
+  }
+
+  destroy(): void {
+    this.disposed = true
+    if (this.resizeCb) window.removeEventListener('resize', this.resizeCb)
+    this.resizeCb = null
+    if (this.app && this.tickerCb) this.app.ticker.remove(this.tickerCb)
+    this.tickerCb = null
+    if (this.app) {
+      const canvas = this.app.canvas
+      this.app.destroy(true, { children: true, texture: false })
+      if (canvas.parentElement) canvas.parentElement.removeChild(canvas)
+    }
+    this.app = null
+    this.layer = null
+    this.effects = []
+  }
+
+  // Outward radial burst at (x,y). Color accepts either a GemColor name (uses
+  // the shared palette) or an explicit hex value (for one-offs like the
+  // cascade pop). Opts let callers tune size/speed/life without forking the
+  // method; sensible defaults match match-clear bursts.
+  spawnBurst(
+    at: ScreenPoint,
+    colorOrHex: GemColor | number,
+    opts: {
+      count?: number
+      speedMin?: number
+      speedMax?: number
+      radiusMin?: number
+      radiusMax?: number
+      lifeMs?: number
+      gravity?: number
+      spread?: number
+    } = {},
+  ): void {
+    const layer = this.layer
+    if (!layer) return
+    const hex =
+      typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
+    const count = opts.count ?? 10
+    const speedMin = opts.speedMin ?? 90
+    const speedMax = opts.speedMax ?? 180
+    const radiusMin = opts.radiusMin ?? 2.5
+    const radiusMax = opts.radiusMax ?? 4.5
+    const baseLife = opts.lifeMs ?? 500
+    const gravity = opts.gravity ?? 240
+    const spread = opts.spread ?? 0.6
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * spread
+      const speed = speedMin + Math.random() * (speedMax - speedMin)
+      const radius = radiusMin + Math.random() * (radiusMax - radiusMin)
+      const g = new Graphics().circle(0, 0, radius).fill(hex)
+      g.x = at.x
+      g.y = at.y
+      layer.addChild(g)
+      this.effects.push({
+        kind: 'physics',
+        view: g,
+        x: at.x,
+        y: at.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        gravity,
+        drag: 1.2,
+        life: baseLife + Math.random() * 150,
+        maxLife: baseLife + 100,
+        growBy: 0,
+        scaleCurve: null,
+        fadeMode: 'linear',
+        baseScale: 1,
+        rotation: 0,
+        rotationTarget: 0,
+        rotationEase: 0,
+        alphaScale: 1,
+      })
+    }
+  }
+
+  // Particle trail from (x,y) that arcs along a randomized quadratic Bezier
+  // to a DOM target (the HUD pool indicator). Lands exactly on the pool when
+  // life expires, then disappears. The destination is re-sampled per-frame
+  // so DOM reflows (scroll, resize) don't strand particles, but the curve
+  // shape is locked at spawn for stable motion.
+  spawnTrail(
+    from: ScreenPoint,
+    attractor: Attractor,
+    color: GemColor,
+    count = 5,
+  ): void {
+    const layer = this.layer
+    if (!layer) return
+    // Snapshot the destination once to compute a sensible curve shape.
+    // If the DOM target isn't there yet, skip the whole batch.
+    const initialEnd = attractor()
+    if (!initialEnd) return
+    const hex = COLOR_HEX[color]
+    for (let i = 0; i < count; i++) {
+      const start = jitterPoint(from, 5)
+      const control = randomBezierControl(start, initialEnd)
+      // Head = bright light-source dot. Tail = empty Graphics, redrawn
+      // every frame from position history to streak behind the head.
+      // Tail is added FIRST so the head renders on top.
+      const tail = new Graphics()
+      tail.alpha = 0
+      layer.addChild(tail)
+      const head = new Graphics()
+      head.circle(0, 0, 4).fill({ color: hex, alpha: 0.45 })
+      head.circle(0, 0, 2.4).fill({ color: 0xffffff, alpha: 1 })
+      head.x = start.x
+      head.y = start.y
+      head.alpha = 0
+      layer.addChild(head)
+      // Staggered life so the particles arrive in a tight cluster, not all
+      // at the same frame.
+      const life = 620 + i * 55
+      this.effects.push({
+        kind: 'bezier',
+        view: head,
+        tail,
+        history: [{ x: start.x, y: start.y }],
+        start,
+        control,
+        attractor,
+        life,
+        maxLife: life,
+        colorHex: hex,
+      })
+    }
+  }
+
+  // Floating text (damage popup, cascade callout, etc).
+  // rotationFrom/rotationTo (radians) animate the text rotation over its life.
+  // rotationEase controls how fast it settles (per-second factor); 0 disables
+  // animation and the text holds at rotationFrom.
+  spawnFloatingText(
+    at: ScreenPoint,
+    text: string,
+    opts: {
+      color?: number
+      fontSize?: number
+      lifeMs?: number
+      driftY?: number
+      growBy?: number
+      // When provided, supersedes growBy. Lets callers script a custom
+      // scale curve over the life — e.g. overshoot-and-settle pop for
+      // cascade callouts.
+      scaleCurve?: (progress: number) => number
+      rotationFrom?: number
+      rotationTo?: number
+      rotationEase?: number
+    } = {},
+  ): void {
+    const layer = this.layer
+    if (!layer) return
+    const t = new Text({
+      text,
+      style: {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: opts.fontSize ?? 26,
+        fontWeight: '700',
+        fill: opts.color ?? 0xffffff,
+        stroke: { color: 0x000000, width: 4, join: 'round' },
+      },
+    })
+    t.anchor.set(0.5)
+    t.x = at.x
+    t.y = at.y
+    const rotation = opts.rotationFrom ?? 0
+    t.rotation = rotation
+    layer.addChild(t)
+    const life = opts.lifeMs ?? 750
+    this.effects.push({
+      kind: 'physics',
+      view: t,
+      x: at.x,
+      y: at.y,
+      vx: 0,
+      vy: opts.driftY ?? -65,
+      gravity: 0,
+      drag: 1,
+      life,
+      maxLife: life,
+      growBy: opts.growBy ?? 0,
+      scaleCurve: opts.scaleCurve ?? null,
+      fadeMode: 'late',
+      baseScale: 1,
+      rotation,
+      rotationTarget: opts.rotationTo ?? 0,
+      rotationEase: opts.rotationEase ?? 0,
+      alphaScale: 1,
+    })
+  }
+
+  private tick(dtMs: number): void {
+    const dt = dtMs / 1000
+    const layer = this.layer
+    if (!layer) return
+    const survivors: Effect[] = []
+    for (const e of this.effects) {
+      e.life -= dtMs
+      if (e.life <= 0) {
+        layer.removeChild(e.view)
+        e.view.destroy()
+        if (e.kind === 'bezier') {
+          layer.removeChild(e.tail)
+          e.tail.destroy()
+        }
+        continue
+      }
+      if (e.kind === 'physics') {
+        e.vy += e.gravity * dt
+        const dragFactor = Math.max(0, 1 - e.drag * dt)
+        e.vx *= dragFactor
+        e.vy *= dragFactor
+        e.x += e.vx * dt
+        e.y += e.vy * dt
+        e.view.x = e.x
+        e.view.y = e.y
+        const t = e.life / e.maxLife
+        const curveAlpha =
+          e.fadeMode === 'late' ? Math.min(1, t * 3) : Math.max(0, t)
+        e.view.alpha = curveAlpha * e.alphaScale
+        if (e.scaleCurve) {
+          e.view.scale.set(e.baseScale * e.scaleCurve(1 - t))
+        } else if (e.growBy !== 0) {
+          const scale = e.baseScale + (1 - t) * e.growBy
+          e.view.scale.set(scale)
+        }
+        if (e.rotationEase > 0) {
+          const k = Math.min(1, e.rotationEase * dt)
+          e.rotation += (e.rotationTarget - e.rotation) * k
+          e.view.rotation = e.rotation
+        }
+      } else {
+        const end = e.attractor()
+        const progress = 1 - e.life / e.maxLife // 0 → 1
+        let curX = e.view.x
+        let curY = e.view.y
+        if (end) {
+          const u = 1 - progress
+          curX =
+            u * u * e.start.x +
+            2 * u * progress * e.control.x +
+            progress * progress * end.x
+          curY =
+            u * u * e.start.y +
+            2 * u * progress * e.control.y +
+            progress * progress * end.y
+          e.view.x = curX
+          e.view.y = curY
+        }
+        // Fade in over first 15%, hold, brief fade-out over last 10% so the
+        // disappearance lands cleanly on the pool indicator.
+        const fadeIn = 0.15
+        const fadeOut = 0.9
+        const alpha =
+          progress < fadeIn
+            ? progress / fadeIn
+            : progress > fadeOut
+              ? Math.max(0, 1 - (progress - fadeOut) / (1 - fadeOut))
+              : 1
+        e.view.alpha = alpha
+        // Record current position into history and redraw the tail as a
+        // fading polyline from oldest to newest. Width and per-segment
+        // alpha both ramp up toward the head so it reads as a streak of
+        // light, not equal-weight dashes.
+        e.history.push({ x: curX, y: curY })
+        if (e.history.length > TAIL_MAX_LENGTH) e.history.shift()
+        const hist = e.history
+        e.tail.clear()
+        if (hist.length >= 2) {
+          for (let i = 0; i < hist.length - 1; i++) {
+            const localT = (i + 1) / hist.length // 0 (oldest) → 1 (newest)
+            const segAlpha = localT * localT * 0.85 * alpha
+            const width = 1 + localT * 4.5
+            const p0 = hist[i]
+            const p1 = hist[i + 1]
+            if (!p0 || !p1) continue
+            e.tail
+              .moveTo(p0.x, p0.y)
+              .lineTo(p1.x, p1.y)
+              .stroke({
+                color: e.colorHex,
+                alpha: segAlpha,
+                width,
+                cap: 'round',
+                join: 'round',
+              })
+          }
+          e.tail.alpha = 1
+        }
+      }
+      survivors.push(e)
+    }
+    this.effects = survivors
+  }
+}
+
+// Coord helpers — both return screen-space (viewport) coordinates, matching
+// the overlay canvas's coordinate system.
+export function elementCenter(el: HTMLElement): ScreenPoint | null {
+  const rect = el.getBoundingClientRect()
+  if (rect.width === 0 && rect.height === 0) return null
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+}
+
+function jitterPoint(p: ScreenPoint, magnitude: number): ScreenPoint {
+  const angle = Math.random() * Math.PI * 2
+  return {
+    x: p.x + Math.cos(angle) * magnitude,
+    y: p.y + Math.sin(angle) * magnitude,
+  }
+}
+
+// Pick a Bezier control point perpendicular to the start→end axis, with a
+// randomized side and magnitude so curves bow left or right and apex earlier
+// or later along the path. Magnitude scales with travel distance so short
+// trails curve subtly and long trails arc more.
+function randomBezierControl(
+  start: ScreenPoint,
+  end: ScreenPoint,
+): ScreenPoint {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const len = Math.hypot(dx, dy) || 1
+  const nx = -dy / len
+  const ny = dx / len
+  // Perpendicular offset: random sign, 15-55% of travel distance.
+  const sign = Math.random() < 0.5 ? -1 : 1
+  const perpMag = len * (0.15 + Math.random() * 0.4) * sign
+  // Along-axis offset: shift apex away from midpoint so curves don't all
+  // peak at the same arc-length.
+  const alongShift = (Math.random() - 0.5) * 0.4
+  const midX = (start.x + end.x) / 2 + dx * alongShift
+  const midY = (start.y + end.y) / 2 + dy * alongShift
+  return {
+    x: midX + nx * perpMag,
+    y: midY + ny * perpMag,
+  }
+}

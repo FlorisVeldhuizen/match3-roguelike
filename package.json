@@ -17,6 +17,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@types/howler": "^2.2.13",
+    "howler": "^2.2.4",
     "immer": "^11.1.8",
     "pixi.js": "^8.18.1",
     "react": "^19.2.6",

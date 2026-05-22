@@ -1,29 +1,36 @@
 import { Ticker, type Sprite } from 'pixi.js'
 
-// Flash white then fade + shrink. ~280ms. Resolves once the sprite is gone.
+// Scale-pop overshoot + flash, then shrink + fade. ~280ms.
+// 0.00 → 0.18: pop up to 1.25x, tint flashes to white.
+// 0.18 → 1.00: shrink to 0 and fade alpha to 0.
 export function tweenClear(sprite: Sprite, durationMs = 280): Promise<void> {
   const startScale = sprite.scale.x
   const startAlpha = sprite.alpha
   const startTint = sprite.tint
+  const POP_END = 0.18
+  const POP_PEAK = 1.25
   let elapsed = 0
   return new Promise((resolve) => {
     const tick = (ticker: Ticker) => {
       elapsed += ticker.deltaMS
       const t = Math.min(elapsed / durationMs, 1)
-      // First 30%: flash bright (lerp tint toward white).
-      const flashT = Math.min(t / 0.3, 1)
-      if (flashT < 1) {
-        // 0xffffff is white; we lerp from startTint to white then back is unnecessary —
-        // hold white through fade. Pixi tint multiplies so 0xffffff = no change.
+      if (t < POP_END) {
+        const u = t / POP_END
+        const scale = startScale * (1 + (POP_PEAK - 1) * u)
+        sprite.scale.set(scale)
         sprite.tint = 0xffffff
+        sprite.alpha = startAlpha
       } else {
-        sprite.tint = startTint
+        const u = (t - POP_END) / (1 - POP_END)
+        const eased = u * u
+        const scale = startScale * POP_PEAK * (1 - eased)
+        sprite.scale.set(scale)
+        sprite.alpha = startAlpha * (1 - eased)
+        // Hold white through fade; tint multiply on alpha 0 is invisible anyway.
+        sprite.tint = 0xffffff
       }
-      // Whole duration: shrink to 30% and fade to 0.
-      const e = t * t
-      sprite.scale.set(startScale * (1 - 0.7 * e))
-      sprite.alpha = startAlpha * (1 - e)
       if (t >= 1) {
+        sprite.tint = startTint
         Ticker.shared.remove(tick)
         resolve()
       }
