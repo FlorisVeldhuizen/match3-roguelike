@@ -5,8 +5,8 @@ export function VictoryOverlay() {
 
   if (phase !== 'victory') return null
 
-  // Reload restarts board+fight cleanly. A proper in-place reset (rebuilding
-  // Pixi sprites against a new board) is on the Phase E to-do list.
+  // Reload restarts board+fight+Pixi cleanly. An in-place Pixi sprite-grid
+  // rebuild lands with the H1 run-flow scaffolding.
   const handleRestart = () => {
     useGameStore.getState().restart()
     window.location.reload()
@@ -16,7 +16,7 @@ export function VictoryOverlay() {
     <div className="victory-overlay" role="dialog" aria-label="Victory">
       <div className="victory-card">
         <h1 className="victory-title">You Win!</h1>
-        <p className="victory-sub">Enemy defeated. Phase D placeholder.</p>
+        <p className="victory-sub">Enemy defeated.</p>
         <button
           type="button"
           className="victory-restart"

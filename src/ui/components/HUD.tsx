@@ -10,6 +10,7 @@ const PHASE_LABEL: Record<CombatPhase, string> = {
   'enemy-acting': 'Enemy turn',
   'enemy-end': 'Enemy turn',
   victory: 'Victory',
+  'game-over': 'Defeated',
 }
 
 const POOL_COLORS: { color: GemColor; label: string; key: 'red' | 'blue' | 'green' }[] = [
@@ -36,6 +37,7 @@ export function HUD() {
   const [shake, setShake] = useState(false)
   const [hpGlow, setHpGlow] = useState(false)
   const [blockPulse, setBlockPulse] = useState(false)
+  const [hpHit, setHpHit] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeGameEvents((event) => {
@@ -59,6 +61,15 @@ export function HUD() {
       } else if (event.kind === 'block-gained') {
         setBlockPulse(true)
         window.setTimeout(() => setBlockPulse(false), 500)
+      } else if (event.kind === 'damage-taken') {
+        if (event.amount > 0) {
+          setHpHit(true)
+          window.setTimeout(() => setHpHit(false), 420)
+          if (event.amount >= 5) {
+            setShake(true)
+            window.setTimeout(() => setShake(false), 320)
+          }
+        }
       }
     })
     return unsub
@@ -81,7 +92,7 @@ export function HUD() {
       </div>
       <div className="hud-row">
         <div
-          className={`hp-bar ${hpGlow ? 'glow' : ''}`}
+          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''}`}
           role="img"
           aria-label={`HP ${player.hp}/${player.maxHp}`}
         >

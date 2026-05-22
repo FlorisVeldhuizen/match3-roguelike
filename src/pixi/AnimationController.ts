@@ -175,9 +175,15 @@ export class AnimationController {
       case 'healed':
         this.spawnHealPopup(event.amount)
         return
-      case 'block-gained':
       case 'damage-taken':
+        if (event.amount > 0) this.spawnPlayerDamagePopup(event.amount)
+        return
+      case 'enemy-block-gained':
+        this.spawnEnemyBlockPopup(event.enemyId, event.amount)
+        return
+      case 'block-gained':
       case 'enemy-killed':
+      case 'intent-telegraphed':
       case 'turn-ended':
       case 'phase-changed':
       case 'screen-shake':
@@ -446,6 +452,48 @@ export class AnimationController {
         lifeMs: 750,
         driftY: -60,
         growBy: 0.25,
+      },
+    )
+  }
+
+  private spawnPlayerDamagePopup(amount: number): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const el = document.querySelector<HTMLElement>('[data-player-hud]')
+    if (!el) return
+    const center = elementCenter(el)
+    if (!center) return
+    overlay.spawnFloatingText(
+      { x: center.x, y: center.y - 20 },
+      `-${amount}`,
+      {
+        color: 0xee5e57,
+        fontSize: 30,
+        lifeMs: 800,
+        driftY: -70,
+        growBy: 0.3,
+      },
+    )
+  }
+
+  private spawnEnemyBlockPopup(enemyId: string, amount: number): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const el = document.querySelector<HTMLElement>(
+      `[data-enemy-id="${enemyId}"]`,
+    )
+    if (!el) return
+    const center = elementCenter(el)
+    if (!center) return
+    overlay.spawnFloatingText(
+      { x: center.x, y: center.y - 30 },
+      `+${amount} 🛡`,
+      {
+        color: 0x9ec5ff,
+        fontSize: 22,
+        lifeMs: 750,
+        driftY: -45,
+        growBy: 0.2,
       },
     )
   }

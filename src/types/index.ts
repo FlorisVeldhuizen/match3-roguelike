@@ -53,8 +53,10 @@ export type GameEvent =
   | { kind: 'damage-dealt'; targetId: string; amount: number; source: DamageSource }
   | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }
   | { kind: 'block-gained'; amount: number }
+  | { kind: 'enemy-block-gained'; enemyId: string; amount: number }
   | { kind: 'healed'; amount: number }
   | { kind: 'enemy-killed'; enemyId: string }
+  | { kind: 'intent-telegraphed'; enemyId: string; intent: Intent }
   | { kind: 'turn-ended' }
   | { kind: 'phase-changed'; phase: CombatPhase }
   | { kind: 'screen-shake'; magnitude: number }
@@ -66,6 +68,15 @@ export type CombatPhase =
   | 'enemy-acting'
   | 'enemy-end'
   | 'victory'
+  | 'game-over'
+
+export type IntentKind = 'attack' | 'block'
+
+export type Intent =
+  | { kind: 'attack'; amount: number }
+  | { kind: 'block'; amount: number }
+
+export type EnemyArchetype = 'brute'
 
 export type PhasePools = {
   red: number
@@ -85,8 +96,12 @@ export type Player = {
 export type Enemy = {
   id: string
   name: string
+  archetype: EnemyArchetype
   hp: number
   maxHp: number
+  block: number
+  currentIntent: Intent
+  nextIntentIndex: number
 }
 
 export type FightState = {

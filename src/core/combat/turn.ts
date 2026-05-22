@@ -55,22 +55,29 @@ export function resolveEndOfPhase(
     events.push({ kind: 'block-gained', amount: nextBlock })
   }
 
-  // Damage to currently targeted enemy.
+  // Damage to currently targeted enemy. Enemy block drains first, then HP.
   let nextEnemies = enemies
   let nextTargetId = targetEnemyId
   if (pools.red > 0 && nextTargetId) {
     const target = enemies.find((e) => e.id === nextTargetId)
     if (target && target.hp > 0) {
-      const dmg = Math.min(target.hp, pools.red)
+      const incoming = pools.red
+      const absorbed = Math.min(target.block, incoming)
+      const hpDamage = Math.min(target.hp, incoming - absorbed)
+      const totalDealt = absorbed + hpDamage
       nextEnemies = enemies.map((e) =>
-        e.id === target.id ? { ...e, hp: e.hp - dmg } : e,
+        e.id === target.id
+          ? { ...e, block: e.block - absorbed, hp: e.hp - hpDamage }
+          : e,
       )
-      events.push({
-        kind: 'damage-dealt',
-        targetId: target.id,
-        amount: dmg,
-        source: 'player-attack',
-      })
+      if (totalDealt > 0) {
+        events.push({
+          kind: 'damage-dealt',
+          targetId: target.id,
+          amount: totalDealt,
+          source: 'player-attack',
+        })
+      }
       const after = nextEnemies.find((e) => e.id === target.id)
       if (after && after.hp <= 0) {
         events.push({ kind: 'enemy-killed', enemyId: target.id })

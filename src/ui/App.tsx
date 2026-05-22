@@ -1,6 +1,7 @@
 import { HUD } from './components/HUD'
 import { EnemyFrame } from './components/EnemyFrame'
 import { VictoryOverlay } from './components/VictoryOverlay'
+import { GameOverOverlay } from './components/GameOverOverlay'
 import { MuteToggle } from './components/MuteToggle'
 
 export const BOARD_MOUNT_ID = 'board-mount'
@@ -10,7 +11,7 @@ export function App() {
     <main className="game">
       <header className="game-header">
         <span className="hud-title">Match-3 Roguelike</span>
-        <span className="hud-build">Phase D · pools & combat</span>
+        <span className="hud-build">Phase E · enemy intents</span>
         <MuteToggle />
       </header>
       <EnemyFrame />
@@ -19,6 +20,7 @@ export function App() {
       </section>
       <HUD />
       <VictoryOverlay />
+      <GameOverOverlay />
     </main>
   )
 }

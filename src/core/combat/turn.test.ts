@@ -20,8 +20,12 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
 const makeEnemy = (overrides: Partial<Enemy> = {}): Enemy => ({
   id: 'enemy-1',
   name: 'Brute',
+  archetype: 'brute',
   hp: 20,
   maxHp: 20,
+  block: 0,
+  currentIntent: { kind: 'attack', amount: 4 },
+  nextIntentIndex: 0,
   ...overrides,
 })
 
@@ -135,6 +139,32 @@ describe('resolveEndOfPhase', () => {
     expect(result.enemies[0]?.hp).toBe(0)
     const dmg = result.events.find((e) => e.kind === 'damage-dealt')
     expect(dmg && dmg.kind === 'damage-dealt' ? dmg.amount : -1).toBe(5)
+  })
+
+  it('drains enemy block before HP on red attack', () => {
+    const p = makePlayer({ phasePools: { red: 8, blue: 0, green: 0 } })
+    const result = resolveEndOfPhase(
+      p,
+      [makeEnemy({ hp: 20, block: 5 })],
+      'enemy-1',
+    )
+    expect(result.enemies[0]?.block).toBe(0)
+    expect(result.enemies[0]?.hp).toBe(17)
+    const dmg = result.events.find((e) => e.kind === 'damage-dealt')
+    expect(dmg && dmg.kind === 'damage-dealt' ? dmg.amount : -1).toBe(8)
+  })
+
+  it('absorbs entire attack into enemy block when block is large', () => {
+    const p = makePlayer({ phasePools: { red: 3, blue: 0, green: 0 } })
+    const result = resolveEndOfPhase(
+      p,
+      [makeEnemy({ hp: 20, block: 10 })],
+      'enemy-1',
+    )
+    expect(result.enemies[0]?.block).toBe(7)
+    expect(result.enemies[0]?.hp).toBe(20)
+    const dmg = result.events.find((e) => e.kind === 'damage-dealt')
+    expect(dmg && dmg.kind === 'damage-dealt' ? dmg.amount : -1).toBe(3)
   })
 
   it('does not emit block-gained or damage-dealt when pools are zero', () => {

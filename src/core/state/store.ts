@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import type { RngState } from '../rng/mulberry32'
 import { generateBoard } from '../board/generation'
 import { resolveSwap, type SwapResolution } from '../board/cascade'
 import { forkStreams, type RngStreams } from '../rng/streams'
@@ -8,6 +9,8 @@ import {
   beginPlayerPhase,
   resolveEndOfPhase,
 } from '../combat/turn'
+import { executeEnemyTurn } from '../combat/enemyTurn'
+import { rollIntent } from '../combat/intents'
 import {
   computeMatchPayouts,
   hasExtraTurnMatch,
@@ -24,6 +27,7 @@ import {
   type Player,
   type Pos,
 } from '../../types'
+import { getArchetype } from '../combat/archetypeRegistry'
 
 export type BoardState = {
   width: number
@@ -43,7 +47,6 @@ export type GameStore = {
 }
 
 const PLAYER_MAX_HP = 60
-const ENEMY_DEFAULT_HP = 20
 
 function freshPlayer(): Player {
   return {
@@ -56,22 +59,28 @@ function freshPlayer(): Player {
   }
 }
 
-function freshEnemy(): Enemy {
-  return {
+function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
+  const archetype = 'brute'
+  const def = getArchetype(archetype)
+  const first = rollIntent(archetype, 0, enemyRng)
+  const enemy: Enemy = {
     id: 'enemy-1',
-    name: 'Brute',
-    hp: ENEMY_DEFAULT_HP,
-    maxHp: ENEMY_DEFAULT_HP,
+    name: def.name,
+    archetype,
+    hp: def.maxHp,
+    maxHp: def.maxHp,
+    block: 0,
+    currentIntent: first.intent,
+    nextIntentIndex: 0,
   }
-}
-
-function freshFight(): FightState {
-  const enemy = freshEnemy()
   return {
-    phase: 'player-acting',
-    player: freshPlayer(),
-    enemies: [enemy],
-    targetEnemyId: enemy.id,
+    fight: {
+      phase: 'player-acting',
+      player: freshPlayer(),
+      enemies: [enemy],
+      targetEnemyId: enemy.id,
+    },
+    rng: first.rng,
   }
 }
 
@@ -83,6 +92,7 @@ function initialState(seed: string): {
 } {
   const streams = forkStreams(seed)
   const { board, rng: nextBoardRng } = generateBoard(streams.board)
+  const { fight, rng: nextEnemyRng } = freshFight(streams.enemy)
   return {
     board: {
       width: BOARD_WIDTH,
@@ -90,9 +100,9 @@ function initialState(seed: string): {
       cells: board,
       selected: null,
     },
-    rng: { ...streams, board: nextBoardRng },
+    rng: { ...streams, board: nextBoardRng, enemy: nextEnemyRng },
     rootSeed: seed,
-    fight: freshFight(),
+    fight,
   }
 }
 
@@ -112,24 +122,18 @@ export const useGameStore = create<GameStore>()(
     attemptSwap: (a, b) => {
       const current = get()
 
-      if (current.fight.phase === 'victory') {
+      if (
+        current.fight.phase === 'victory' ||
+        current.fight.phase === 'game-over'
+      ) {
         return { valid: false, events: [] }
       }
 
-      // If the prior phase ended (enemy-acting holds until the player commits
-      // their next swap in Phase D — the enemy doesn't actually act yet),
-      // start a fresh player phase: block zeroes, pools reset.
       let phase: CombatPhase = current.fight.phase
       let player = current.fight.player
-      const prelude: GameEvent[] = []
-      if (phase === 'enemy-acting') {
-        player = beginPlayerPhase(player)
-        phase = 'player-acting'
-        prelude.push({ kind: 'phase-changed', phase: 'player-acting' })
-      }
 
       if (phase !== 'player-acting') {
-        return { valid: false, events: prelude }
+        return { valid: false, events: [] }
       }
 
       const swap: SwapResolution = resolveSwap(
@@ -140,37 +144,47 @@ export const useGameStore = create<GameStore>()(
       )
 
       if (!swap.valid) {
-        // Commit just the prelude reset (if any) so we don't lose the phase
-        // transition. The board stays as-is.
-        if (prelude.length > 0) {
-          set((s) => {
-            s.fight.player = player
-            s.fight.phase = phase
-          })
-        }
-        return { valid: false, events: [...prelude, ...swap.events] }
+        return { valid: false, events: swap.events }
       }
 
       let enemies = current.fight.enemies
       let targetEnemyId = current.fight.targetEnemyId
+      let enemyRng = current.rng.enemy
 
       const deltas = computeMatchPayouts(swap.events)
       const decoratedSwap = withPoolGainedEvents(swap.events)
       player = applyPoolDeltas(player, deltas)
 
-      let endEvents: GameEvent[] = []
+      const tailEvents: GameEvent[] = []
+
       if (!hasExtraTurnMatch(swap.events)) {
         const resolved = resolveEndOfPhase(player, enemies, targetEnemyId)
         player = resolved.player
         enemies = resolved.enemies
         targetEnemyId = resolved.targetEnemyId
         phase = resolved.phase
-        endEvents = resolved.events
+        tailEvents.push(...resolved.events)
+
+        // If enemies still alive, enemy turn fires now. Then begin next player
+        // phase so block zeroes and pools reset before the player swaps again.
+        if (phase === 'enemy-acting') {
+          const enemyResult = executeEnemyTurn(player, enemies, enemyRng)
+          player = enemyResult.player
+          enemies = enemyResult.enemies
+          enemyRng = enemyResult.rng
+          phase = enemyResult.phase
+          tailEvents.push(...enemyResult.events)
+
+          if (phase === 'player-acting') {
+            player = beginPlayerPhase(player)
+          }
+        }
       }
 
       set((s) => {
         s.board.cells = swap.board
         s.rng.board = swap.rng
+        s.rng.enemy = enemyRng
         s.board.selected = null
         s.fight.phase = phase
         s.fight.player = player
@@ -180,7 +194,7 @@ export const useGameStore = create<GameStore>()(
 
       return {
         valid: true,
-        events: [...prelude, ...decoratedSwap, ...endEvents],
+        events: [...decoratedSwap, ...tailEvents],
       }
     },
     restart: () => {
