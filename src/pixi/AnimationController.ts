@@ -198,6 +198,9 @@ export class AnimationController {
       case 'gems-spawned':
         await this.animateSpawn(event.spawns)
         return
+      case 'board-shuffled':
+        await this.animateShuffle(event.cells)
+        return
       case 'pool-gained':
         this.spawnPoolTrail(event.color)
         return
@@ -309,6 +312,68 @@ export class AnimationController {
     })
     await Promise.all(promises)
     for (const { sprite, to } of moves) this.setSprite(to, sprite)
+  }
+
+  // No-legal-swaps reshuffle. Plays a "NO MOVES" banner + screenshake, then
+  // dissolves every existing gem and drops a fresh playable board in from
+  // the top. The cell layout is determined by the store (deterministic from
+  // rng.board); we just render it.
+  private async animateShuffle(
+    cells: { at: Pos; color: GemColor }[],
+  ): Promise<void> {
+    this.spawnNoMovesCallout()
+    emitGameEvent({ kind: 'screen-shake', magnitude: 0.6 })
+    // Brief read-time on the banner before the board tears down.
+    await wait(360)
+    // Dissolve every existing sprite in parallel.
+    const dissolvePromises: Promise<void>[] = []
+    const toRemove: { sprite: Sprite; pos: Pos }[] = []
+    for (let y = 0; y < this.sprites.length; y++) {
+      const row = this.sprites[y]
+      if (!row) continue
+      for (let x = 0; x < row.length; x++) {
+        const s = row[x]
+        if (!s) continue
+        toRemove.push({ sprite: s, pos: { x, y } })
+        dissolvePromises.push(tweenClear(s, CLEAR_MS))
+      }
+    }
+    await Promise.all(dissolvePromises)
+    for (const { sprite, pos } of toRemove) {
+      this.parent.removeChild(sprite)
+      sprite.destroy()
+      this.setSprite(pos, null)
+    }
+    // Fresh fall-in. Reuse animateSpawn — staggered drop distances make
+    // the new board look like it cascades into place rather than blinking on.
+    await this.animateSpawn(cells)
+  }
+
+  private spawnNoMovesCallout(): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const center = this.cellScreenCenter({ x: 3.5, y: 3.5 })
+    if (!center) return
+    overlay.spawnFloatingText(center, 'NO MOVES', {
+      color: 0xfacc15,
+      fontSize: 44,
+      lifeMs: 900,
+      driftY: -10,
+      scaleCurve: popScaleCurve,
+      rotationFrom: this.nextTiltRadians(),
+      rotationEase: 0,
+    })
+    overlay.spawnFloatingText(
+      { x: center.x, y: center.y + 38 },
+      'reshuffling…',
+      {
+        color: 0xffffff,
+        fontSize: 22,
+        lifeMs: 900,
+        driftY: -10,
+        growBy: 0.1,
+      },
+    )
   }
 
   private async animateSpawn(

@@ -49,6 +49,7 @@ export type GameEvent =
   | { kind: 'gems-cleared'; cells: Pos[] }
   | { kind: 'gems-fell'; movements: { from: Pos; to: Pos }[] }
   | { kind: 'gems-spawned'; spawns: { at: Pos; color: GemColor }[] }
+  | { kind: 'board-shuffled'; cells: { at: Pos; color: GemColor }[] }
   | { kind: 'pool-gained'; color: GemColor; amount: number }
   | { kind: 'damage-dealt'; targetId: string; amount: number; source: DamageSource }
   | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }

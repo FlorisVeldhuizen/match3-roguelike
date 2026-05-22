@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { RngState } from '../rng/mulberry32'
-import { generateBoard } from '../board/generation'
+import { generateBoard, hasValidSwap } from '../board/generation'
 import { resolveSwap, type SwapResolution } from '../board/cascade'
 import { forkStreams, type RngStreams } from '../rng/streams'
 import {
@@ -155,6 +155,30 @@ export const useGameStore = create<GameStore>()(
       const decoratedSwap = withPoolGainedEvents(swap.events)
       player = applyPoolDeltas(player, deltas)
 
+      // Post-cascade playability check. If the settled board has no
+      // legal swap (rare with 5 colors on 8×8, but possible), regenerate
+      // a fresh playable board and emit a `board-shuffled` event so the
+      // animator can sell it. The reshuffle does not consume the turn.
+      let finalBoard = swap.board
+      let finalBoardRng = swap.rng
+      const shuffleEvents: GameEvent[] = []
+      if (!hasValidSwap(finalBoard)) {
+        const regen = generateBoard(finalBoardRng)
+        finalBoard = regen.board
+        finalBoardRng = regen.rng
+        const cells: { at: Pos; color: import('../../types').GemColor }[] = []
+        for (let y = 0; y < finalBoard.length; y++) {
+          const row = finalBoard[y]
+          if (!row) continue
+          for (let x = 0; x < row.length; x++) {
+            const cell = row[x]
+            if (!cell) continue
+            cells.push({ at: { x, y }, color: cell.gemColor })
+          }
+        }
+        shuffleEvents.push({ kind: 'board-shuffled', cells })
+      }
+
       const tailEvents: GameEvent[] = []
 
       const extraTurn = hasExtraTurnMatch(swap.events)
@@ -187,8 +211,8 @@ export const useGameStore = create<GameStore>()(
       }
 
       set((s) => {
-        s.board.cells = swap.board
-        s.rng.board = swap.rng
+        s.board.cells = finalBoard
+        s.rng.board = finalBoardRng
         s.rng.enemy = enemyRng
         s.board.selected = null
         s.fight.phase = phase
@@ -199,7 +223,7 @@ export const useGameStore = create<GameStore>()(
 
       return {
         valid: true,
-        events: [...decoratedSwap, ...tailEvents],
+        events: [...decoratedSwap, ...shuffleEvents, ...tailEvents],
       }
     },
     restart: () => {

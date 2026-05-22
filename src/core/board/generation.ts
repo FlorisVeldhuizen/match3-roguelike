@@ -83,7 +83,7 @@ function forbiddenColorsAt(
   return out
 }
 
-function hasValidSwap(board: Cell[][]): boolean {
+export function hasValidSwap(board: Cell[][]): boolean {
   const h = board.length
   const w = board[0]?.length ?? 0
   for (let y = 0; y < h; y++) {
