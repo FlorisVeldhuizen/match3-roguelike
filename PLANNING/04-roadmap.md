@@ -2,6 +2,12 @@
 
 Status: **Phase E complete.** Working on Phase F next.
 
+> **Design update (2026-05-22):** *Enemies share the board* pillar added to `01-design.md`. Every identity enemy archetype now gets a **board verb** (column smash, color hex, row petrify, cluster shove, tile burn). Implications:
+> - **Brute** shipped in Phase E without a board verb. Retrofit "column smash" is queued — either as a small dedicated retrofit between F and G, or folded into Phase H2 alongside the other archetypes. Decision pending.
+> - **Phase H2** archetype work expands: each of Caster / Defender / Swarmer (and Bleeder, already in F) needs its board verb designed, telegraphed, and wired through `Cell.flags`. Skirmisher stays pure-stat as connective tissue.
+> - **Phase F's Bleeder** should ship with its tile-burn verb included, not as a follow-up — the verb *is* the archetype's identity now.
+> - **Phase J1 Corruptor** is unchanged in spec but reframed: it's the most extreme instance of the verb system, not a one-off mechanic.
+
 Ordered build phases. Each phase ends at a **runnable, demoable state** in the browser. No phase is "done" until you can open it and use it.
 
 Each phase has:
@@ -148,7 +154,8 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - Ultimate button (active at full charge)
 - **Pending-effects strip** next to phase indicator: shows icons for already-cast spells with deferred (end-of-phase) effects — visibility only, not a batching UI
 - Status icons on player + enemy frames with tooltip
-- Bleeder enemy archetype (applies Burn) — second enemy implemented
+- Bleeder enemy archetype — direct Burn-on-hit *and* its **tile-burn board verb** (flags 1-2 cells as burning, matching them applies Burn). First non-Corruptor instance of the `Cell.flags` system in action; proves the verb pipeline before H2 builds on it
+- `core/board/flags.ts` — generic cell-flag read/write/tick helpers (Burn duration ticks, flag-clear on cascade-out, etc.) so each new verb in H2/J1 plugs in without re-implementing flag bookkeeping
 
 **Out of scope:** relics, map, shop, remaining enemies, multi-enemy fights.
 
@@ -219,20 +226,23 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 **Goal:** real combat variety. Fights can contain 2-3 enemies; player selects target. AOE matches hit all enemies. All 5 non-boss enemy archetypes (Brute + 4 new) are implemented and used in map node generation.
 
 **Scope:**
-- Remaining 4 enemy archetypes (Skirmisher, Caster, Defender, Swarmer) — intent patterns, stats, behaviors
+- Remaining 4 enemy archetypes (Skirmisher, Caster, Defender, Swarmer) — intent patterns, stats, behaviors, **and each non-Skirmisher's board verb** (Caster: color hex; Defender: petrify row; Swarmer: cluster shove). Lock verb specifics at the start of this phase per the candidates in `02-scope.md`
+- Brute board-verb retrofit (column smash), if not done earlier — Brute currently only has direct attacks
+- Each new verb adds its flag to `Cell.flags` and its rendering pass; reuses the flag-tick helpers built in Phase F
 - Multi-enemy fight state (array of enemies, per-enemy intent/HP)
 - Target selection — click enemy to select; selected enemy receives single-target effects
 - Default target = leftmost enemy at fight start
 - AOE damage: 5-line and T/L matches hit all enemies (one source of damage per enemy, applied through normal damage pipeline)
 - Map generation pulls from the full archetype pool (with weights — common archetypes early, harder ones later)
-- (Bleeder is already implemented in Phase F.)
+- (Bleeder + tile-burn verb already implemented in Phase F.)
 
 **Out of scope:** shop, rest, Corruptor curse, save/load.
 
 **Acceptance:**
 - ✓ Multi-enemy fights work; target selection persists until enemy dies or new selection
 - ✓ 5-line / T / L match damages all living enemies; per-enemy damage applies Vulnerable/Weak/etc independently
-- ✓ Each archetype shows its specced behavior (Defender gains block, Swarmer comes in groups, Caster applies debuffs, Skirmisher attacks every turn)
+- ✓ Each archetype shows its specced behavior (Defender gains block + petrifies rows, Swarmer comes in groups + shoves clusters, Caster applies debuffs + hexes colors, Skirmisher attacks every turn, Brute attacks + smashes columns)
+- ✓ Every board verb is **telegraphed** one phase before it fires (which column, which color, which row) and **counterable** through play (clearing the threatened cells changes or denies the effect)
 - ✓ Killing the targeted enemy auto-selects the next leftmost living one
 
 ---

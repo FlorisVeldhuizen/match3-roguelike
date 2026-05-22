@@ -73,7 +73,17 @@ type GameState = {
 
 type Cell = {
   gemColor: GemColor;
-  flags: { cursed?: boolean };  // boss-corruptor adds these
+  flags: CellFlags;  // enemy board verbs write here; cursed is the prototype
+};
+
+// Open set — each enemy archetype's board verb adds a flag.
+// All flags are read by the resolution / matchability layer, never by the match-detection scan.
+type CellFlags = {
+  cursed?: boolean;        // Corruptor — self-damage on match
+  petrified?: number;      // Defender — turns remaining; cell cannot anchor a match
+  hexed?: GemColor;        // Caster — color override; matching cells of this color apply Weak
+  burning?: number;        // Bleeder — turns remaining; matching applies Burn
+  pendingSmash?: number;   // Brute — turns remaining; column will be cleared without payout
 };
 
 type RelicInstance = {

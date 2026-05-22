@@ -23,9 +23,25 @@ Status: **Phase 0 complete.** Systems-level design locked. Content-level decisio
   - ⚔ N — attacks for N next turn
   - 🛡 N — blocks N
   - ☠ debuff — applies status
-  - 🌀 board — manipulates board (e.g. converts gems, locks tiles)
+  - 🌀 board — manipulates board (see *Enemies share the board* below — this is the signature verb, not a side category)
 - Intent visible **before** player's turn so they can plan.
-- Each enemy has a **hybrid** intent pattern: the *kind* follows a fixed per-archetype script (e.g. Brute: ⚔, ⚔, 🛡, ⚔, …), but the *numeric value* (damage, block amount) rolls from `rng.enemy` within an archetype-defined range. Players can learn the rhythm of intents and plan around them; numbers stay varied enough that fights don't feel canned. Patterns repeat from the start of each encounter so the player sees the same intent at the same turn index regardless of when they entered the fight.
+- Each enemy has a **hybrid** intent pattern: the *kind* follows a fixed per-archetype script (e.g. Brute: ⚔, 🌀, ⚔, …), but the *numeric value* (damage, block amount) and the *target* of board verbs (which column, which color) roll from `rng.enemy` within archetype-defined constraints. Players can learn the rhythm of intents and plan around them; numbers and targets stay varied enough that fights don't feel canned. Patterns repeat from the start of each encounter so the player sees the same intent kind at the same turn index regardless of when they entered the fight.
+
+### Enemies share the board (locked direction)
+
+Pivot from the original framing: enemies don't just attack and defend — their **signature verb is board manipulation**. Telegraphed intents still drive the planning loop, but the intent typically targets *the grid itself*, not just the player's HP bar. This is how the game stakes out its own ground between two reference points:
+
+- **Not Puzzle Quest:** the enemy never takes matching turns. The player owns the matching loop; pacing stays tight.
+- **Not pure Slay the Spire:** the enemy's intent isn't just damage/block. It reshapes the board the player has to play on.
+
+Each enemy archetype gets a distinctive **board verb** — smashes a column, corrupts a color, locks a row, hexes a tile. The verb is:
+- **Legible from the intent telegraph** (the player can see what's about to happen and where).
+- **Counterable through play** (clear the threatened cells, deny the target, sequence around the lockout).
+- **Built on the cell-flags primitive** already established for cursed cells — same architecture, different flag.
+
+Identity enemies become *puzzles*, not HP bars with different damage numbers. Direct damage / block intents stay in the kit as connective tissue (a Brute might smash a column *and* attack on alternating turns), and one or two pure-stat archetypes (e.g. Skirmisher as chip-damage threat) keep the early curve gentle. The boss is the most extreme board verb, not the only one — Phase J1's Corruptor work is the first full instance of a broader system, not a one-off gimmick.
+
+Specific archetype verbs are listed in `02-scope.md` as candidates; each is locked when its build phase opens.
 
 ### Match → combat mapping (gems-as-resources)
 Five gem colors, five pools. Matching gems fills the corresponding pool.
@@ -134,12 +150,12 @@ A **player phase** is the full window from when the player regains control until
 - Shop offers: 3 relics (variable cost), 2 heals, 1 relic-remove, 1 board-upgrade (TBD what these do).
 
 ### Boss: one boss, one gimmick
-- One designed boss for the slice with a **board-manipulation gimmick** (not just stat bloat).
+- One designed boss for the slice with a **scaled-up board verb**. Since every identity enemy now has a board verb (see *Enemies share the board*), the boss differentiates on scale, persistence, and severity — not category.
 - Candidate gimmicks (pick one in Phase 1):
   - **Petrifier**: every 3rd turn, locks a random column (gems can't be matched there for 2 turns)
   - **Corruptor**: every 2nd turn, converts 2 random gems to "cursed" gems (matching cursed = self-damage)
   - **Wall**: spawns indestructible block-tiles in random spots; player must work around them
-- Shows the system can do interesting board effects (which is also where board-rule modifiers will live).
+- The cell-flags architecture proven on Corruptor is the same one all other enemy board verbs ride on, so the boss exercises the system to its limit rather than introducing a one-off mechanic.
 
 ---
 

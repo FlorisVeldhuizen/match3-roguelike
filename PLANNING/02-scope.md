@@ -36,15 +36,19 @@ Red / Blue / Green / Yellow / Purple, each with a **unique SVG silhouette** so c
 
 This is an asset-level accessibility shim — no toggle, no color-blind mode (still a non-goal). The board just *happens* to be legible without color. Costs an afternoon of SVG work at Phase B and pays for itself forever.
 
-### Enemies: 6 archetypes (locked, numbers TBD)
-| Enemy | Lesson | Behavior sketch |
-|-------|--------|------------------|
-| **Brute** | Block on telegraph | High HP, big attack every 2-3 turns, otherwise idle |
-| **Skirmisher** | Sustained damage | Low HP, attacks every turn for small damage |
-| **Caster** | Priority targeting | Fragile, applies Weak/Vulnerable debuffs |
-| **Defender** | Breakthrough matters | Gains block each turn (persistent, accumulates across turns), hard to chip down |
-| **Swarmer** | AOE + target switch | Appears in groups of 2-3, weak individually |
-| **Bleeder** | Status fx threat | Attacks apply Burn |
+### Enemies: 6 archetypes (locked, numbers + verbs TBD)
+Per *Enemies share the board* (`01-design.md`), identity archetypes have a **board verb** in addition to (or instead of) direct damage. Verbs below are **candidates** — locked when each archetype's build phase opens (Brute already shipped in Phase E without a verb; see roadmap note).
+
+| Enemy | Lesson | Board verb (candidate) | Behavior sketch |
+|-------|--------|------------------------|------------------|
+| **Brute** | Block on telegraph | **Column smash** — destroys all gems in one telegraphed column (no payout, refills from top); player gets one phase warning to clear/match that column for value first | High HP, alternates column-smash and big single-target attack |
+| **Skirmisher** | Sustained damage | *(none — connective tissue)* | Low HP, attacks every turn for small damage. The "pure stat" archetype that keeps the early curve gentle |
+| **Caster** | Priority targeting | **Color hex** — marks one gem color as hexed for 2 turns; matching hexed gems applies 1 stack of Weak per cell (telegraphed: the player can see which color is about to become a trap) | Fragile, alternates hex with Weak/Vulnerable direct debuffs |
+| **Defender** | Breakthrough matters | **Petrify row** — locks one row from being matched for 2 turns (gems still cascade through; just can't be the anchor of a match) | Gains block each turn; petrify forces the player to route matches around the wall |
+| **Swarmer** | AOE + target switch | **Cluster shove** — slides a 2-cell run of one color across the board to clump with another (creates a match the player didn't plan; can be useful, can ruin a set-up — telegraphed enough to react) | Appears in groups of 2-3, weak individually |
+| **Bleeder** | Status fx threat | **Tile burn** — flags 1-2 cells as burning for 2 turns; matching a burning cell applies 1 stack of Burn per cell | Attacks also apply Burn directly — the verb amplifies, doesn't replace |
+
+**Architectural note:** every board verb reads/writes the existing `Cell.flags` bag (`cursed` is the prototype; add `petrified`, `hexed`, `burning`, `pending-smash` as needed). Match algorithm and cascade loop stay unchanged — verbs only affect generation, resolution, or matchability checks. See `03-architecture.md` §Cell.
 
 ### Boss: Corruptor (locked, numbers TBD)
 - High HP, multi-phase intents.
