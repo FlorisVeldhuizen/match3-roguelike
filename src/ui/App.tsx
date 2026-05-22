@@ -2,6 +2,7 @@ import { HUD } from './components/HUD'
 import { EnemyFrame } from './components/EnemyFrame'
 import { VictoryOverlay } from './components/VictoryOverlay'
 import { GameOverOverlay } from './components/GameOverOverlay'
+import { PhaseBanner } from './components/PhaseBanner'
 import { MuteToggle } from './components/MuteToggle'
 
 export const BOARD_MOUNT_ID = 'board-mount'
@@ -19,6 +20,7 @@ export function App() {
         <div id={BOARD_MOUNT_ID} className="board-mount" />
       </section>
       <HUD />
+      <PhaseBanner />
       <VictoryOverlay />
       <GameOverOverlay />
     </main>

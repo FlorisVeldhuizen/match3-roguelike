@@ -17,6 +17,23 @@ const DROP_PER_CELL_MS = 80
 const DROP_MIN_MS = 150
 const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
 
+// Combat beat pacing — each event gets its own breath so the player can read
+// what's happening. Tuned to feel snappy but distinct; Spacebar fast-forward
+// (Phase L) will collapse these to 0.
+const BEAT = {
+  damageDealt: 380,
+  blockGained: 240,
+  healed: 260,
+  enemyKilled: 480,
+  damageTaken: 440,
+  enemyBlockGained: 320,
+  intentTelegraphed: 180,
+  phaseToEnemy: 600,
+  phaseToPlayer: 380,
+  phaseToVictory: 500,
+  phaseToGameOver: 500,
+} as const
+
 export type BoardGeometry = {
   cellSize: number
   gemSize: number
@@ -27,6 +44,21 @@ const keyOf = (p: Pos) => `${p.x},${p.y}`
 
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms))
+
+function phaseBeat(phase: import('../types').CombatPhase): number {
+  switch (phase) {
+    case 'enemy-acting':
+      return BEAT.phaseToEnemy
+    case 'player-acting':
+      return BEAT.phaseToPlayer
+    case 'victory':
+      return BEAT.phaseToVictory
+    case 'game-over':
+      return BEAT.phaseToGameOver
+    default:
+      return 0
+  }
+}
 
 // Overshoot-and-settle scale curve for callout text. Mirrors the puco-puco
 // combo-pop keyframes: 0% → 1.45, 60% → 0.92, 100% → 1.0.
@@ -171,21 +203,38 @@ export class AnimationController {
         return
       case 'damage-dealt':
         this.spawnDamagePopup(event.targetId, event.amount)
+        await wait(BEAT.damageDealt)
         return
       case 'healed':
         this.spawnHealPopup(event.amount)
+        await wait(BEAT.healed)
         return
       case 'damage-taken':
-        if (event.amount > 0) this.spawnPlayerDamagePopup(event.amount)
+        if (event.amount > 0) {
+          this.spawnPlayerDamagePopup(event.amount)
+          await wait(BEAT.damageTaken)
+        }
         return
       case 'enemy-block-gained':
         this.spawnEnemyBlockPopup(event.enemyId, event.amount)
+        await wait(BEAT.enemyBlockGained)
         return
       case 'block-gained':
+        await wait(BEAT.blockGained)
+        return
       case 'enemy-killed':
+        await wait(BEAT.enemyKilled)
+        return
       case 'intent-telegraphed':
-      case 'turn-ended':
+        await wait(BEAT.intentTelegraphed)
+        return
       case 'phase-changed':
+        await wait(phaseBeat(event.phase))
+        return
+      case 'extra-turn-granted':
+        await wait(BEAT.phaseToPlayer)
+        return
+      case 'turn-ended':
       case 'screen-shake':
         // HUD reads these straight off state or via the event bus subscriber.
         return

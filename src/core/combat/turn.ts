@@ -41,21 +41,10 @@ export function resolveEndOfPhase(
   const events: GameEvent[] = []
   const pools = player.phasePools
 
-  // Heal (capped at maxHp).
-  let nextHp = player.hp
-  if (pools.green > 0) {
-    nextHp = Math.min(player.maxHp, player.hp + pools.green)
-    const healed = nextHp - player.hp
-    if (healed > 0) events.push({ kind: 'healed', amount: healed })
-  }
+  // Emit in narrative order so the player sees impact first, defensive
+  // setup second, recovery last: attack → block → heal.
 
-  // Block: set to blue pool (any prior block from this phase is overwritten).
-  const nextBlock = pools.blue
-  if (nextBlock > 0) {
-    events.push({ kind: 'block-gained', amount: nextBlock })
-  }
-
-  // Damage to currently targeted enemy. Enemy block drains first, then HP.
+  // 1. Damage to currently targeted enemy. Enemy block drains first, then HP.
   let nextEnemies = enemies
   let nextTargetId = targetEnemyId
   if (pools.red > 0 && nextTargetId) {
@@ -88,6 +77,20 @@ export function resolveEndOfPhase(
         nextTargetId = nextLiving?.id ?? null
       }
     }
+  }
+
+  // 2. Block: set to blue pool (any prior block from this phase is overwritten).
+  const nextBlock = pools.blue
+  if (nextBlock > 0) {
+    events.push({ kind: 'block-gained', amount: nextBlock })
+  }
+
+  // 3. Heal (capped at maxHp).
+  let nextHp = player.hp
+  if (pools.green > 0) {
+    nextHp = Math.min(player.maxHp, player.hp + pools.green)
+    const healed = nextHp - player.hp
+    if (healed > 0) events.push({ kind: 'healed', amount: healed })
   }
 
   const updatedPlayer: Player = {

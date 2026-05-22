@@ -65,10 +65,15 @@ export function HUD() {
         if (event.amount > 0) {
           setHpHit(true)
           window.setTimeout(() => setHpHit(false), 420)
-          if (event.amount >= 5) {
-            setShake(true)
-            window.setTimeout(() => setShake(false), 320)
-          }
+          // Shake on every HP hit, harder on big ones.
+          setShake(true)
+          window.setTimeout(() => setShake(false), event.amount >= 5 ? 420 : 280)
+          // Vignette flash on the whole frame.
+          document.body.classList.add('vignette-damage')
+          window.setTimeout(
+            () => document.body.classList.remove('vignette-damage'),
+            500,
+          )
         }
       }
     })

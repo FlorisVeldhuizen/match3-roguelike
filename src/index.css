@@ -111,6 +111,21 @@ body {
   transition: border-color 120ms ease, opacity 120ms ease;
 }
 
+@keyframes intent-pop-in {
+  0% {
+    transform: translateX(-50%) translateY(6px) scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: translateX(-50%) translateY(-2px) scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
 .enemy-intent {
   position: absolute;
   top: -0.85rem;
@@ -127,6 +142,8 @@ body {
   font-weight: 700;
   line-height: 1;
   z-index: 2;
+  animation: intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+  transform-origin: center bottom;
 }
 
 .enemy-intent.intent-attack {
@@ -141,6 +158,56 @@ body {
 
 .enemy-intent .intent-icon {
   font-size: 0.95rem;
+}
+
+@keyframes enemy-firing-attack {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: brightness(1);
+    border-color: #2a2a3e;
+  }
+  25% {
+    transform: translate3d(0, -3px, 0) scale(1.06);
+    filter: brightness(1.8) saturate(1.4);
+    border-color: #ff7a72;
+    box-shadow: 0 0 22px rgba(238, 94, 87, 0.55);
+  }
+  60% {
+    transform: translate3d(2px, 4px, 0) scale(1.02);
+    filter: brightness(1.3);
+    border-color: #ff7a72;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: brightness(1);
+    border-color: #2a2a3e;
+  }
+}
+
+@keyframes enemy-firing-block {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
+    border-color: #2a2a3e;
+  }
+  35% {
+    transform: scale(1.04);
+    box-shadow: 0 0 28px 4px rgba(122, 184, 255, 0.45);
+    border-color: #7ab8ff;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
+    border-color: #2a2a3e;
+  }
+}
+
+.enemy-frame.firing-attack {
+  animation: enemy-firing-attack 420ms ease-out;
+}
+
+.enemy-frame.firing-block {
+  animation: enemy-firing-block 420ms ease-out;
 }
 
 .enemy-block-badge {
@@ -478,6 +545,110 @@ body {
   color: #0e0e15;
 }
 
+/* Phase banner — announces "Your Turn" / "Enemy Turn" mid-board */
+
+@keyframes phase-banner-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+    letter-spacing: 0.04em;
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+    letter-spacing: 0.12em;
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    letter-spacing: 0.14em;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+    letter-spacing: 0.16em;
+  }
+}
+
+@keyframes phase-banner-streak {
+  0% { transform: translateX(-110%); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateX(110%); opacity: 0; }
+}
+
+.phase-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9;
+  pointer-events: none;
+  padding: 0.85rem 2.4rem;
+  border-radius: 0.6rem;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45), 0 0 18px rgba(0, 0, 0, 0.6);
+  background: rgba(8, 8, 14, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+  animation: phase-banner-in 1.05s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  will-change: transform, opacity, letter-spacing;
+}
+
+.phase-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 100%
+  );
+  animation: phase-banner-streak 1.05s ease-out forwards;
+  pointer-events: none;
+}
+
+.phase-banner-player {
+  border-color: rgba(122, 184, 255, 0.55);
+  box-shadow: 0 0 36px rgba(122, 184, 255, 0.22), 0 8px 26px rgba(0, 0, 0, 0.45);
+  color: #d9ecff;
+}
+
+.phase-banner-enemy {
+  border-color: rgba(238, 94, 87, 0.55);
+  box-shadow: 0 0 36px rgba(238, 94, 87, 0.28), 0 8px 26px rgba(0, 0, 0, 0.45);
+  color: #ffd8d4;
+}
+
+.phase-banner-victory {
+  border-color: rgba(250, 204, 21, 0.6);
+  box-shadow: 0 0 36px rgba(250, 204, 21, 0.3), 0 8px 26px rgba(0, 0, 0, 0.45);
+  color: #fff2b8;
+}
+
+.phase-banner-defeat {
+  border-color: rgba(238, 94, 87, 0.7);
+  box-shadow: 0 0 40px rgba(238, 94, 87, 0.35), 0 8px 26px rgba(0, 0, 0, 0.5);
+  color: #ffd8d4;
+}
+
+.phase-banner-bonus {
+  border-color: rgba(250, 204, 21, 0.7);
+  box-shadow: 0 0 40px rgba(250, 204, 21, 0.32), 0 8px 26px rgba(0, 0, 0, 0.45);
+  color: #fff2b8;
+  font-size: 2.1rem;
+}
+
+.phase-banner-text {
+  position: relative;
+  z-index: 1;
+}
+
 /* Feedback animations */
 
 @keyframes shake {
@@ -546,6 +717,27 @@ body.shake {
 
 .hp-bar.glow {
   animation: hp-glow 500ms ease-out;
+}
+
+@keyframes vignette-damage-flash {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+  20% {
+    box-shadow: inset 0 0 160px 40px rgba(238, 94, 87, 0.55);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+}
+
+body.vignette-damage::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  animation: vignette-damage-flash 500ms ease-out;
 }
 
 @keyframes hp-hit {

@@ -157,7 +157,12 @@ export const useGameStore = create<GameStore>()(
 
       const tailEvents: GameEvent[] = []
 
-      if (!hasExtraTurnMatch(swap.events)) {
+      const extraTurn = hasExtraTurnMatch(swap.events)
+      if (extraTurn) {
+        tailEvents.push({ kind: 'extra-turn-granted' })
+      }
+
+      if (!extraTurn) {
         const resolved = resolveEndOfPhase(player, enemies, targetEnemyId)
         player = resolved.player
         enemies = resolved.enemies

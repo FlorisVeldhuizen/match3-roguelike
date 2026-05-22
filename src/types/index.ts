@@ -57,6 +57,7 @@ export type GameEvent =
   | { kind: 'healed'; amount: number }
   | { kind: 'enemy-killed'; enemyId: string }
   | { kind: 'intent-telegraphed'; enemyId: string; intent: Intent }
+  | { kind: 'extra-turn-granted' }
   | { kind: 'turn-ended' }
   | { kind: 'phase-changed'; phase: CombatPhase }
   | { kind: 'screen-shake'; magnitude: number }
