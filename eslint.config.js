@@ -23,29 +23,65 @@ export default defineConfig([
       globals: globals.browser,
     },
     settings: {
+      'import/resolver': {
+        typescript: { project: './tsconfig.app.json' },
+        node: true,
+      },
       'boundaries/include': ['src/**/*'],
       'boundaries/elements': [
-        { type: 'core', pattern: 'src/core', mode: 'folder' },
-        { type: 'content', pattern: 'src/content', mode: 'folder' },
-        { type: 'ui', pattern: 'src/ui', mode: 'folder' },
-        { type: 'pixi', pattern: 'src/pixi', mode: 'folder' },
-        { type: 'types', pattern: 'src/types', mode: 'folder' },
+        { type: 'core', pattern: 'src/core/**/*', mode: 'file' },
+        { type: 'content', pattern: 'src/content/**/*', mode: 'file' },
+        { type: 'ui', pattern: 'src/ui/**/*', mode: 'file' },
+        { type: 'pixi', pattern: 'src/pixi/**/*', mode: 'file' },
+        { type: 'types', pattern: 'src/types/**/*', mode: 'file' },
         { type: 'root', pattern: 'src/*.{ts,tsx}', mode: 'file' },
       ],
     },
     rules: {
-      'boundaries/element-types': [
+      'boundaries/dependencies': [
         'error',
         {
           default: 'disallow',
           rules: [
-            { from: 'core', allow: ['core', 'types'] },
-            { from: 'content', allow: ['types', 'core'] },
-            { from: 'ui', allow: ['core', 'content', 'types'] },
-            { from: 'pixi', allow: ['core', 'content', 'types'] },
-            { from: 'types', allow: ['types'] },
+            {
+              from: { type: 'core' },
+              allow: [{ to: { type: 'core' } }, { to: { type: 'types' } }],
+            },
+            {
+              from: { type: 'content' },
+              allow: [{ to: { type: 'types' } }, { to: { type: 'core' } }],
+            },
+            {
+              from: { type: 'ui' },
+              allow: [
+                { to: { type: 'core' } },
+                { to: { type: 'content' } },
+                { to: { type: 'types' } },
+              ],
+            },
+            {
+              from: { type: 'pixi' },
+              allow: [
+                { to: { type: 'core' } },
+                { to: { type: 'content' } },
+                { to: { type: 'types' } },
+              ],
+            },
+            {
+              from: { type: 'types' },
+              allow: [{ to: { type: 'types' } }],
+            },
             // bootstrap (main.tsx etc.) may import anything
-            { from: 'root', allow: ['core', 'content', 'ui', 'pixi', 'types'] },
+            {
+              from: { type: 'root' },
+              allow: [
+                { to: { type: 'core' } },
+                { to: { type: 'content' } },
+                { to: { type: 'ui' } },
+                { to: { type: 'pixi' } },
+                { to: { type: 'types' } },
+              ],
+            },
           ],
         },
       ],

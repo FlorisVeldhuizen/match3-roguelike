@@ -452,17 +452,19 @@ Three import rules (enforced by `eslint-plugin-boundaries`):
 Use `eslint-plugin-boundaries` (not `no-restricted-imports`) — the boundaries plugin defines element types (`core`, `content`, `ui`, `pixi`, `types`) and an allow-matrix between them, which both enforces the rules and acts as living documentation. `no-restricted-imports` would only catch direct path imports, missing transitive violations and harder to read.
 
 ```js
-// eslintrc excerpt
-'boundaries/element-types': ['error', {
+// eslint.config.js excerpt (eslint-plugin-boundaries v6 syntax)
+'boundaries/dependencies': ['error', {
   default: 'disallow',
   rules: [
-    { from: 'core',    allow: ['core', 'types'] },
-    { from: 'content', allow: ['types', 'core'] },
-    { from: 'ui',      allow: ['core', 'content', 'types'] },
-    { from: 'pixi',    allow: ['core', 'content', 'types'] },
+    { from: { type: 'core' },    allow: [{ to: { type: 'core' } }, { to: { type: 'types' } }] },
+    { from: { type: 'content' }, allow: [{ to: { type: 'types' } }, { to: { type: 'core' } }] },
+    { from: { type: 'ui' },      allow: [{ to: { type: 'core' } }, { to: { type: 'content' } }, { to: { type: 'types' } }] },
+    { from: { type: 'pixi' },    allow: [{ to: { type: 'core' } }, { to: { type: 'content' } }, { to: { type: 'types' } }] },
   ],
 }]
 ```
+
+Resolution requires `eslint-import-resolver-typescript` configured under `import/resolver` so the plugin can map relative imports to element types.
 
 This is the architecture's hardest discipline. Following it means game logic stays testable and rendering stays swappable.
 
