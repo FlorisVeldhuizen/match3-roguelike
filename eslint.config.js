@@ -49,11 +49,16 @@ export default defineConfig([
             },
             {
               from: { type: 'content' },
-              allow: [{ to: { type: 'types' } }, { to: { type: 'core' } }],
+              allow: [
+                { to: { type: 'content' } },
+                { to: { type: 'types' } },
+                { to: { type: 'core' } },
+              ],
             },
             {
               from: { type: 'ui' },
               allow: [
+                { to: { type: 'ui' } },
                 { to: { type: 'core' } },
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
@@ -62,6 +67,7 @@ export default defineConfig([
             {
               from: { type: 'pixi' },
               allow: [
+                { to: { type: 'pixi' } },
                 { to: { type: 'core' } },
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
