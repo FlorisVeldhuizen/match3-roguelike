@@ -20,8 +20,17 @@ function intentLabel(intent: Intent): string {
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
-  const pendingRed = useGameStore((s) => s.fight.player.phasePools.red)
+  const rootSeed = useGameStore((s) => s.rootSeed)
   const animatedPhase = useAnimatedPhase()
+
+  // Displayed HP per enemy, mirrored event-driven so the bar drains on
+  // `damage-dealt` (animation-timed) instead of snapping when the store
+  // finalises the whole turn synchronously at swap commit time.
+  const [displayedHp, setDisplayedHp] = useState<Record<string, number>>(() => {
+    const out: Record<string, number> = {}
+    for (const e of enemies) out[e.id] = e.hp
+    return out
+  })
   // The badge belongs to the *player phase that's about to end* — it tells
   // the player "this is what the enemy will do." Once the enemy starts
   // acting (animated phase = enemy-acting) we hide it; the firing pulse on
@@ -53,17 +62,31 @@ export function EnemyFrame() {
     const unsub = subscribeGameEvents((event) => {
       if (event.kind === 'damage-dealt') {
         const id = event.targetId
-        setFlashing((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+        const amount = event.amount
+        const isPlayerAttack = event.source === 'player-attack'
+        // Player-attack hits commit per-match; the matching red trail
+        // takes ~700ms to land, so we delay the bar drain + hit flash
+        // until it arrives. Other damage sources (future DoTs, etc.)
+        // are not trail-driven — apply instantly.
+        const delay = isPlayerAttack ? 700 : 0
         window.setTimeout(() => {
-          setFlashing((prev) => ({
+          setDisplayedHp((prev) => ({
             ...prev,
-            [id]: Math.max(0, (prev[id] ?? 0) - 1),
+            [id]: Math.max(0, (prev[id] ?? 0) - amount),
           }))
-        }, HIT_FLASH_MS)
+          setFlashing((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+          window.setTimeout(() => {
+            setFlashing((prev) => ({
+              ...prev,
+              [id]: Math.max(0, (prev[id] ?? 0) - 1),
+            }))
+          }, HIT_FLASH_MS)
+        }, delay)
       } else if (event.kind === 'pool-gained' && event.color === 'red') {
-        // Red gem trail just landed — pulse the currently targeted enemy.
-        // The trail itself flies to the [data-pool-target="red"] element,
-        // which is the same frame.
+        // Red gem trail just spawned — schedule a brief outline pulse
+        // on the targeted enemy when it lands. The actual damage popup
+        // comes from the per-match damage-dealt event the store walker
+        // emits right after this; no longer accumulates into a pip.
         const id = useGameStore.getState().fight.targetEnemyId
         if (!id) return
         window.setTimeout(() => {
@@ -74,7 +97,7 @@ export function EnemyFrame() {
               [id]: Math.max(0, (prev[id] ?? 0) - 1),
             }))
           }, 380)
-        }, 700) // matches TRAIL_TRAVEL_MS in HUD
+        }, 700)
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
         // Enemy's attack just landed — pulse the *currently-acting* enemy.
         // Phase E only has one enemy; in H2 we'll route by enemy id once the
@@ -94,10 +117,28 @@ export function EnemyFrame() {
     return unsub
   }, [])
 
+  // Hard-resync displayed HP on run reset. Subscribe to the store so
+  // the setState happens in the callback (external-system update),
+  // not in the effect body.
+  useEffect(() => {
+    let prevSeed = rootSeed
+    return useGameStore.subscribe((s) => {
+      if (s.rootSeed === prevSeed) return
+      prevSeed = s.rootSeed
+      const fresh: Record<string, number> = {}
+      for (const e of s.fight.enemies) fresh[e.id] = e.hp
+      setDisplayedHp(fresh)
+    })
+  }, [rootSeed])
+
   return (
     <section className="enemy-row" aria-label="Enemies">
       {enemies.map((enemy) => {
-        const dead = enemy.hp <= 0
+        const shownHp = displayedHp[enemy.id] ?? enemy.hp
+        // Use the *displayed* HP for the dead-vs-alive visual so the
+        // skull/intent-hide flips in sync with the bar drain, not at
+        // store-commit time.
+        const dead = shownHp <= 0
         const isTarget = enemy.id === targetId
         const isHit = (flashing[enemy.id] ?? 0) > 0
         const isTrailHit = (trailPulse[enemy.id] ?? 0) > 0
@@ -105,12 +146,13 @@ export function EnemyFrame() {
         const isFiring = (firingState?.count ?? 0) > 0
         const firingKind = firingState?.kind
         const intent = displayedIntent[enemy.id] ?? enemy.currentIntent
-        const hpPct = Math.max(0, (enemy.hp / enemy.maxHp) * 100)
-        // Pending damage pip only shown on the target — that's where the
-        // red pool will resolve at phase end.
-        const showPendingDamage = isTarget && !dead && pendingRed > 0
+        const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
         // Targeted, living enemy is the attractor for red gem trails.
         const poolTargetAttr = isTarget && !dead ? 'red' : undefined
+        // Plan B: red gem damage commits per-match (no pending pip).
+        // The previous "loaded damage" indicator is gone; damage is
+        // shown by the bar draining when each damage-dealt event
+        // plays.
         return (
           <div
             key={enemy.id}
@@ -126,7 +168,7 @@ export function EnemyFrame() {
             ]
               .filter(Boolean)
               .join(' ')}
-            aria-label={`${enemy.name} ${enemy.hp}/${enemy.maxHp} HP${dead ? ' (defeated)' : ''}`}
+            aria-label={`${enemy.name} ${shownHp}/${enemy.maxHp} HP${dead ? ' (defeated)' : ''}`}
           >
             {!dead && showIntent && (
               <div
@@ -158,22 +200,11 @@ export function EnemyFrame() {
                 <span>{enemy.block}</span>
               </div>
             )}
-            <div
-              className="enemy-hp-bar"
-              role="img"
-              title={
-                showPendingDamage
-                  ? `Incoming damage: -${pendingRed} at end of phase`
-                  : undefined
-              }
-            >
+            <div className="enemy-hp-bar" role="img">
               <div className="enemy-hp-fill" style={{ width: `${hpPct}%` }} />
               <span className="enemy-hp-text">
-                {Math.max(0, enemy.hp)} / {enemy.maxHp}
+                {Math.max(0, shownHp)} / {enemy.maxHp}
               </span>
-              {showPendingDamage && (
-                <span className="enemy-hp-pending" aria-hidden>−{pendingRed}</span>
-              )}
             </div>
           </div>
         )

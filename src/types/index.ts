@@ -55,6 +55,8 @@ export type GameEvent =
   | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }
   | { kind: 'block-gained'; amount: number }
   | { kind: 'enemy-block-gained'; enemyId: string; amount: number }
+  | { kind: 'block-absorbed'; targetId: 'player' | string }
+  | { kind: 'block-broken'; targetId: 'player' | string }
   | { kind: 'healed'; amount: number }
   | { kind: 'enemy-killed'; enemyId: string }
   | { kind: 'intent-telegraphed'; enemyId: string; intent: Intent }

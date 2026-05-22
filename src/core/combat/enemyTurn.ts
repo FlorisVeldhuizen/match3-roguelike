@@ -35,11 +35,13 @@ export function executeEnemyTurn(
 
     if (intent.kind === 'attack') {
       const incoming = intent.amount
-      const blocked = Math.min(nextPlayer.block, incoming)
+      const blockBefore = nextPlayer.block
+      const blocked = Math.min(blockBefore, incoming)
       const hpDamage = incoming - blocked
+      const blockAfter = blockBefore - blocked
       nextPlayer = {
         ...nextPlayer,
-        block: nextPlayer.block - blocked,
+        block: blockAfter,
         hp: Math.max(0, nextPlayer.hp - hpDamage),
       }
       events.push({
@@ -48,6 +50,11 @@ export function executeEnemyTurn(
         blocked,
         source: 'enemy-attack',
       })
+      if (blockBefore > 0 && blockAfter === 0 && blocked > 0) {
+        events.push({ kind: 'block-broken', targetId: 'player' })
+      } else if (blocked > 0 && hpDamage === 0) {
+        events.push({ kind: 'block-absorbed', targetId: 'player' })
+      }
     } else {
       updatedEnemy = { ...updatedEnemy, block: updatedEnemy.block + intent.amount }
       events.push({

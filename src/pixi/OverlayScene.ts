@@ -326,6 +326,176 @@ export class OverlayScene {
     }
   }
 
+  // Shield-absorbed flash: an expanding hex ring + a few light-blue sparks
+  // flying outward. Reads as "the shield held" — quick, contained, not
+  // showy. Color is the same light-blue used by the block popup so the
+  // visual language stays consistent across the HUD.
+  spawnShieldBlock(at: ScreenPoint): void {
+    const layer = this.layer
+    if (!layer) return
+    const hex = 0xa8c8ff
+
+    // Expanding hex ring: outline only, grows ~1.0 → 2.2 while fading.
+    const ring = new Graphics()
+    const r = 24
+    for (let i = 0; i <= 6; i++) {
+      const a = (Math.PI * 2 * i) / 6 - Math.PI / 2
+      const x = Math.cos(a) * r
+      const y = Math.sin(a) * r
+      if (i === 0) ring.moveTo(x, y)
+      else ring.lineTo(x, y)
+    }
+    ring.stroke({ color: hex, width: 2.5, alpha: 1, join: 'round' })
+    ring.x = at.x
+    ring.y = at.y
+    layer.addChild(ring)
+    this.effects.push({
+      kind: 'physics',
+      view: ring,
+      x: at.x,
+      y: at.y,
+      vx: 0,
+      vy: 0,
+      gravity: 0,
+      drag: 0,
+      life: 320,
+      maxLife: 320,
+      growBy: 0,
+      // Quick outward expansion, then settles. Progress is 0→1 over life.
+      scaleCurve: (p) => 1 + p * 1.3,
+      fadeMode: 'linear',
+      baseScale: 1,
+      rotation: 0,
+      rotationTarget: 0,
+      rotationEase: 0,
+      alphaScale: 0.9,
+    })
+
+    // 5 small radial sparks — short life, no gravity, fade fast.
+    const sparkCount = 5
+    for (let i = 0; i < sparkCount; i++) {
+      const angle =
+        (Math.PI * 2 * i) / sparkCount + (Math.random() - 0.5) * 0.4
+      const speed = 110 + Math.random() * 60
+      const g = new Graphics()
+        .circle(0, 0, 1.6 + Math.random() * 1.2)
+        .fill({ color: 0xeaf4ff, alpha: 1 })
+      g.x = at.x
+      g.y = at.y
+      layer.addChild(g)
+      this.effects.push({
+        kind: 'physics',
+        view: g,
+        x: at.x,
+        y: at.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        gravity: 0,
+        drag: 2.2,
+        life: 260 + Math.random() * 80,
+        maxLife: 320,
+        growBy: -0.6,
+        scaleCurve: null,
+        fadeMode: 'linear',
+        baseScale: 1,
+        rotation: 0,
+        rotationTarget: 0,
+        rotationEase: 0,
+        alphaScale: 1,
+      })
+    }
+  }
+
+  // Shield-broken shatter: a dimmer, larger ring flash plus 10 angular
+  // shards flying outward with gravity and rotation. Reads as "the shield
+  // gave way" — more chaotic and longer-lived than the block effect, with
+  // shards falling away.
+  spawnShieldBreak(at: ScreenPoint): void {
+    const layer = this.layer
+    if (!layer) return
+    const hex = 0xd6ebff
+
+    // Broken hex ring: half-arcs offset slightly so the ring looks fractured.
+    const ring = new Graphics()
+    const r = 28
+    // Two arcs with a gap — gives the "split" look without per-segment work.
+    const arcs: [number, number][] = [
+      [-Math.PI * 0.85, Math.PI * 0.1],
+      [Math.PI * 0.25, Math.PI * 0.95],
+    ]
+    for (const [start, end] of arcs) {
+      ring.moveTo(Math.cos(start) * r, Math.sin(start) * r)
+      const segments = 10
+      for (let i = 1; i <= segments; i++) {
+        const a = start + ((end - start) * i) / segments
+        ring.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+      }
+    }
+    ring.stroke({ color: hex, width: 2.5, alpha: 1, join: 'round' })
+    ring.x = at.x
+    ring.y = at.y
+    layer.addChild(ring)
+    this.effects.push({
+      kind: 'physics',
+      view: ring,
+      x: at.x,
+      y: at.y,
+      vx: 0,
+      vy: 0,
+      gravity: 0,
+      drag: 0,
+      life: 360,
+      maxLife: 360,
+      growBy: 0,
+      scaleCurve: (p) => 1 + p * 1.5,
+      fadeMode: 'linear',
+      baseScale: 1,
+      rotation: 0,
+      rotationTarget: 0,
+      rotationEase: 0,
+      alphaScale: 0.75,
+    })
+
+    // 10 shards: small elongated rectangles that fly out and tumble.
+    const shardCount = 10
+    for (let i = 0; i < shardCount; i++) {
+      const angle =
+        (Math.PI * 2 * i) / shardCount + (Math.random() - 0.5) * 0.5
+      const speed = 140 + Math.random() * 110
+      const len = 5 + Math.random() * 4
+      const width = 1.6 + Math.random() * 0.8
+      const g = new Graphics()
+        .rect(-len / 2, -width / 2, len, width)
+        .fill({ color: 0xeaf4ff, alpha: 1 })
+      g.x = at.x
+      g.y = at.y
+      g.rotation = angle
+      layer.addChild(g)
+      this.effects.push({
+        kind: 'physics',
+        view: g,
+        x: at.x,
+        y: at.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        gravity: 380,
+        drag: 0.9,
+        life: 520 + Math.random() * 180,
+        maxLife: 700,
+        growBy: 0,
+        scaleCurve: null,
+        fadeMode: 'linear',
+        baseScale: 1,
+        rotation: angle,
+        // Tumble target — pick something past the spawn angle so easing
+        // produces visible rotation throughout the life.
+        rotationTarget: angle + (Math.random() < 0.5 ? -1 : 1) * Math.PI * 1.8,
+        rotationEase: 1.4,
+        alphaScale: 1,
+      })
+    }
+  }
+
   // Floating text (damage popup, cascade callout, etc).
   // rotationFrom/rotationTo (radians) animate the text rotation over its life.
   // rotationEase controls how fast it settles (per-second factor); 0 disables

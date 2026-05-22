@@ -20,7 +20,7 @@ const PULSE_MS = 380
 export function HUD() {
   const player = useGameStore((s) => s.fight.player)
   const phase = useGameStore((s) => s.fight.phase)
-  const hpPct = Math.max(0, (player.hp / player.maxHp) * 100)
+  const rootSeed = useGameStore((s) => s.rootSeed)
   const [pulse, setPulse] = useState<Record<GemColor, number>>({
     red: 0,
     blue: 0,
@@ -33,46 +33,128 @@ export function HUD() {
   const [blockPulse, setBlockPulse] = useState(false)
   const [hpHit, setHpHit] = useState(false)
 
+  // ---- Event-driven displayed values --------------------------------
+  // Canonical state finalises the whole turn (EOP → enemy attack →
+  // beginPlayerPhase) inside `attemptSwap` before React ever sees it, so
+  // intermediate values like committed block are invisible if we read
+  // them straight from the store. These mirrors are driven by the same
+  // animation event stream the canvas listens to, so the HUD ticks in
+  // lockstep with the visible action: gain on trail-arrival, drain on
+  // damage-taken, reset on the next player phase.
+  const [displayedHp, setDisplayedHp] = useState(player.hp)
+  const [displayedMana, setDisplayedMana] = useState(player.mana)
+  const [displayedCharge, setDisplayedCharge] = useState(player.skillCharge)
+  const [displayedBlock, setDisplayedBlock] = useState(player.block)
+  // Block is the one remaining pooled resource — it has to snap into
+  // place before the enemy attacks, so blue gems still accumulate
+  // through the cascade and commit on `block-gained` at EOP. Red/green
+  // commit per-match (plan B), so no pendingRed/pendingGreen here.
+  const [pendingBlue, setPendingBlue] = useState(0)
+
   useEffect(() => {
     const unsub = subscribeGameEvents((event) => {
       if (event.kind === 'pool-gained') {
         const color = event.color
+        const amount = event.amount
+        // Delay the value bump until the particle trail visibly lands —
+        // same window as the existing indicator pulse — so the "+N"
+        // popup spawned at arrival reads as the cause.
         window.setTimeout(() => {
           setPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
           window.setTimeout(() => {
             setPulse((prev) => ({ ...prev, [color]: Math.max(0, prev[color] - 1) }))
           }, PULSE_MS)
+          if (color === 'yellow') setDisplayedMana((m) => m + amount)
+          else if (color === 'purple') setDisplayedCharge((c) => c + amount)
+          else if (color === 'blue') setPendingBlue((p) => p + amount)
+          // Red and green commit per-match via damage-dealt/healed
+          // events; nothing accumulates on the HUD for those.
         }, TRAIL_TRAVEL_MS)
-      } else if (event.kind === 'damage-dealt' && event.amount >= 5) {
-        setShake(true)
-        window.setTimeout(() => setShake(false), 320)
-      } else if (event.kind === 'screen-shake') {
-        setShake(true)
-        window.setTimeout(() => setShake(false), 320)
-      } else if (event.kind === 'healed') {
-        setHpGlow(true)
-        window.setTimeout(() => setHpGlow(false), 500)
       } else if (event.kind === 'block-gained') {
-        setBlockPulse(true)
-        window.setTimeout(() => setBlockPulse(false), 500)
+        // EOP committed the blue pool to the block stat. Move pending
+        // into displayed — the badge stays the same number, just visually
+        // shifts from "pending" styling to "active".
+        setDisplayedBlock(event.amount)
+        setPendingBlue(0)
+      } else if (event.kind === 'healed') {
+        // Per-match heal commit. Delay the bar fill to sync with the
+        // green trail's arrival at the HP bar (matches the popup
+        // timing in AnimationController.scheduleDelayedHealPopup).
+        const amount = event.amount
+        window.setTimeout(() => {
+          setDisplayedHp((h) =>
+            Math.min(
+              useGameStore.getState().fight.player.maxHp,
+              h + amount,
+            ),
+          )
+        }, TRAIL_TRAVEL_MS)
       } else if (event.kind === 'damage-taken') {
+        // Snap to post-absorption state so the bar drain matches what
+        // the engine actually computed (block may have absorbed part).
+        const s = useGameStore.getState().fight.player
+        setDisplayedHp(s.hp)
+        setDisplayedBlock(s.block)
         if (event.amount > 0) {
           setHpHit(true)
           window.setTimeout(() => setHpHit(false), 420)
-          // Shake on every HP hit, harder on big ones.
           setShake(true)
           window.setTimeout(() => setShake(false), event.amount >= 5 ? 420 : 280)
-          // Vignette flash on the whole frame.
           document.body.classList.add('vignette-damage')
           window.setTimeout(
             () => document.body.classList.remove('vignette-damage'),
             500,
           )
         }
+      } else if (event.kind === 'phase-changed') {
+        // Block is per-phase: it expires the moment the next player
+        // phase begins. beginPlayerPhase already cleared it on the
+        // store side; we mirror that here so the badge zeroes in
+        // animation-time, not before the enemy hit is even shown.
+        if (event.phase === 'player-acting') {
+          setDisplayedBlock(0)
+          setPendingBlue(0)
+        }
+      } else if (event.kind === 'damage-dealt' && event.amount >= 5) {
+        setShake(true)
+        window.setTimeout(() => setShake(false), 320)
+      } else if (event.kind === 'screen-shake') {
+        setShake(true)
+        window.setTimeout(() => setShake(false), 320)
+      }
+      // Decorative pulses on commit events — these run independently of
+      // the displayed-value updates above (which already handle the
+      // healed/block-gained events for value changes).
+      if (event.kind === 'healed') {
+        setHpGlow(true)
+        window.setTimeout(() => setHpGlow(false), 500)
+      } else if (event.kind === 'block-gained') {
+        setBlockPulse(true)
+        window.setTimeout(() => setBlockPulse(false), 500)
       }
     })
     return unsub
   }, [])
+
+  // Run reset (restart, new run): hard-resync to canonical state.
+  // Subscribe to the store so the setState call happens in the
+  // subscription callback rather than in the effect body — keeps it on
+  // the "external system update" side of React's effect rules.
+  useEffect(() => {
+    let prevSeed = rootSeed
+    return useGameStore.subscribe((s) => {
+      if (s.rootSeed === prevSeed) return
+      prevSeed = s.rootSeed
+      const p = s.fight.player
+      setDisplayedHp(p.hp)
+      setDisplayedMana(p.mana)
+      setDisplayedCharge(p.skillCharge)
+      setDisplayedBlock(p.block)
+      setPendingBlue(0)
+    })
+    // rootSeed intentionally captured once for initial baseline; the
+    // subscription itself tracks subsequent transitions.
+  }, [rootSeed])
 
   // Apply screenshake to .game (the wrapper around HUD + Pixi canvas) rather
   // than body. position:fixed elements outside .game (the phase banner) stay
@@ -87,18 +169,10 @@ export function HUD() {
   const cls = (color: GemColor, base: string) =>
     pulse[color] > 0 ? `${base} pulsing` : base
 
-  const pendingBlue = player.phasePools.blue
-  const pendingGreen = player.phasePools.green
-  // During the player phase, blue gems are flying to the shield; show the
-  // pool on the badge so the running total is visible. `block` is the
-  // committed value (built up at phase-end + carried from prior phases);
-  // `pendingBlue` is what will fold into it at phase end. We display the
-  // sum so the badge shows the value the player can plan around — the
-  // `pending` class signals that part of it is still up for grabs (Bulwark
-  // etc. can siphon the pool before it commits).
-  const displayedBlock = player.block + pendingBlue
+  const hpPct = Math.max(0, (displayedHp / player.maxHp) * 100)
+  const badgeBlock = displayedBlock + pendingBlue
   const blockHasPending = pendingBlue > 0
-  const blockActive = displayedBlock > 0
+  const blockActive = badgeBlock > 0
 
   return (
     <section className="hud" aria-label="Player status" data-player-hud="true">
@@ -109,33 +183,25 @@ export function HUD() {
         <div
           className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${cls('green', '')}`}
           role="img"
-          aria-label={`HP ${player.hp}/${player.maxHp}`}
+          aria-label={`HP ${displayedHp}/${player.maxHp}`}
           data-pool-target="green"
-          title={
-            pendingGreen > 0
-              ? `Healing +${pendingGreen} at end of phase`
-              : undefined
-          }
         >
           <div className="hp-fill" style={{ width: `${hpPct}%` }} />
           <span className="hp-text">
-            {player.hp} / {player.maxHp}
+            {displayedHp} / {player.maxHp}
           </span>
-          {pendingGreen > 0 && (
-            <span className="hp-pending" aria-hidden>+{pendingGreen}</span>
-          )}
         </div>
         <div
           className={`block-badge ${blockActive ? 'active' : ''} ${blockHasPending ? 'pending' : ''} ${blockPulse ? 'pulsing' : ''} ${cls('blue', '')}`}
           title={
             blockHasPending
-              ? `Block ${player.block} (+${pendingBlue} pending at phase end)`
+              ? `Block ${displayedBlock} (+${pendingBlue} pending at phase end)`
               : 'Block'
           }
           data-pool-target="blue"
         >
           <span className="block-icon" aria-hidden>🛡</span>
-          <span className="block-value">{displayedBlock}</span>
+          <span className="block-value">{badgeBlock}</span>
         </div>
       </div>
       <div className="hud-row hud-resources">
@@ -146,7 +212,7 @@ export function HUD() {
         >
           <span className="resource-dot" data-color="yellow" aria-hidden />
           <span className="resource-label">Mana</span>
-          <span className="resource-value">{player.mana}</span>
+          <span className="resource-value">{displayedMana}</span>
         </div>
         <div
           className={cls('purple', 'resource resource-charge')}
@@ -155,7 +221,7 @@ export function HUD() {
         >
           <span className="resource-dot" data-color="purple" aria-hidden />
           <span className="resource-label">Charge</span>
-          <span className="resource-value">{player.skillCharge}</span>
+          <span className="resource-value">{displayedCharge}</span>
         </div>
       </div>
     </section>

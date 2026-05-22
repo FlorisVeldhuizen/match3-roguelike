@@ -155,6 +155,55 @@ export const useGameStore = create<GameStore>()(
       const decoratedSwap = withPoolGainedEvents(swap.events)
       player = applyPoolDeltas(player, deltas)
 
+      // Per-match damage + heal commit. Walk the (pool-gained-decorated)
+      // event stream and, immediately after each red/green pool-gained,
+      // resolve the matched amount against state and inject a follow-up
+      // damage-dealt / healed event in-place. The result is that damage
+      // and heal commit *with* their gem match (animation-timed) instead
+      // of accumulating into a pool and dumping at end-of-phase. Block
+      // (blue) still pools to EOP — defensive setup needs to be ready
+      // before the enemy attack.
+      const damageHealStream: GameEvent[] = []
+      for (const ev of decoratedSwap) {
+        damageHealStream.push(ev)
+        if (ev.kind !== 'pool-gained') continue
+        if (ev.color === 'red') {
+          if (targetEnemyId == null) continue
+          const target = enemies.find((e) => e.id === targetEnemyId)
+          if (!target || target.hp <= 0) continue
+          const absorbed = Math.min(target.block, ev.amount)
+          const hpDamage = Math.min(target.hp, ev.amount - absorbed)
+          const totalDealt = absorbed + hpDamage
+          if (totalDealt <= 0) continue
+          enemies = enemies.map((e) =>
+            e.id === target.id
+              ? { ...e, block: e.block - absorbed, hp: e.hp - hpDamage }
+              : e,
+          )
+          damageHealStream.push({
+            kind: 'damage-dealt',
+            targetId: target.id,
+            amount: totalDealt,
+            source: 'player-attack',
+          })
+          const after = enemies.find((e) => e.id === target.id)
+          if (after && after.hp <= 0) {
+            damageHealStream.push({ kind: 'enemy-killed', enemyId: target.id })
+            const nextLiving = enemies.find(
+              (e) => e.id !== target.id && e.hp > 0,
+            )
+            targetEnemyId = nextLiving?.id ?? null
+          }
+        } else if (ev.color === 'green') {
+          const before = player.hp
+          const next = Math.min(player.maxHp, player.hp + ev.amount)
+          const healed = next - before
+          if (healed <= 0) continue
+          player = { ...player, hp: next }
+          damageHealStream.push({ kind: 'healed', amount: healed })
+        }
+      }
+
       // Post-cascade playability check. If the settled board has no
       // legal swap (rare with 5 colors on 8×8, but possible), regenerate
       // a fresh playable board and emit a `board-shuffled` event so the
@@ -223,7 +272,7 @@ export const useGameStore = create<GameStore>()(
 
       return {
         valid: true,
-        events: [...decoratedSwap, ...shuffleEvents, ...tailEvents],
+        events: [...damageHealStream, ...shuffleEvents, ...tailEvents],
       }
     },
     restart: () => {

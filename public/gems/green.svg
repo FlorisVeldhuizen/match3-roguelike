@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
     <radialGradient id="gg-fill" cx="0.4" cy="0.3" r="0.95">
-      <stop offset="0" stop-color="#e8fbef"/>
-      <stop offset="0.22" stop-color="#86efac"/>
-      <stop offset="0.55" stop-color="#15803d"/>
-      <stop offset="1" stop-color="#052e16"/>
+      <stop offset="0" stop-color="#f5fff8"/>
+      <stop offset="0.18" stop-color="#9eecb8"/>
+      <stop offset="0.55" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#15532b"/>
     </radialGradient>
     <radialGradient id="gg-bloom" cx="0.55" cy="0.55" r="0.45">
-      <stop offset="0" stop-color="#d1fae5" stop-opacity="0.4"/>
+      <stop offset="0" stop-color="#d1fae5" stop-opacity="0.32"/>
       <stop offset="1" stop-color="#d1fae5" stop-opacity="0"/>
     </radialGradient>
     <clipPath id="gg-clip">
@@ -18,12 +18,10 @@
         fill="url(#gg-fill)" stroke="#03190c" stroke-width="2.8" stroke-linejoin="round"/>
   <g clip-path="url(#gg-clip)">
     <circle cx="34" cy="33" r="16" fill="url(#gg-bloom)"/>
+    <!-- Subtle upper bright facet -->
     <path d="M14 50 C 16 20, 44 14, 56 12 C 54 26, 36 30, 22 36 C 18 40, 16 46, 14 50 Z"
-          fill="#86efac" opacity="0.3"/>
-    <path d="M14 50 L 52 12" stroke="#03190c" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.55"/>
-    <!-- Specular sweep along the upper leaf edge -->
-    <ellipse cx="40" cy="14" rx="9" ry="2.6" fill="#fff" opacity="0.7" transform="rotate(-20 40 14)"/>
-    <!-- Pinpoint catchlight -->
-    <ellipse cx="44" cy="12" rx="2.6" ry="1.2" fill="#fff" transform="rotate(-20 44 12)"/>
+          fill="#86efac" opacity="0.2"/>
+    <!-- Midrib seam -->
+    <path d="M14 50 L 52 12" stroke="#03190c" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.4"/>
   </g>
 </svg>

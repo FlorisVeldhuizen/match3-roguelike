@@ -20,10 +20,14 @@ const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
 // Combat beat pacing — each event gets its own breath so the player can read
 // what's happening. Tuned to feel snappy but distinct; Spacebar fast-forward
 // (Phase L) will collapse these to 0.
+// `damageDealt` and `healed` are per-match commits (plan B: pools resolve
+// during the cascade, not at EOP), so they need to be much shorter than the
+// old single-EOP beat — otherwise a 3-match cascade with 3 hits takes
+// >1 second of dead time just for damage beats.
 const BEAT = {
-  damageDealt: 380,
+  damageDealt: 60,
   blockGained: 240,
-  healed: 260,
+  healed: 60,
   enemyKilled: 480,
   damageTaken: 440,
   enemyBlockGained: 320,
@@ -33,6 +37,10 @@ const BEAT = {
   phaseToVictory: 500,
   phaseToGameOver: 500,
 } as const
+
+// Per-match damage/heal popups schedule themselves on this delay so the
+// number lands at the same moment the gem trail arrives at its target.
+const TRAIL_ARRIVAL_MS = 700
 
 export type BoardGeometry = {
   cellSize: number
@@ -78,6 +86,18 @@ const CALLOUT_PALETTE: Record<GemColor, number> = {
 }
 
 const CASCADE_HEX = 0xfacc15
+
+// Darker "stored pool" palette — matches the loaded-pip backgrounds in
+// the HUD so a `+N` popup at the pip visually reads as the same currency
+// the pip is holding. Used for pool-arrival popups AND the end-of-phase
+// commit popups; the player sees one consistent colour story per pool.
+const STORED_HEX: Record<GemColor, number> = {
+  red: 0xb84a44,
+  blue: 0x6b9bd6,
+  green: 0x5fb87a,
+  yellow: 0xe6b830,
+  purple: 0xa46be3,
+}
 
 function cascadeCalloutText(displayLevel: number): string {
   if (displayLevel <= 2) return 'CHAIN!'
@@ -202,14 +222,29 @@ export class AnimationController {
         await this.animateShuffle(event.cells)
         return
       case 'pool-gained':
+        // Trail always flies. Pool-arrival popup only for pools that
+        // are still pooled at EOP (blue/yellow/purple). Red and green
+        // resolve per-match, so their popup comes from the immediate
+        // damage-dealt / healed event — no double-pop.
         this.spawnPoolTrail(event.color)
+        if (event.color !== 'red' && event.color !== 'green') {
+          this.spawnPoolArrivalPopup(event.color, event.amount)
+        }
         return
       case 'damage-dealt':
-        this.spawnDamagePopup(event.targetId, event.amount)
+        if (event.source === 'player-attack') {
+          // Per-match commit. Delay the popup so it lands at the same
+          // moment the red gem trail arrives at the enemy.
+          this.scheduleDelayedDamagePopup(event.targetId, event.amount)
+        } else {
+          this.spawnDamagePopup(event.targetId, event.amount)
+        }
         await wait(BEAT.damageDealt)
         return
       case 'healed':
-        this.spawnHealPopup(event.amount)
+        // Per-match commit. Delay the popup to sync with the green
+        // trail's arrival at the HP bar.
+        this.scheduleDelayedHealPopup(event.amount)
         await wait(BEAT.healed)
         return
       case 'damage-taken':
@@ -236,6 +271,12 @@ export class AnimationController {
         return
       case 'extra-turn-granted':
         await wait(BEAT.phaseToPlayer)
+        return
+      case 'block-absorbed':
+        this.spawnShieldEffect(event.targetId, 'absorbed')
+        return
+      case 'block-broken':
+        this.spawnShieldEffect(event.targetId, 'broken')
         return
       case 'turn-ended':
       case 'screen-shake':
@@ -510,6 +551,82 @@ export class AnimationController {
     return (tiltDeg * Math.PI) / 180
   }
 
+  // Scheduled popup at the pool-target element to coincide with the
+  // particle trail's arrival (~700ms). This is the "impact" beat — the
+  // value lands visibly *before* the receiving UI element (HP bar, block
+  // badge, enemy frame) settles into its new value at end-of-phase. Red
+  // shows as a damage-coded "-N" at the targeted enemy; everything else
+  // shows as a "+N" tinted to the pool's palette color.
+  private spawnPoolArrivalPopup(color: GemColor, amount: number): void {
+    if (amount <= 0) return
+    window.setTimeout(() => {
+      const overlay = this.overlay
+      if (!overlay) return
+      const el = document.querySelector<HTMLElement>(
+        `[data-pool-target="${color}"]`,
+      )
+      if (!el) return
+      const center = elementCenter(el)
+      if (!center) return
+      const isDamage = color === 'red'
+      const text = isDamage ? `-${amount}` : `+${amount}`
+      // Per-match popup uses the *stored*-pool tint (darker) so it
+      // reads as "added to the loaded pip", not as a direct hit.
+      // The EOP commit popup uses the same palette, so the player
+      // gets one consistent colour story per pool from load to cash-in.
+      const popupColor = STORED_HEX[color]
+      // Slight font bump for bigger gains so a 5-match feels heavier than
+      // a 3-match without spawning a whole second callout.
+      const fontSize = 26 + Math.min(6, Math.max(0, amount - 3) * 2)
+      overlay.spawnFloatingText(
+        { x: center.x, y: center.y - 18 },
+        text,
+        {
+          color: popupColor,
+          fontSize,
+          lifeMs: 720,
+          driftY: -52,
+          growBy: 0.25,
+        },
+      )
+    }, 700)
+  }
+
+  // Per-match damage / heal popups deferred to the trail's arrival
+  // moment. The store-walker emits damage-dealt/healed events directly
+  // after the matching pool-gained, but visually we want the number
+  // to pop *with* the gem trail's landing — same timing the player
+  // already associates with pool-arrival feedback.
+  private scheduleDelayedDamagePopup(enemyId: string, amount: number): void {
+    if (amount <= 0) return
+    window.setTimeout(() => {
+      this.spawnDamagePopup(enemyId, amount)
+    }, TRAIL_ARRIVAL_MS)
+  }
+
+  private scheduleDelayedHealPopup(amount: number): void {
+    if (amount <= 0) return
+    window.setTimeout(() => {
+      const overlay = this.overlay
+      if (!overlay) return
+      const el = document.querySelector<HTMLElement>('[data-pool-target="green"]')
+      if (!el) return
+      const center = elementCenter(el)
+      if (!center) return
+      overlay.spawnFloatingText(
+        { x: center.x, y: center.y - 18 },
+        `+${amount}`,
+        {
+          color: STORED_HEX.green,
+          fontSize: 26 + Math.min(6, Math.max(0, amount - 3) * 2),
+          lifeMs: 720,
+          driftY: -52,
+          growBy: 0.25,
+        },
+      )
+    }, TRAIL_ARRIVAL_MS)
+  }
+
   private spawnPoolTrail(color: GemColor): void {
     const overlay = this.overlay
     if (!overlay) return
@@ -550,26 +667,6 @@ export class AnimationController {
     )
   }
 
-  private spawnHealPopup(amount: number): void {
-    const overlay = this.overlay
-    if (!overlay) return
-    const el = document.querySelector<HTMLElement>('[data-player-hud]')
-    if (!el) return
-    const center = elementCenter(el)
-    if (!center) return
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y - 20 },
-      `+${amount}`,
-      {
-        color: 0x4dd581,
-        fontSize: 28,
-        lifeMs: 750,
-        driftY: -60,
-        growBy: 0.25,
-      },
-    )
-  }
-
   private spawnPlayerDamagePopup(amount: number): void {
     const overlay = this.overlay
     if (!overlay) return
@@ -588,6 +685,28 @@ export class AnimationController {
         growBy: 0.3,
       },
     )
+  }
+
+  // Looks up the on-screen anchor for a shield event and dispatches to the
+  // overlay. `targetId` is 'player' for the player HUD, otherwise an enemy id.
+  // Coordinates match the damage popups so the visual lines up with where
+  // the player's eye already is for that hit.
+  private spawnShieldEffect(
+    targetId: string,
+    kind: 'absorbed' | 'broken',
+  ): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const selector =
+      targetId === 'player'
+        ? '[data-player-hud]'
+        : `[data-enemy-id="${targetId}"]`
+    const el = document.querySelector<HTMLElement>(selector)
+    if (!el) return
+    const center = elementCenter(el)
+    if (!center) return
+    if (kind === 'absorbed') overlay.spawnShieldBlock(center)
+    else overlay.spawnShieldBreak(center)
   }
 
   private spawnEnemyBlockPopup(enemyId: string, amount: number): void {

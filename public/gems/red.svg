@@ -1,33 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <radialGradient id="rg-fill" cx="0.35" cy="0.25" r="0.9">
-      <stop offset="0" stop-color="#ffe9e9"/>
-      <stop offset="0.22" stop-color="#ff8585"/>
+    <radialGradient id="rg-fill" cx="0.3" cy="0.22" r="0.95">
+      <stop offset="0" stop-color="#fff5e0"/>
+      <stop offset="0.18" stop-color="#ffa5a5"/>
       <stop offset="0.55" stop-color="#dc2626"/>
-      <stop offset="1" stop-color="#4a0606"/>
+      <stop offset="1" stop-color="#7a1414"/>
     </radialGradient>
-    <radialGradient id="rg-bloom" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#ffd5a0" stop-opacity="0.4"/>
+    <radialGradient id="rg-bloom" cx="0.5" cy="0.55" r="0.45">
+      <stop offset="0" stop-color="#ffd5a0" stop-opacity="0.3"/>
       <stop offset="1" stop-color="#ffd5a0" stop-opacity="0"/>
     </radialGradient>
     <clipPath id="rg-clip">
       <polygon points="32,3 60,32 32,61 4,32"/>
     </clipPath>
   </defs>
-  <!-- Silhouette + stroke -->
   <polygon points="32,3 60,32 32,61 4,32" fill="url(#rg-fill)" stroke="#2a0303" stroke-width="2.8" stroke-linejoin="round"/>
-  <!-- Everything below clipped to silhouette -->
   <g clip-path="url(#rg-clip)">
-    <circle cx="32" cy="32" r="14" fill="url(#rg-bloom)"/>
-    <polygon points="32,3 32,32 4,32" fill="#ff8585" opacity="0.32"/>
-    <polygon points="32,32 60,32 32,61" fill="#1a0202" opacity="0.42"/>
-    <g stroke="#ffd5d5" stroke-width="0.6" opacity="0.28">
+    <circle cx="32" cy="34" r="14" fill="url(#rg-bloom)"/>
+    <!-- Subtle light facet — just a hint of "cut stone" -->
+    <polygon points="32,3 32,32 4,32" fill="#ffb4b4" opacity="0.18"/>
+    <!-- Faint facet seams -->
+    <g stroke="#ffd5d5" stroke-width="0.5" opacity="0.22">
       <line x1="32" y1="32" x2="32" y2="3"/>
       <line x1="32" y1="32" x2="4" y2="32"/>
     </g>
-    <!-- Specular sweep along the top-left edge -->
-    <ellipse cx="22" cy="14" rx="9" ry="3.2" fill="#fff" opacity="0.7" transform="rotate(-45 22 14)"/>
-    <!-- Pinpoint catchlight -->
-    <ellipse cx="20" cy="12" rx="2.4" ry="1.3" fill="#fff" transform="rotate(-45 20 12)"/>
   </g>
 </svg>
