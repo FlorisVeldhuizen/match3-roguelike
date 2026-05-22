@@ -57,6 +57,7 @@ export type GameEvent =
   | { kind: 'enemy-killed'; enemyId: string }
   | { kind: 'turn-ended' }
   | { kind: 'phase-changed'; phase: CombatPhase }
+  | { kind: 'screen-shake'; magnitude: number }
 
 export type CombatPhase =
   | 'player-acting'

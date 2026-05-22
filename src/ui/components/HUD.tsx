@@ -50,6 +50,9 @@ export function HUD() {
       } else if (event.kind === 'damage-dealt' && event.amount >= 5) {
         setShake(true)
         window.setTimeout(() => setShake(false), 320)
+      } else if (event.kind === 'screen-shake') {
+        setShake(true)
+        window.setTimeout(() => setShake(false), 320)
       } else if (event.kind === 'healed') {
         setHpGlow(true)
         window.setTimeout(() => setHpGlow(false), 500)

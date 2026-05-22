@@ -83,6 +83,11 @@ export class AnimationController {
   // Shared across cascade + match callouts so consecutive pops (including
   // chained tiers) swing opposite directions.
   private lastCalloutTiltSign = 0
+  // "Heat" accumulates with each callout and decays exponentially with a
+  // 1.5s half-life. Drives intensity escalation: bigger font at heat ≥ 2,
+  // screenshake at heat ≥ 3, flame burst at heat ≥ 4.
+  private heat = 0
+  private heatLastTimestamp = 0
 
   constructor(opts: {
     parent: Container
@@ -175,9 +180,25 @@ export class AnimationController {
       case 'enemy-killed':
       case 'turn-ended':
       case 'phase-changed':
+      case 'screen-shake':
         // HUD reads these straight off state or via the event bus subscriber.
         return
     }
+  }
+
+  // Exponential-decay heat counter. Each callout calls bumpHeat() which
+  // first decays based on time since last bump, then adds 1 (capped at 6).
+  // Returns the post-bump value so callers can branch on intensity.
+  private bumpHeat(): number {
+    const now = performance.now()
+    if (this.heatLastTimestamp > 0) {
+      const dt = (now - this.heatLastTimestamp) / 1000
+      const decayed = this.heat * Math.pow(0.5, dt / 1.5)
+      this.heat = decayed < 0.05 ? 0 : decayed
+    }
+    this.heatLastTimestamp = now
+    this.heat = Math.min(6, this.heat + 1)
+    return this.heat
   }
 
   private getSprite(p: Pos): Sprite | null {
@@ -276,14 +297,16 @@ export class AnimationController {
     if (!overlay) return
     const center = this.cellScreenCenter({ x: 3.5, y: -1 })
     if (!center) return
-    // Each link in the chain pops a touch larger — subtle build-up so the
-    // 4-cascade UNREAL! reads bigger than the opening CHAIN! without
-    // exploding off-screen. Capped at +16 over base.
+    const heat = this.bumpHeat()
+    // Each link in the chain pops a touch larger. Heat adds a TINY extra
+    // bump (max +2px) — the user wants the word growth to stay subtle, so
+    // we lean on particles/shake for the "louder" intensity beats.
     const steps = Math.min(displayLevel - 2, 4)
-    const fontSize = 36 + steps * 4
-    // Burst grows alongside the text so the gold "moment" scales with it.
+    const fontHeatBoost = Math.min(2, Math.floor((heat - 1) / 2))
+    const burstHeatBoost = Math.max(0, Math.floor(heat - 1))
+    const fontSize = 36 + steps * 4 + fontHeatBoost
     overlay.spawnBurst(center, CASCADE_HEX, {
-      count: 14 + steps * 2,
+      count: 14 + steps * 2 + burstHeatBoost,
       speedMin: 110,
       speedMax: 220 + steps * 18,
       radiusMin: 3,
@@ -301,6 +324,21 @@ export class AnimationController {
       rotationFrom: this.nextTiltRadians(),
       rotationEase: 0,
     })
+    if (heat >= 2) {
+      // White sparkles drifting upward around the text. Count grows with
+      // heat so the air around bigger callouts gets visibly busier.
+      overlay.spawnSparkle(center, 4 + Math.floor((heat - 1) * 1.5))
+    }
+    if (heat >= 3) {
+      // Screenshake on chained callouts — the body class handles the
+      // animation. HUD listens for this event and toggles its shake state.
+      emitGameEvent({ kind: 'screen-shake', magnitude: Math.min(1, heat / 5) })
+    }
+    if (heat >= 4) {
+      // Embers rising behind the text. Subtle — small particle count, short
+      // life — but it adds the "things are getting hot" beat.
+      overlay.spawnFlame(center, 7 + Math.floor(heat))
+    }
   }
 
   private spawnMatchCallout(
@@ -324,9 +362,11 @@ export class AnimationController {
       y: sumY / cells.length,
     })
     if (!at) return
+    const heat = this.bumpHeat()
+    const heatBoost = Math.floor(Math.max(0, heat - 1))
     overlay.spawnFloatingText(at, text, {
       color: CALLOUT_PALETTE[color],
-      fontSize: 28,
+      fontSize: 28 + heatBoost,
       lifeMs: 650,
       driftY: -55,
       scaleCurve: popScaleCurve,

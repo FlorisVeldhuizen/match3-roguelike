@@ -248,6 +248,84 @@ export class OverlayScene {
     }
   }
 
+  // White sparkles drifting upward — small, brief, no color. Used at
+  // mid-heat levels to put a fleck of motion in the air around callout
+  // text without taking over the screen.
+  spawnSparkle(at: ScreenPoint, count = 5): void {
+    const layer = this.layer
+    if (!layer) return
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.65
+      const speed = 60 + Math.random() * 90
+      const radius = 1.3 + Math.random() * 1.4
+      const g = new Graphics()
+        .circle(0, 0, radius)
+        .fill({ color: 0xffffff, alpha: 1 })
+      g.x = at.x + (Math.random() - 0.5) * 40
+      g.y = at.y + (Math.random() - 0.5) * 10
+      layer.addChild(g)
+      this.effects.push({
+        kind: 'physics',
+        view: g,
+        x: g.x,
+        y: g.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        gravity: -20,
+        drag: 1.6,
+        life: 380 + Math.random() * 220,
+        maxLife: 500,
+        growBy: -0.65,
+        scaleCurve: null,
+        fadeMode: 'linear',
+        baseScale: 1,
+        rotation: 0,
+        rotationTarget: 0,
+        rotationEase: 0,
+        alphaScale: 0.85,
+      })
+    }
+  }
+
+  // Rising embers: orange/yellow particles directed mostly upward with
+  // slight horizontal jitter, negative gravity (upward acceleration), and
+  // a quick shrink-fade. Used as an "intensity" signal behind chained
+  // cascade callouts — subtle, not a full flame loop.
+  spawnFlame(at: ScreenPoint, count = 8): void {
+    const layer = this.layer
+    if (!layer) return
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.7
+      const speed = 80 + Math.random() * 110
+      const radius = 2 + Math.random() * 2
+      const hex = Math.random() < 0.5 ? 0xff8a3c : 0xffd14a
+      const g = new Graphics().circle(0, 0, radius).fill(hex)
+      g.x = at.x + (Math.random() - 0.5) * 28
+      g.y = at.y + (Math.random() - 0.5) * 6
+      layer.addChild(g)
+      this.effects.push({
+        kind: 'physics',
+        view: g,
+        x: g.x,
+        y: g.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        gravity: -60, // upward acceleration → embers keep rising
+        drag: 1.4,
+        life: 480 + Math.random() * 220,
+        maxLife: 600,
+        growBy: -0.5,
+        scaleCurve: null,
+        fadeMode: 'linear',
+        baseScale: 1,
+        rotation: 0,
+        rotationTarget: 0,
+        rotationEase: 0,
+        alphaScale: 0.75,
+      })
+    }
+  }
+
   // Floating text (damage popup, cascade callout, etc).
   // rotationFrom/rotationTo (radians) animate the text rotation over its life.
   // rotationEase controls how fast it settles (per-second factor); 0 disables

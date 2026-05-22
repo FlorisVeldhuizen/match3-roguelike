@@ -47,13 +47,67 @@ const HOVER_HALO_PEAK_ALPHA = 0.4
 // Pressed state dims the halo to half-strength — small but legible "click
 // registered" feedback without overpowering the hover glow.
 const HOVER_HALO_PRESSED_ALPHA = 0.22
+// Subtle scale lift on hover/press — multipliers applied on top of each
+// sprite's resting scale. Hover lifts slightly; pressing settles a touch
+// like a button being pushed.
+const HOVER_SCALE_PEAK = 1.06
+const HOVER_SCALE_PRESSED = 1.02
+
+// Shimmer: a brief diagonal streak of light grazes a single random gem
+// every so often. Frequency is board-wide, not per-gem. The streak is
+// masked to the gem's silhouette and is sized to span the entire gem in
+// any rotation so the whole face gets illuminated. Always sweeps the
+// same direction (top-left → bottom-right) at the same angle for a
+// consistent "polished gem" feel.
+const SHIMMER_MIN_INTERVAL_MS = 1800
+const SHIMMER_MAX_INTERVAL_MS = 3600
+const SHIMMER_DURATION_MS = 620
+const SHIMMER_PEAK_ALPHA = 0.6
+// Streak is rotated so it sits at "\" relative to the cell (top-left to
+// bottom-right). It sweeps perpendicular to itself — motion vector goes
+// from the bottom-left corner of the cell up to the top-right corner.
+// Together these produce the classic 45° polished-gem shine sweep.
+const SHIMMER_STREAK_ROTATION = Math.PI / 4
+const SHIMMER_MOTION_ANGLE = -Math.PI / 4
+const SHIMMER_LEN_RATIO = 1.7 // comfortably ≥ gem diagonal so the streak
+//                                covers the full gem length at any sweep position
+const SHIMMER_WIDTH_PX = 6
+const SHIMMER_SWEEP_RATIO = 1.5 // travel distance relative to cell size
+//                                  (≈ cell diagonal so motion runs corner-to-corner)
 
 type HoverAnim = {
   sprite: Sprite
   baseX: number
   baseY: number
+  // Resting scale captured at anim creation. Sprite scale is set via
+  // width/height in buildSprites, so the underlying scale.x value depends
+  // on the SVG texture's native size — we multiply this by targetScaleMul
+  // each frame instead of assuming a base of 1.
+  baseScale: number
   targetOffsetX: number
   targetOffsetY: number
+  targetScaleMul: number
+}
+
+type ShimmerInstance = {
+  view: Graphics
+  // CLONE of the gem sprite, used purely as a mask. Pixi removes whatever
+  // object is assigned as a mask from normal rendering, so we can't reuse
+  // the live gem sprite — we share its texture but render the original
+  // intact. Cloned mask is owned by the shimmer and destroyed with it.
+  maskClone: Sprite
+  elapsed: number
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+}
+
+function randomShimmerInterval(): number {
+  return (
+    SHIMMER_MIN_INTERVAL_MS +
+    Math.random() * (SHIMMER_MAX_INTERVAL_MS - SHIMMER_MIN_INTERVAL_MS)
+  )
 }
 
 export class BoardScene {
@@ -75,7 +129,13 @@ export class BoardScene {
   private hoverAnims = new Map<Sprite, HoverAnim>()
   private hoverHaloTargetAlpha = 0
   private hoverIsPressed = false
+  private boardLayer: Container | null = null
+  private activeShimmers: ShimmerInstance[] = []
+  private shimmerCooldownMs = randomShimmerInterval()
   private effectsTickerCb: ((ticker: Ticker) => void) | null = null
+  // Tracks last-set canvas cursor so the per-frame cursor update doesn't
+  // write to style on every tick when nothing has changed.
+  private lastCursor = ''
 
   constructor(mountEl: HTMLElement) {
     this.mountEl = mountEl
@@ -132,6 +192,7 @@ export class BoardScene {
     const sprites = this.buildSprites(board, textures)
     this.buildSelectionRing(board)
     this.buildHoverHalo(board)
+    this.boardLayer = board
     this.animator = new AnimationController({
       parent: board,
       sprites,
@@ -164,6 +225,8 @@ export class BoardScene {
     this.hoveredCell = null
     this.hoverIsPressed = false
     this.hoverAnims.clear()
+    this.activeShimmers = []
+    this.boardLayer = null
     this.activePointer = null
   }
 
@@ -404,7 +467,8 @@ export class BoardScene {
     canvas.addEventListener('pointerup', onPointerUp)
     canvas.addEventListener('pointercancel', onPointerCancel)
     canvas.addEventListener('pointerleave', onPointerLeave)
-    canvas.style.cursor = 'pointer'
+    // Cursor is driven dynamically in tickEffects (pointer when actionable,
+    // default during animation / victory).
 
     this.detachPointer = () => {
       canvas.removeEventListener('pointerdown', onPointerDown)
@@ -488,7 +552,7 @@ export class BoardScene {
       if (oldSprite) this.releaseHoverTarget(oldSprite)
     }
     this.hoveredCell = cell
-    this.refreshHaloTargetAlpha()
+    this.refreshHoverTargets()
     const halo = this.hoverHalo
     if (halo && cell) {
       const { x, y } = cellCenter(cell.x, cell.y)
@@ -498,10 +562,10 @@ export class BoardScene {
     }
   }
 
-  // Recompute the halo target alpha from current (hover, pressed) state.
-  // Called whenever either flips so the eased halo.alpha drifts toward the
-  // right level (hover = full glow, pressed = dimmed, neither = off).
-  private refreshHaloTargetAlpha(): void {
+  // Recompute halo alpha + currently hovered sprite's scale target from
+  // (hover, pressed) state. Called whenever either flips so the eased
+  // values drift toward the right level.
+  private refreshHoverTargets(): void {
     if (!this.hoveredCell) {
       this.hoverHaloTargetAlpha = 0
       return
@@ -509,12 +573,21 @@ export class BoardScene {
     this.hoverHaloTargetAlpha = this.hoverIsPressed
       ? HOVER_HALO_PRESSED_ALPHA
       : HOVER_HALO_PEAK_ALPHA
+    const sprite = this.animator?.peekSprite(this.hoveredCell)
+    if (sprite) {
+      const anim = this.hoverAnims.get(sprite)
+      if (anim) {
+        anim.targetScaleMul = this.hoverIsPressed
+          ? HOVER_SCALE_PRESSED
+          : HOVER_SCALE_PEAK
+      }
+    }
   }
 
   private setPressed(pressed: boolean): void {
     if (this.hoverIsPressed === pressed) return
     this.hoverIsPressed = pressed
-    this.refreshHaloTargetAlpha()
+    this.refreshHoverTargets()
   }
 
   private setHoverTarget(sprite: Sprite, dx: number, dy: number): void {
@@ -524,13 +597,18 @@ export class BoardScene {
         sprite,
         baseX: sprite.x,
         baseY: sprite.y,
+        baseScale: sprite.scale.x,
         targetOffsetX: 0,
         targetOffsetY: 0,
+        targetScaleMul: 1,
       }
       this.hoverAnims.set(sprite, anim)
     }
     anim.targetOffsetX = dx
     anim.targetOffsetY = dy
+    anim.targetScaleMul = this.hoverIsPressed
+      ? HOVER_SCALE_PRESSED
+      : HOVER_SCALE_PEAK
   }
 
   private releaseHoverTarget(sprite: Sprite): void {
@@ -538,6 +616,7 @@ export class BoardScene {
     if (anim) {
       anim.targetOffsetX = 0
       anim.targetOffsetY = 0
+      anim.targetScaleMul = 1
     }
   }
 
@@ -553,6 +632,7 @@ export class BoardScene {
   private tickEffects(dtMs: number): void {
     if (this.disposed) return
     const animating = this.animator?.isAnimating ?? false
+    this.updateCursor(animating)
     if (animating) {
       // Drop/swap tweens own sprite positions during animation; bail out of
       // hover entirely so we don't fight them.
@@ -560,6 +640,7 @@ export class BoardScene {
         for (const anim of this.hoverAnims.values()) {
           anim.sprite.x = anim.baseX
           anim.sprite.y = anim.baseY
+          anim.sprite.scale.set(anim.baseScale)
         }
         this.hoverAnims.clear()
       }
@@ -570,7 +651,7 @@ export class BoardScene {
     }
     const dt = dtMs / 1000
     const easeK = 1 - Math.exp(-HOVER_EASE_RATE * dt)
-    // Ease each nudged sprite toward its target offset.
+    // Ease nudge offset + scale lift each frame.
     if (this.hoverAnims.size > 0) {
       const toRemove: Sprite[] = []
       for (const anim of this.hoverAnims.values()) {
@@ -580,16 +661,22 @@ export class BoardScene {
         const newOffY = curOffY + (anim.targetOffsetY - curOffY) * easeK
         anim.sprite.x = anim.baseX + newOffX
         anim.sprite.y = anim.baseY + newOffY
-        // Release entries that have settled at rest (only when target is
-        // also rest — entries actively being pulled keep their slot).
+        const curScaleMul = anim.sprite.scale.x / anim.baseScale
+        const newScaleMul =
+          curScaleMul + (anim.targetScaleMul - curScaleMul) * easeK
+        anim.sprite.scale.set(anim.baseScale * newScaleMul)
+        // Release entries that have fully returned to rest.
         if (
           anim.targetOffsetX === 0 &&
           anim.targetOffsetY === 0 &&
+          anim.targetScaleMul === 1 &&
           Math.abs(newOffX) < 0.05 &&
-          Math.abs(newOffY) < 0.05
+          Math.abs(newOffY) < 0.05 &&
+          Math.abs(newScaleMul - 1) < 0.002
         ) {
           anim.sprite.x = anim.baseX
           anim.sprite.y = anim.baseY
+          anim.sprite.scale.set(anim.baseScale)
           toRemove.push(anim.sprite)
         }
       }
@@ -606,5 +693,138 @@ export class BoardScene {
         halo.visible = false
       }
     }
+    this.tickShimmers(dtMs, animating)
+  }
+
+  // Drive existing shimmer streaks each frame, and (when idle) tick down
+  // the cooldown and spawn a new one. Frequency is board-wide — single
+  // shimmer at a time, long quiet gaps between.
+  private tickShimmers(dtMs: number, animating: boolean): void {
+    // Animation owns the sprites; abort any in-flight shimmers so we don't
+    // hold a mask reference to a sprite that may be destroyed by a clear.
+    if (animating && this.activeShimmers.length > 0) {
+      for (const s of this.activeShimmers) this.disposeShimmer(s)
+      this.activeShimmers = []
+    }
+    if (this.activeShimmers.length > 0) {
+      const survivors: ShimmerInstance[] = []
+      for (const s of this.activeShimmers) {
+        s.elapsed += dtMs
+        if (s.elapsed >= SHIMMER_DURATION_MS) {
+          this.disposeShimmer(s)
+          continue
+        }
+        const t = s.elapsed / SHIMMER_DURATION_MS
+        s.view.x = s.startX + (s.endX - s.startX) * t
+        s.view.y = s.startY + (s.endY - s.startY) * t
+        // Triangle envelope: 0 → peak around the midpoint → 0.
+        const env = t < 0.45 ? t / 0.45 : (1 - t) / 0.55
+        s.view.alpha = Math.max(0, env) * SHIMMER_PEAK_ALPHA
+        survivors.push(s)
+      }
+      this.activeShimmers = survivors
+    }
+    if (animating) return
+    this.shimmerCooldownMs -= dtMs
+    if (this.shimmerCooldownMs > 0) return
+    this.shimmerCooldownMs = randomShimmerInterval()
+    if (this.activeShimmers.length === 0) this.spawnShimmer()
+  }
+
+  // Sets canvas cursor to "pointer" only when actions are available
+  // (board ready for input). During animations or after a victory the
+  // board is non-actionable, so the cursor reverts to the default arrow.
+  private updateCursor(animating: boolean): void {
+    const canvas = this.app?.canvas
+    if (!canvas) return
+    const phase = useGameStore.getState().fight.phase
+    const desired = animating || phase === 'victory' ? 'default' : 'pointer'
+    if (this.lastCursor === desired) return
+    canvas.style.cursor = desired
+    this.lastCursor = desired
+  }
+
+  private disposeShimmer(s: ShimmerInstance): void {
+    s.view.mask = null
+    s.view.parent?.removeChild(s.view)
+    s.view.destroy()
+    s.maskClone.parent?.removeChild(s.maskClone)
+    // texture: false — the clone shares the gem's texture, leave it alive
+    // so the original gem doesn't lose its asset.
+    s.maskClone.destroy({ texture: false })
+  }
+
+  private spawnShimmer(): void {
+    const layer = this.boardLayer
+    const animator = this.animator
+    if (!layer || !animator) return
+    const cx = Math.floor(Math.random() * BOARD_DIM)
+    const cy = Math.floor(Math.random() * BOARD_DIM)
+    const sprite = animator.peekSprite({ x: cx, y: cy })
+    if (!sprite) return
+    const len = GEM_SIZE * SHIMMER_LEN_RATIO
+    const width = SHIMMER_WIDTH_PX
+    // Soft-edge pill: layered roundRects with stepped alpha so the streak
+    // doesn't read as a hard rectangle.
+    const streak = new Graphics()
+    streak
+      .roundRect(
+        -len / 2 - 2,
+        -width / 2 - 2,
+        len + 4,
+        width + 4,
+        (width + 4) / 2,
+      )
+      .fill({ color: 0xffffff, alpha: 0.12 })
+    streak
+      .roundRect(-len / 2, -width / 2, len, width, width / 2)
+      .fill({ color: 0xffffff, alpha: 0.5 })
+    streak
+      .roundRect(
+        (-len / 2) * 0.6,
+        (-width / 2) * 0.55,
+        len * 0.6,
+        width * 0.55,
+        (width * 0.55) / 2,
+      )
+      .fill({ color: 0xffffff, alpha: 0.95 })
+    streak.blendMode = 'add'
+    // Clone the gem sprite for use as an alpha mask — Pixi removes the
+    // assigned mask object from normal rendering, so we'd erase the gem
+    // if we used the original. The clone shares the live texture, matches
+    // position/size, and is destroyed with the shimmer.
+    const maskClone = new Sprite(sprite.texture)
+    maskClone.anchor.set(sprite.anchor.x, sprite.anchor.y)
+    maskClone.width = sprite.width
+    maskClone.height = sprite.height
+    maskClone.x = sprite.x
+    maskClone.y = sprite.y
+    layer.addChild(maskClone)
+    streak.mask = maskClone
+    // Fixed orientation + motion so every shimmer behaves identically.
+    // Streak is rotated to "\", sweeping perpendicular along the "/"
+    // diagonal of the cell — from bottom-left corner up to top-right.
+    streak.rotation = SHIMMER_STREAK_ROTATION
+    const { x: ccx, y: ccy } = cellCenter(cx, cy)
+    const sweep = CELL_SIZE * SHIMMER_SWEEP_RATIO
+    const dx = (sweep * Math.cos(SHIMMER_MOTION_ANGLE)) / 2
+    const dy = (sweep * Math.sin(SHIMMER_MOTION_ANGLE)) / 2
+    const startX = ccx - dx
+    const startY = ccy - dy
+    const endX = ccx + dx
+    const endY = ccy + dy
+    streak.x = startX
+    streak.y = startY
+    streak.alpha = 0
+    layer.addChild(streak)
+    this.activeShimmers.push({
+      view: streak,
+      maskClone,
+      elapsed: 0,
+      startX,
+      startY,
+      endX,
+      endY,
+    })
   }
 }
