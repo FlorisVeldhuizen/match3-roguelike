@@ -9,14 +9,13 @@ import {
 import { useGameStore } from '../core/state/store'
 import { type GemColor, GEM_COLORS, type Pos } from '../types'
 import { createBoardInteraction } from './input'
-import { tweenSwap } from './animations/swap'
+import { AnimationController } from './AnimationController'
 
 const CELL_SIZE = 64
 const GEM_SIZE = 54
 const BOARD_PADDING = 8
 const BOARD_DIM = 8
 const LOGICAL_SIZE = BOARD_PADDING * 2 + CELL_SIZE * BOARD_DIM
-const SWAP_DURATION_MS = 200
 
 const cellCenter = (x: number, y: number) => ({
   x: x * CELL_SIZE + CELL_SIZE / 2,
@@ -35,16 +34,15 @@ type PointerState = {
   startClientY: number
   lastClientX: number
   lastClientY: number
-  everEscaped: boolean // pointer has left startCell at least once
+  everEscaped: boolean
 }
 
 export class BoardScene {
   private readonly mountEl: HTMLElement
   private app: Application | null = null
-  private sprites: Sprite[][] = []
+  private animator: AnimationController | null = null
   private selectionRing: Graphics | null = null
   private ghostRing: Graphics | null = null
-  private isAnimating = false
   private disposed = false
   private unsubscribeSelection: (() => void) | null = null
   private detachPointer: (() => void) | null = null
@@ -81,8 +79,14 @@ export class BoardScene {
     app.stage.addChild(board)
 
     this.drawBoardBackground(board)
-    this.buildSprites(board, textures)
+    const sprites = this.buildSprites(board, textures)
     this.buildSelectionRing(board)
+    this.animator = new AnimationController({
+      parent: board,
+      sprites,
+      geometry: { cellSize: CELL_SIZE, gemSize: GEM_SIZE, cellCenter },
+      textures,
+    })
     this.subscribeSelection()
     this.attachPointerEvents(app.canvas)
   }
@@ -97,7 +101,7 @@ export class BoardScene {
       this.app.destroy(true, { children: true, texture: false })
       this.app = null
     }
-    this.sprites = []
+    this.animator = null
     this.selectionRing = null
     this.ghostRing = null
     this.activePointer = null
@@ -128,8 +132,9 @@ export class BoardScene {
   private buildSprites(
     parent: Container,
     textures: Record<GemColor, Texture>,
-  ): void {
+  ): Sprite[][] {
     const cells = useGameStore.getState().board.cells
+    const sprites: Sprite[][] = []
     for (let y = 0; y < BOARD_DIM; y++) {
       const row: Sprite[] = []
       for (let x = 0; x < BOARD_DIM; x++) {
@@ -145,8 +150,9 @@ export class BoardScene {
         parent.addChild(sprite)
         row.push(sprite)
       }
-      this.sprites.push(row)
+      sprites.push(row)
     }
+    return sprites
   }
 
   private buildSelectionRing(parent: Container): void {
@@ -190,7 +196,6 @@ export class BoardScene {
     const ring = this.selectionRing
     const ghost = this.ghostRing
     if (!ring || !ghost) return
-    // Drag-press cell takes precedence over click-stored selection.
     const active = this.activePointer
     const dragSource = active?.startCell ?? null
     const stored = useGameStore.getState().board.selected
@@ -215,8 +220,6 @@ export class BoardScene {
   }
 
   private computeDragTarget(active: PointerState): Pos | null {
-    // Cell-based threshold: the swap is only projected once the pointer
-    // has left the source cell. Coming back inside it clears the ghost.
     const hover = this.clientToCell(active.lastClientX, active.lastClientY)
     if (!hover || samePos(hover, active.startCell)) return null
     const dx = active.lastClientX - active.startClientX
@@ -251,7 +254,7 @@ export class BoardScene {
   private attachPointerEvents(canvas: HTMLCanvasElement): void {
     const interaction = createBoardInteraction({
       performSwap: (from, to) => this.performSwap(from, to),
-      isAnimating: () => this.isAnimating,
+      isAnimating: () => this.animator?.isAnimating ?? false,
     })
 
     const onPointerDown = (ev: PointerEvent) => {
@@ -300,9 +303,7 @@ export class BoardScene {
         void interaction.dragSwap(active.startCell, target)
         return
       }
-      // Release inside the source cell after a drag began → cancel completely.
       if (active.everEscaped) return
-      // Pure tap (never left source cell) → click semantics.
       void interaction.click(active.startCell)
     }
 
@@ -331,22 +332,9 @@ export class BoardScene {
   }
 
   private async performSwap(from: Pos, to: Pos): Promise<void> {
-    if (this.isAnimating) return
-    const rowFrom = this.sprites[from.y]
-    const rowTo = this.sprites[to.y]
-    if (!rowFrom || !rowTo) return
-    const a = rowFrom[from.x]
-    const b = rowTo[to.x]
-    if (!a || !b) return
-    this.isAnimating = true
-    try {
-      useGameStore.getState().swapCells(from, to)
-      await tweenSwap(a, b, SWAP_DURATION_MS)
-      if (this.disposed) return
-      rowFrom[from.x] = b
-      rowTo[to.x] = a
-    } finally {
-      this.isAnimating = false
-    }
+    const animator = this.animator
+    if (!animator || animator.isAnimating) return
+    const result = useGameStore.getState().attemptSwap(from, to)
+    await animator.play(result.events)
   }
 }

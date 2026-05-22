@@ -5,7 +5,7 @@ export function App() {
     <main className="game">
       <header className="hud-placeholder" aria-label="HUD placeholder">
         <span className="hud-title">Match-3 Roguelike</span>
-        <span className="hud-phase">Phase B · board + swap</span>
+        <span className="hud-phase">Phase C · cascades</span>
       </header>
       <section className="board-shell" aria-label="Game board">
         <div id={BOARD_MOUNT_ID} className="board-mount" />

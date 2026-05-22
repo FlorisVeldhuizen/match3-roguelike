@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "format": "prettier --write .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "immer": "^11.1.8",
@@ -36,6 +38,7 @@
     "prettier": "^3.8.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^4.1.7"
   }
 }
