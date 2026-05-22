@@ -1,10 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <linearGradient id="yg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fde68a"/>
-      <stop offset="1" stop-color="#ca8a04"/>
-    </linearGradient>
+    <radialGradient id="yg-fill" cx="0.5" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#fffdf2"/>
+      <stop offset="0.22" stop-color="#fff385"/>
+      <stop offset="0.55" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#3d1f04"/>
+    </radialGradient>
+    <radialGradient id="yg-spark" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fffdf2" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#fde68a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fde68a" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="yg-clip">
+      <polygon points="32,3 39,24 61,24 43,37 50,60 32,46 14,60 21,37 3,24 25,24"/>
+    </clipPath>
   </defs>
-  <polygon points="32,3 39,24 61,24 43,37 50,60 32,46 14,60 21,37 3,24 25,24" fill="url(#yg)" stroke="#5a3d05" stroke-width="2.5" stroke-linejoin="round"/>
-  <polygon points="32,12 35,23 32,32 29,23" fill="#fef9c3" opacity="0.65"/>
+  <polygon points="32,3 39,24 61,24 43,37 50,60 32,46 14,60 21,37 3,24 25,24"
+           fill="url(#yg-fill)" stroke="#2a1604" stroke-width="2.8" stroke-linejoin="round"/>
+  <g clip-path="url(#yg-clip)">
+    <polygon points="32,3 39,24 32,32 25,24" fill="#fff8c2" opacity="0.45"/>
+    <polygon points="32,15 36,26 47,26 38,33 42,45 32,38 22,45 26,33 17,26 28,26"
+             fill="none" stroke="#fff6dc" stroke-width="0.8" opacity="0.45"/>
+    <circle cx="32" cy="31" r="7" fill="url(#yg-spark)"/>
+    <!-- Specular on the top point -->
+    <ellipse cx="30" cy="10" rx="3" ry="5" fill="#fff" opacity="0.75"/>
+    <!-- Pinpoint catchlight -->
+    <ellipse cx="30" cy="8" rx="1.4" ry="2.2" fill="#fff"/>
+  </g>
 </svg>

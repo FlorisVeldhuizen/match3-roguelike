@@ -20,6 +20,7 @@ function intentLabel(intent: Intent): string {
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
+  const pendingRed = useGameStore((s) => s.fight.player.phasePools.red)
   const animatedPhase = useAnimatedPhase()
   // The badge belongs to the *player phase that's about to end* — it tells
   // the player "this is what the enemy will do." Once the enemy starts
@@ -36,6 +37,9 @@ export function EnemyFrame() {
   })
 
   const [flashing, setFlashing] = useState<Record<string, number>>({})
+  // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
+  // Cleared by id so the pulse stops if the player switches targets mid-phase.
+  const [trailPulse, setTrailPulse] = useState<Record<string, number>>({})
   // "Intent firing" tracks which enemy is currently visibly resolving its
   // intent and whether that intent is attack or block (so the CSS can play
   // the right pulse — the intent badge is already hidden by this point).
@@ -56,6 +60,21 @@ export function EnemyFrame() {
             [id]: Math.max(0, (prev[id] ?? 0) - 1),
           }))
         }, HIT_FLASH_MS)
+      } else if (event.kind === 'pool-gained' && event.color === 'red') {
+        // Red gem trail just landed — pulse the currently targeted enemy.
+        // The trail itself flies to the [data-pool-target="red"] element,
+        // which is the same frame.
+        const id = useGameStore.getState().fight.targetEnemyId
+        if (!id) return
+        window.setTimeout(() => {
+          setTrailPulse((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+          window.setTimeout(() => {
+            setTrailPulse((prev) => ({
+              ...prev,
+              [id]: Math.max(0, (prev[id] ?? 0) - 1),
+            }))
+          }, 380)
+        }, 700) // matches TRAIL_TRAVEL_MS in HUD
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
         // Enemy's attack just landed — pulse the *currently-acting* enemy.
         // Phase E only has one enemy; in H2 we'll route by enemy id once the
@@ -81,20 +100,28 @@ export function EnemyFrame() {
         const dead = enemy.hp <= 0
         const isTarget = enemy.id === targetId
         const isHit = (flashing[enemy.id] ?? 0) > 0
+        const isTrailHit = (trailPulse[enemy.id] ?? 0) > 0
         const firingState = intentFiring[enemy.id]
         const isFiring = (firingState?.count ?? 0) > 0
         const firingKind = firingState?.kind
         const intent = displayedIntent[enemy.id] ?? enemy.currentIntent
         const hpPct = Math.max(0, (enemy.hp / enemy.maxHp) * 100)
+        // Pending damage pip only shown on the target — that's where the
+        // red pool will resolve at phase end.
+        const showPendingDamage = isTarget && !dead && pendingRed > 0
+        // Targeted, living enemy is the attractor for red gem trails.
+        const poolTargetAttr = isTarget && !dead ? 'red' : undefined
         return (
           <div
             key={enemy.id}
             data-enemy-id={enemy.id}
+            data-pool-target={poolTargetAttr}
             className={[
               'enemy-frame',
               dead ? 'dead' : '',
               isTarget ? 'targeted' : '',
               isHit ? 'hit' : '',
+              isTrailHit ? 'trail-pulsing' : '',
               isFiring ? `firing firing-${firingKind}` : '',
             ]
               .filter(Boolean)
@@ -131,11 +158,22 @@ export function EnemyFrame() {
                 <span>{enemy.block}</span>
               </div>
             )}
-            <div className="enemy-hp-bar" role="img">
+            <div
+              className="enemy-hp-bar"
+              role="img"
+              title={
+                showPendingDamage
+                  ? `Incoming damage: -${pendingRed} at end of phase`
+                  : undefined
+              }
+            >
               <div className="enemy-hp-fill" style={{ width: `${hpPct}%` }} />
               <span className="enemy-hp-text">
                 {Math.max(0, enemy.hp)} / {enemy.maxHp}
               </span>
+              {showPendingDamage && (
+                <span className="enemy-hp-pending" aria-hidden>−{pendingRed}</span>
+              )}
             </div>
           </div>
         )

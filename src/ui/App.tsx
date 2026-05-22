@@ -12,7 +12,7 @@ export function App() {
     <>
       <main className="game">
         <header className="game-header">
-          <span className="hud-title">Match-3 Roguelike</span>
+          <span className="hud-title">Mokori</span>
           <span className="hud-build">Phase E · enemy intents</span>
           <MuteToggle />
         </header>

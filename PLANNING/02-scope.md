@@ -26,15 +26,15 @@ The slice is complete when:
 ### Gems: 5 colors + 5 shapes (locked)
 Red / Blue / Green / Yellow / Purple, each with a **unique SVG silhouette** so color is not the only differentiator:
 
-| Color  | Shape    |
-|--------|----------|
-| Red    | Diamond  |
-| Blue   | Teardrop |
-| Green  | Leaf     |
-| Yellow | Star     |
-| Purple | Hexagon  |
+| Color  | Shape    | Cryptic theme nod |
+|--------|----------|-------------------|
+| Red    | Diamond  | Sharp/blade — combat |
+| Blue   | Shield (kite) | Defense — silhouette itself reads as shield |
+| Green  | Leaf     | Nature/herb — healing |
+| Yellow | Star     | Spark — mana |
+| Purple | Hexagon  | Runic/arcane — skill charge |
 
-This is an asset-level accessibility shim — no toggle, no color-blind mode (still a non-goal). The board just *happens* to be legible without color. Costs an afternoon of SVG work at Phase B and pays for itself forever.
+This is an asset-level accessibility shim — no toggle, no color-blind mode (still a non-goal). The board just *happens* to be legible without color. Silhouettes also carry a faint thematic nod to each gem's function (a shield-shape for block, a leaf for heal) — cryptic enough to not feel like clip-art, legible enough that a new player picks it up subliminally alongside the trail-routing visuals. Costs an afternoon of SVG work at Phase B and pays for itself forever.
 
 ### Enemies: 6 archetypes (locked, numbers + verbs TBD)
 Per *Enemies share the board* (`01-design.md`), identity archetypes have a **board verb** in addition to (or instead of) direct damage. Verbs below are **candidates** — locked when each archetype's build phase opens (Brute already shipped in Phase E without a verb; see roadmap note).

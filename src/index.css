@@ -380,57 +380,84 @@ body {
   text-align: right;
 }
 
-.resource-dot,
-.pool-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  display: inline-grid;
-  place-items: center;
-  font-size: 0.6rem;
+.resource-dot {
+  width: 22px;
+  height: 22px;
+  display: inline-block;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.resource-dot[data-color='yellow'] {
+  background-image: url('/gems/yellow.svg');
+}
+.resource-dot[data-color='purple'] {
+  background-image: url('/gems/purple.svg');
+}
+
+/* Pending state pills — show the value the player is building up before
+   it commits at phase end. Pip on the HP bar = pending heal; pip on the
+   enemy HP bar = pending damage. The block badge has its own pending
+   style (gem-bordered) since the value lives on the badge itself. */
+
+.hp-pending,
+.enemy-hp-pending {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   font-weight: 700;
-  color: #0e0e15;
-}
-
-[data-color='red'] {
-  background: #ee5e57;
-}
-[data-color='blue'] {
-  background: #4f9dff;
-}
-[data-color='green'] {
-  background: #4dd581;
-}
-[data-color='yellow'] {
-  background: #f5cf3a;
-}
-[data-color='purple'] {
-  background: #b074ff;
-}
-
-.hud-pools {
-  gap: 0.75rem;
-}
-
-.hud-pools-label {
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  opacity: 0.55;
-}
-
-.pool {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-}
-
-.pool-value {
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  min-width: 1.5ch;
-  text-align: right;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+.hp-pending {
+  right: 0.6rem;
+  font-size: 0.75rem;
+  color: #d6f5e1;
+  background: rgba(34, 110, 60, 0.55);
+  border: 1px solid rgba(134, 239, 172, 0.55);
+  padding: 0 0.4rem;
+  border-radius: 999px;
+}
+
+.enemy-hp-pending {
+  right: 0.4rem;
+  font-size: 0.7rem;
+  color: #ffd6d6;
+  background: rgba(132, 34, 30, 0.65);
+  border: 1px solid rgba(255, 138, 138, 0.6);
+  padding: 0 0.35rem;
+  border-radius: 999px;
+}
+
+/* Block badge pending state: dashed accent border + slightly brighter
+   background while pool is still up for grabs (Bulwark etc. can siphon
+   it before commit). Phase end → class drops, badge settles to .active. */
+.block-badge.pending {
+  background: #3a5a8a;
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(164, 202, 254, 0.55) inset;
+}
+
+/* Red gem trail just arrived on the targeted enemy: brief outline pulse. */
+.enemy-frame.trail-pulsing {
+  animation: enemy-trail-pulse 380ms ease-out;
+}
+
+@keyframes enemy-trail-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+  40% {
+    box-shadow: 0 0 14px 3px rgba(238, 94, 87, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(238, 94, 87, 0);
+  }
 }
 
 /* Victory overlay */
@@ -678,10 +705,27 @@ body {
   }
 }
 
-.pool.pulsing,
 .resource.pulsing {
   animation: pool-pulse 380ms ease-out;
   border-radius: 999px;
+}
+
+/* Green gem trail just landed on the HP bar: glow-only pulse (no scale,
+   since the bar is wide and scaling would push neighbors). */
+.hp-bar.pulsing {
+  animation: hp-bar-pulse 420ms ease-out;
+}
+
+@keyframes hp-bar-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+  40% {
+    box-shadow: 0 0 16px 3px rgba(77, 213, 129, 0.65);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(77, 213, 129, 0);
+  }
 }
 
 @keyframes block-pulse {

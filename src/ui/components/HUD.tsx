@@ -13,12 +13,6 @@ const PHASE_LABEL: Record<CombatPhase, string> = {
   'game-over': 'Defeated',
 }
 
-const POOL_COLORS: { color: GemColor; label: string; key: 'red' | 'blue' | 'green' }[] = [
-  { color: 'red', label: 'R', key: 'red' },
-  { color: 'blue', label: 'B', key: 'blue' },
-  { color: 'green', label: 'G', key: 'green' },
-]
-
 // Particle trail travels ~700ms; pulse the indicator on arrival.
 const TRAIL_TRAVEL_MS = 700
 const PULSE_MS = 380
@@ -93,6 +87,19 @@ export function HUD() {
   const cls = (color: GemColor, base: string) =>
     pulse[color] > 0 ? `${base} pulsing` : base
 
+  const pendingBlue = player.phasePools.blue
+  const pendingGreen = player.phasePools.green
+  // During the player phase, blue gems are flying to the shield; show the
+  // pool on the badge so the running total is visible. `block` is the
+  // committed value (built up at phase-end + carried from prior phases);
+  // `pendingBlue` is what will fold into it at phase end. We display the
+  // sum so the badge shows the value the player can plan around — the
+  // `pending` class signals that part of it is still up for grabs (Bulwark
+  // etc. can siphon the pool before it commits).
+  const displayedBlock = player.block + pendingBlue
+  const blockHasPending = pendingBlue > 0
+  const blockActive = displayedBlock > 0
+
   return (
     <section className="hud" aria-label="Player status" data-player-hud="true">
       <div className="hud-row">
@@ -100,28 +107,42 @@ export function HUD() {
       </div>
       <div className="hud-row">
         <div
-          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''}`}
+          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${cls('green', '')}`}
           role="img"
           aria-label={`HP ${player.hp}/${player.maxHp}`}
+          data-pool-target="green"
+          title={
+            pendingGreen > 0
+              ? `Healing +${pendingGreen} at end of phase`
+              : undefined
+          }
         >
           <div className="hp-fill" style={{ width: `${hpPct}%` }} />
           <span className="hp-text">
             {player.hp} / {player.maxHp}
           </span>
+          {pendingGreen > 0 && (
+            <span className="hp-pending" aria-hidden>+{pendingGreen}</span>
+          )}
         </div>
         <div
-          className={`block-badge ${player.block > 0 ? 'active' : ''} ${blockPulse ? 'pulsing' : ''}`}
-          title="Block"
+          className={`block-badge ${blockActive ? 'active' : ''} ${blockHasPending ? 'pending' : ''} ${blockPulse ? 'pulsing' : ''} ${cls('blue', '')}`}
+          title={
+            blockHasPending
+              ? `Block ${player.block} (+${pendingBlue} pending at phase end)`
+              : 'Block'
+          }
+          data-pool-target="blue"
         >
           <span className="block-icon" aria-hidden>🛡</span>
-          <span className="block-value">{player.block}</span>
+          <span className="block-value">{displayedBlock}</span>
         </div>
       </div>
       <div className="hud-row hud-resources">
         <div
           className={cls('yellow', 'resource resource-mana')}
           data-pool-target="yellow"
-          title="Mana (yellow, persistent)"
+          title="Mana — earned from yellow stars; spent on spells. Persists across phases."
         >
           <span className="resource-dot" data-color="yellow" aria-hidden />
           <span className="resource-label">Mana</span>
@@ -130,26 +151,12 @@ export function HUD() {
         <div
           className={cls('purple', 'resource resource-charge')}
           data-pool-target="purple"
-          title="Skill charge (purple, persistent)"
+          title="Skill charge — earned from purple gems; full bar unlocks your ultimate."
         >
           <span className="resource-dot" data-color="purple" aria-hidden />
           <span className="resource-label">Charge</span>
           <span className="resource-value">{player.skillCharge}</span>
         </div>
-      </div>
-      <div className="hud-row hud-pools" aria-label="This phase's pools">
-        <span className="hud-pools-label">Phase pools</span>
-        {POOL_COLORS.map(({ color, label, key }) => (
-          <div
-            key={color}
-            className={cls(color, 'pool')}
-            data-pool-target={color}
-            title={`${color} pool (resolves at end of phase)`}
-          >
-            <span className="pool-dot" data-color={color} aria-hidden>{label}</span>
-            <span className="pool-value">{player.phasePools[key]}</span>
-          </div>
-        ))}
       </div>
     </section>
   )
