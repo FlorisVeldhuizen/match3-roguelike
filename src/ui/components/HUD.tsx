@@ -80,11 +80,14 @@ export function HUD() {
     return unsub
   }, [])
 
-  // Apply screenshake class to body so it covers the whole UI including
-  // the Pixi board canvas (which lives outside this component).
+  // Apply screenshake to .game (the wrapper around HUD + Pixi canvas) rather
+  // than body. position:fixed elements outside .game (the phase banner) stay
+  // pinned to the viewport because their tree has no transformed ancestor.
   useEffect(() => {
-    document.body.classList.toggle('shake', shake)
-    return () => document.body.classList.remove('shake')
+    const el = document.querySelector('.game')
+    if (!el) return
+    el.classList.toggle('shake', shake)
+    return () => el.classList.remove('shake')
   }, [shake])
 
   const cls = (color: GemColor, base: string) =>
