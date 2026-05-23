@@ -1845,9 +1845,10 @@ export function playShieldParticleTickSfx(amount = 1): void {
 }
 
 // Tile ignite: Bleeder's tile-burn intent lights N cells. Soft whoosh
-// + low rumble — ominous, "fire just took hold". Pitch + amplitude
-// scale modestly with count so 2 tiles ignite louder than 1, but the
-// timbre stays the same.
+// + low rumble — meant to register as "something happened" without
+// stealing the spotlight from the per-match cues that follow. Volumes
+// roughly halved from the first pass; user fed back the original mix
+// was hard to miss.
 function synthBurnIgnite(count: number): void {
   const c = getCtx()
   if (!c) return
@@ -1855,39 +1856,37 @@ function synthBurnIgnite(count: number): void {
   const I = intensity(count)
 
   // Filtered noise whoosh: bandpass sweeps up, mimicking air drawn into
-  // a fire as it catches. Short attack, longer tail than the noise itself
-  // by ramping the bandpass center up over ~140ms.
+  // a fire as it catches.
   const noise = makeNoiseBurst(c)
   const bp = c.createBiquadFilter()
   bp.type = 'bandpass'
   bp.frequency.setValueAtTime(380 * jitter(0.1), now)
-  bp.frequency.exponentialRampToValueAtTime(1600 * jitter(0.1), now + 0.16)
-  bp.Q.value = 0.9
+  bp.frequency.exponentialRampToValueAtTime(1400 * jitter(0.1), now + 0.18)
+  bp.Q.value = 1.1
   const ng = c.createGain()
   ng.gain.setValueAtTime(0.0001, now)
-  ng.gain.exponentialRampToValueAtTime(0.18 * jitter(0.2) * I, now + 0.022)
+  ng.gain.exponentialRampToValueAtTime(0.085 * jitter(0.2) * I, now + 0.03)
   ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
   noise.connect(bp).connect(ng).connect(out(c))
   noise.start(now)
   noise.stop(now + 0.24)
 
-  // Low rumble: a brief 90→55Hz sine for body. Anchors the cue so the
-  // noise doesn't read as paper-thin.
+  // Low rumble: a brief 90→55Hz sine for body. Quieter and softer
+  // attack so it sits under the whoosh instead of slapping out front.
   const sub = c.createOscillator()
   sub.type = 'sine'
   sub.frequency.setValueAtTime(95 * jitter(0.08), now)
-  sub.frequency.exponentialRampToValueAtTime(55 * jitter(0.08), now + 0.18)
+  sub.frequency.exponentialRampToValueAtTime(55 * jitter(0.08), now + 0.2)
   const sg = c.createGain()
   sg.gain.setValueAtTime(0.0001, now)
-  sg.gain.exponentialRampToValueAtTime(0.22 * I, now + 0.012)
-  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.2)
+  sg.gain.exponentialRampToValueAtTime(0.1 * I, now + 0.02)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
   sub.connect(sg).connect(out(c))
   sub.start(now)
-  sub.stop(now + 0.22)
+  sub.stop(now + 0.24)
 
-  // High crackle accents — 2-3 short bandpass-noise spikes scattered
-  // across the first 80ms. Make the flame feel alive, not a static
-  // whoosh.
+  // High crackle accents — kept but quieter. They sell "alive" without
+  // adding much mass to the cue.
   const sparks = 2 + Math.floor(Math.random() * 2)
   for (let i = 0; i < sparks; i++) {
     const offset = 0.01 + Math.random() * 0.07
@@ -1898,7 +1897,7 @@ function synthBurnIgnite(count: number): void {
     bp2.Q.value = 4
     const g = c.createGain()
     g.gain.setValueAtTime(0.0001, now + offset)
-    g.gain.exponentialRampToValueAtTime(0.08 * jitter(0.3), now + offset + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.035 * jitter(0.3), now + offset + 0.004)
     g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.06)
     n2.connect(bp2).connect(g).connect(out(c))
     n2.start(now + offset)
@@ -1907,23 +1906,22 @@ function synthBurnIgnite(count: number): void {
 }
 
 // Burn burst: a burning tile got matched and is resolving. Quick fwoosh-
-// pop — the visual burst has a flame core scaling out + sparks flying.
-// Audio matches: short pitched chirp (rising) + crackle layer. Pitched
-// chirp gives the cue "punch" so it reads cleanly even under the clack
-// of the match itself.
+// pop. Halved peak gains + tighter chirp range so it sits *under* the
+// per-match clack instead of poking through it.
 function synthBurnBurst(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
 
   // Pitched chirp — the "fwoosh" curl as the flame jumps and dies.
+  // Narrower upward sweep so the cue feels rounder, less screechy.
   const osc = c.createOscillator()
   osc.type = 'triangle'
   osc.frequency.setValueAtTime(260 * jitter(0.1), now)
-  osc.frequency.exponentialRampToValueAtTime(820 * jitter(0.1), now + 0.09)
+  osc.frequency.exponentialRampToValueAtTime(620 * jitter(0.1), now + 0.1)
   const og = c.createGain()
   og.gain.setValueAtTime(0.0001, now)
-  og.gain.exponentialRampToValueAtTime(0.22 * jitter(0.2), now + 0.008)
+  og.gain.exponentialRampToValueAtTime(0.1 * jitter(0.2), now + 0.01)
   og.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
   osc.connect(og).connect(out(c))
   osc.start(now)
@@ -1933,15 +1931,15 @@ function synthBurnBurst(): void {
   const noise = makeNoiseBurst(c)
   const hp = c.createBiquadFilter()
   hp.type = 'highpass'
-  hp.frequency.value = 1800
+  hp.frequency.value = 2200
   hp.Q.value = 0.8
   const ng = c.createGain()
   ng.gain.setValueAtTime(0.0001, now)
-  ng.gain.exponentialRampToValueAtTime(0.14 * jitter(0.2), now + 0.005)
-  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+  ng.gain.exponentialRampToValueAtTime(0.06 * jitter(0.2), now + 0.006)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.13)
   noise.connect(hp).connect(ng).connect(out(c))
   noise.start(now)
-  noise.stop(now + 0.16)
+  noise.stop(now + 0.15)
 }
 
 export function playBurnIgniteSfx(count = 1): void {

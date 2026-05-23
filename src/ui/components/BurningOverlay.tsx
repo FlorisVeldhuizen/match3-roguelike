@@ -92,6 +92,46 @@ export function BurningOverlay() {
           }
           return next
         })
+      } else if (event.kind === 'gems-fell') {
+        // Gravity preserves Cell identity (gemColor + flags fall
+        // together — see core/board/gravity.ts). The overlay tracks
+        // flames by position, so without this they'd stay glued to the
+        // original cell while the burning gem slid down out from under
+        // them. Re-key each affected flame to its new position.
+        setFlames((prev) => {
+          let changed = false
+          const next = new Map(prev)
+          // Two-step: collect destinations first so a chain of moves
+          // (a → b, b → c) doesn't overwrite intermediate flames. The
+          // cascade emits a single gems-fell per step with disjoint
+          // sources/destinations, so simple key-swap is enough here.
+          const pending: { from: string; to: string; flame: Flame }[] = []
+          for (const m of event.movements) {
+            const fromK = keyOf(m.from)
+            const flame = prev.get(fromK)
+            if (!flame) continue
+            pending.push({
+              from: fromK,
+              to: keyOf(m.to),
+              flame: { ...flame, x: m.to.x, y: m.to.y },
+            })
+          }
+          for (const p of pending) {
+            next.delete(p.from)
+            changed = true
+          }
+          for (const p of pending) {
+            next.set(p.to, p.flame)
+            changed = true
+          }
+          return changed ? next : prev
+        })
+      } else if (event.kind === 'cascade-complete') {
+        // Safety net: after a full cascade resolves, re-sync from the
+        // committed board. Catches any drift (e.g. a flag we missed
+        // moving, or a reshuffle from a deadlocked board) without
+        // forcing the overlay to mirror store state during play.
+        setFlames(initialFlamesFromStore())
       } else if (event.kind === 'board-shuffled') {
         // Reshuffle wipes all flags.
         setFlames(new Map())
