@@ -26,8 +26,10 @@ export function App() {
         <VictoryOverlay />
         <GameOverOverlay />
       </main>
-      {/* Outside .game so the screenshake transform on .game can't shift it —
-          position:fixed is relative to the nearest transformed ancestor. */}
+      {/* Outside .game so the screenshake transform doesn't drag it around
+          (position:fixed is relative to the nearest transformed ancestor).
+          The banner reads board-mount's bounding rect to align itself to
+          the board's resting center — see PhaseBanner.tsx. */}
       <PhaseBanner />
     </>
   )

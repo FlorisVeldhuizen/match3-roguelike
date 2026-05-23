@@ -38,17 +38,13 @@ type PointerState = {
   everEscaped: boolean
 }
 
-// Cursor-relative nudge: max offset (px) when the pointer sits at the cell
-// edge. Smaller numbers feel like a polite lean; larger feels like the gem
-// is chasing the cursor.
-const HOVER_NUDGE_MAX_PX = 2.2
 const HOVER_EASE_RATE = 14 // halo alpha ease — exponential, no bounce on a glow
-// Hover offset + scale track their targets via an under-damped spring so
-// settling overshoots before resting — gives the return-to-rest a clear
-// rubber-band feel. ω sets the natural period (slower = more time for the
-// bounce to register); ζ < 1 picks the overshoot amount. ζ=0.3 yields
-// ~37% overshoot. With peak scale 1.12, the ramp-up overshoot caps at
-// ~1.165 → 62.9px on a 54px gem in a 64px cell (still inside).
+// Hover scale tracks its target via an under-damped spring so settling
+// overshoots before resting — gives the return-to-rest a clear rubber-band
+// feel. ω sets the natural period (slower = more time for the bounce to
+// register); ζ < 1 picks the overshoot amount. With peak scale 1.12, the
+// ramp-up overshoot caps at ~1.165 → 62.9px on a 54px gem in a 64px cell
+// (still inside).
 const HOVER_SPRING_OMEGA = 18
 const HOVER_SPRING_ZETA = 0.42
 const HOVER_HALO_PEAK_ALPHA = 0.4
@@ -108,31 +104,25 @@ type FloatPhases = {
   px2: number
   py1: number
   py2: number
+  // Breath offset sampled at the sprite's first idle frame. We subtract
+  // it from every later sample so the sprite starts at exactly cellCenter
+  // and the breath eases in — without this, newly-spawned sprites jump to
+  // a random sub-pixel offset on their first tick (visible as jitter at
+  // the start of the player turn after a cascade fills new gems).
+  initDx: number
+  initDy: number
 }
 
 type HoverAnim = {
   sprite: Sprite
-  baseX: number
-  baseY: number
   // Resting scale captured at anim creation. Sprite scale is set via
   // width/height in buildSprites, so the underlying scale.x value depends
   // on the SVG texture's native size — we multiply this by targetScaleMul
   // each frame instead of assuming a base of 1.
   baseScale: number
-  targetOffsetX: number
-  targetOffsetY: number
   targetScaleMul: number
-  // Eased current values, tracked on the anim instead of read from sprite.x.
-  // We can't recover them from sprite.x because tickFloat layers a breathing
-  // offset on top of the hover offset — `sprite.x - baseX` would conflate
-  // the two and the ease loop would try to "ease away" the breath.
-  currentOffsetX: number
-  currentOffsetY: number
   currentScaleMul: number
-  // Spring velocities — required to give settling an overshoot bounce.
-  // Units match the value they accompany (px/s, scale-mul/s).
-  velOffsetX: number
-  velOffsetY: number
+  // Spring velocity — required to give settling an overshoot bounce.
   velScaleMul: number
 }
 
@@ -170,9 +160,9 @@ export class BoardScene {
   private overlay: import('./OverlayScene').OverlayScene | null = null
   private hoverHalo: Graphics | null = null
   private hoveredCell: Pos | null = null
-  // Per-sprite nudge state. Typically holds 0–2 entries: the currently
-  // hovered sprite (target = cursor-relative offset) and at most one
-  // departing sprite easing back to rest.
+  // Per-sprite scale-lift state. Holds entries for every sprite currently
+  // inside the proximity radius (plus any stragglers still easing back to
+  // rest).
   private hoverAnims = new Map<Sprite, HoverAnim>()
   private hoverHaloTargetAlpha = 0
   private hoverIsPressed = false
@@ -450,7 +440,7 @@ export class BoardScene {
         lastClientY: ev.clientY,
         everEscaped: false,
       }
-      // Keep the hover halo + nudge alive through the click — the selection
+      // Keep the hover halo + lift alive through the click — the selection
       // ring fades in alongside it instead of replacing it. If the click
       // commits to a swap, animation start will clean up via tickEffects.
       // Mark pressed so the halo dims slightly: visible "click registered"
@@ -474,8 +464,8 @@ export class BoardScene {
         this.updateSelectionRing()
         return
       }
-      // No active drag → hover-track. Animations suppress hover so nudges
-      // don't fight drop/swap tweens.
+      // No active drag → hover-track. Animations suppress hover so the
+      // scale lift doesn't fight drop/swap tweens.
       if (this.animator?.isAnimating) {
         this.setHover(null)
         return
@@ -539,7 +529,7 @@ export class BoardScene {
   private async performSwap(from: Pos, to: Pos): Promise<void> {
     const animator = this.animator
     if (!animator || animator.isAnimating) return
-    // Clear hover before the cascade plays so the nudge/halo don't ghost
+    // Clear hover before the cascade plays so the lift/halo don't ghost
     // through cleared cells.
     this.setHover(null)
     const result = useGameStore.getState().attemptSwap(from, to)
@@ -573,11 +563,10 @@ export class BoardScene {
   }
 
   // Sweep gems within a small bounding window around the cursor cell and set
-  // each one's hover target by distance: the closest gem grows the most,
-  // neighbors get a smaller share via a smoothstep falloff. The cell directly
-  // under the cursor also gets the positional nudge so it leans toward the
-  // mouse. Any anim that's no longer in the window (sprite left the
-  // proximity field) is eased back to rest.
+  // each one's hover scale by distance: the closest gem grows the most,
+  // neighbors get a smaller share via a smoothstep falloff. Any anim that's
+  // no longer in the window (sprite left the proximity field) is eased back
+  // to rest.
   // Window is sized from the radius so only cells that could possibly be
   // within proximity are touched (~9–25 cells), not all 64.
   // Re-runs on every pointermove and on press-state changes.
@@ -602,7 +591,6 @@ export class BoardScene {
     const localX = logicalX - BOARD_PADDING
     const localY = logicalY - BOARD_PADDING
     const peak = this.hoverIsPressed ? HOVER_SCALE_PRESSED : HOVER_SCALE_PEAK
-    const nudgeRatio = HOVER_NUDGE_MAX_PX / (CELL_SIZE / 2)
     const radius = HOVER_PROXIMITY_RADIUS_PX
     // Worst-case ring of cells whose center could land within `radius` of
     // the cursor. Any further out and the smoothstep is guaranteed to be 0,
@@ -628,14 +616,8 @@ export class BoardScene {
         const t = dist >= radius ? 0 : 1 - dist / radius
         const tSmooth = t * t * (3 - 2 * t)
         const scaleMul = 1 + (peak - 1) * tSmooth
-        const isHovered = x === cell.x && y === cell.y
-        // Only the hovered cell gets the positional nudge — neighbors just
-        // breathe in place. Nudging neighbors too would make the board feel
-        // like it's chasing the cursor instead of leaning toward it.
-        const nudgeX = isHovered ? dx * nudgeRatio : 0
-        const nudgeY = isHovered ? dy * nudgeRatio : 0
-        if (scaleMul > 1.0005 || isHovered) {
-          this.setHoverTarget(sprite, { x, y }, nudgeX, nudgeY, scaleMul)
+        if (scaleMul > 1.0005) {
+          this.setHoverTarget(sprite, scaleMul)
           visited.add(sprite)
         }
       }
@@ -691,53 +673,29 @@ export class BoardScene {
     if (this.hasHoverPosition) this.applyHoverState()
   }
 
-  private setHoverTarget(
-    sprite: Sprite,
-    cell: Pos,
-    dx: number,
-    dy: number,
-    scaleMul: number,
-  ): void {
+  private setHoverTarget(sprite: Sprite, scaleMul: number): void {
     let anim = this.hoverAnims.get(sprite)
     if (!anim) {
-      // Derive base from cellCenter, not sprite.x/y — the breathing drift
-      // can have nudged the sprite a couple px off rest at this instant, and
-      // capturing that would offset the hover ease target permanently.
-      const center = cellCenter(cell.x, cell.y)
       anim = {
         sprite,
-        baseX: center.x,
-        baseY: center.y,
         baseScale: sprite.scale.x,
-        targetOffsetX: 0,
-        targetOffsetY: 0,
         targetScaleMul: 1,
-        currentOffsetX: 0,
-        currentOffsetY: 0,
         currentScaleMul: 1,
-        velOffsetX: 0,
-        velOffsetY: 0,
         velScaleMul: 0,
       }
       this.hoverAnims.set(sprite, anim)
     }
-    anim.targetOffsetX = dx
-    anim.targetOffsetY = dy
     anim.targetScaleMul = scaleMul
   }
 
   private releaseHoverTarget(sprite: Sprite): void {
     const anim = this.hoverAnims.get(sprite)
-    if (anim) {
-      anim.targetOffsetX = 0
-      anim.targetOffsetY = 0
-      anim.targetScaleMul = 1
-    }
+    if (anim) anim.targetScaleMul = 1
   }
 
-  // Per-frame ease of nudge offsets and halo alpha. When the board starts
-  // animating, snap all anims to their base (drops/swaps own the sprites)
-  // and clear hover so the halo fades cleanly.
+  // Per-frame ease of scale lift and halo alpha. When the board starts
+  // animating, reset all anims (drops/swaps own the sprites) and clear hover
+  // so the halo fades cleanly.
   private startEffectsTicker(): void {
     const cb = (ticker: Ticker) => this.tickEffects(ticker.deltaMS)
     this.effectsTickerCb = cb
@@ -749,34 +707,11 @@ export class BoardScene {
     const animating = this.animator?.isAnimating ?? false
     this.updateCursor(animating)
     if (animating) {
-      // Drop/swap tweens own sprite positions during animation; bail out of
-      // hover entirely so we don't fight them. Snap each cleared sprite to
-      // base + *current breath offset* — not bare baseX — so when tickFloat
-      // resumes after the animation it writes the same position and the
-      // hand-off is jitter-free. (Snapping to baseX would drop the breath
-      // component and produce a ~1px shift at animation end.)
+      // Drop/swap tweens own sprite scale and position during animation;
+      // bail out of hover entirely so we don't fight them. Reset scale to
+      // resting so the animator starts from a clean baseline.
       if (this.hoverAnims.size > 0) {
-        const t = this.floatElapsedMs
-        const wx1 = (2 * Math.PI) / FLOAT_PERIOD_X1_MS
-        const wx2 = (2 * Math.PI) / FLOAT_PERIOD_X2_MS
-        const wy1 = (2 * Math.PI) / FLOAT_PERIOD_Y1_MS
-        const wy2 = (2 * Math.PI) / FLOAT_PERIOD_Y2_MS
         for (const anim of this.hoverAnims.values()) {
-          const phases = this.floatPhases.get(anim.sprite)
-          let breathX = 0
-          let breathY = 0
-          if (phases) {
-            const dx =
-              0.6 * Math.sin(t * wx1 + phases.px1) +
-              0.4 * Math.sin(t * wx2 + phases.px2)
-            const dy =
-              0.6 * Math.sin(t * wy1 + phases.py1) +
-              0.4 * Math.sin(t * wy2 + phases.py2)
-            breathX = FLOAT_AMPLITUDE_X_PX * dx
-            breathY = FLOAT_AMPLITUDE_Y_PX * dy
-          }
-          anim.sprite.x = anim.baseX + breathX
-          anim.sprite.y = anim.baseY + breathY
           anim.sprite.scale.set(anim.baseScale)
         }
         this.hoverAnims.clear()
@@ -790,27 +725,16 @@ export class BoardScene {
     // can integrate into instability at large dt. ~33ms keeps ω·dt < 1.
     const dt = Math.min(dtMs / 1000, 1 / 30)
     const easeK = 1 - Math.exp(-HOVER_EASE_RATE * dt)
-    // Spring-integrate nudge offset + scale lift each frame. Semi-implicit
-    // Euler: a = -2ζω·v - ω²(x - target); v += a·dt; x += v·dt. ζ < 1 means
-    // each value overshoots its target slightly before settling — the
-    // "rubber band" feel on return to rest. tickFloat below layers breathing
-    // on top of currentOffset*; we only write scale here.
+    // Spring-integrate scale lift each frame. Semi-implicit Euler:
+    // a = -2ζω·v - ω²(x - target); v += a·dt; x += v·dt. ζ < 1 means the
+    // value overshoots its target slightly before settling — the rubber-band
+    // feel on return to rest.
     if (this.hoverAnims.size > 0) {
       const omega = HOVER_SPRING_OMEGA
       const omegaSq = omega * omega
       const damp = 2 * HOVER_SPRING_ZETA * omega
       const toRemove: Sprite[] = []
       for (const anim of this.hoverAnims.values()) {
-        const aOffX =
-          -damp * anim.velOffsetX -
-          omegaSq * (anim.currentOffsetX - anim.targetOffsetX)
-        anim.velOffsetX += aOffX * dt
-        anim.currentOffsetX += anim.velOffsetX * dt
-        const aOffY =
-          -damp * anim.velOffsetY -
-          omegaSq * (anim.currentOffsetY - anim.targetOffsetY)
-        anim.velOffsetY += aOffY * dt
-        anim.currentOffsetY += anim.velOffsetY * dt
         const aScale =
           -damp * anim.velScaleMul -
           omegaSq * (anim.currentScaleMul - anim.targetScaleMul)
@@ -821,14 +745,8 @@ export class BoardScene {
         // and velocity must be near zero — without the velocity check we'd
         // remove the anim mid-bounce.
         if (
-          anim.targetOffsetX === 0 &&
-          anim.targetOffsetY === 0 &&
           anim.targetScaleMul === 1 &&
-          Math.abs(anim.currentOffsetX) < 0.05 &&
-          Math.abs(anim.currentOffsetY) < 0.05 &&
           Math.abs(anim.currentScaleMul - 1) < 0.002 &&
-          Math.abs(anim.velOffsetX) < 1 &&
-          Math.abs(anim.velOffsetY) < 1 &&
           Math.abs(anim.velScaleMul) < 0.05
         ) {
           anim.sprite.scale.set(anim.baseScale)
@@ -852,11 +770,23 @@ export class BoardScene {
     this.tickShimmers(dtMs, animating)
   }
 
-  // Slow Lissajous drift on every resting gem, layered on top of any hover
-  // offset. Skipped only during AnimationController animations (it owns
-  // sprite positions then). Uses cellCenter (or the hover-anim's base + its
-  // eased offset) as the absolute base so writes don't accumulate, and
-  // assigns a random phase per sprite the first time it's seen.
+  // Slow Lissajous drift on every resting gem. Skipped during
+  // AnimationController animations (it owns sprite positions then). Uses
+  // cellCenter as the absolute base so writes don't accumulate, and assigns
+  // a random phase per sprite the first time it's seen.
+  //
+  // Each sprite stores the breath sample at its anchor moment (initDx/Dy)
+  // and we subtract it from every later sample, so the first write after
+  // anchoring is exactly cellCenter and the breath eases in from zero. The
+  // anchor is set:
+  //   - on first sight (newly-spawned sprites after a drop), and
+  //   - any time the sprite sits at exact cellCenter, which means the
+  //     animator just finalized it there (the only other way to land at
+  //     exact center is a sin zero-crossing during idle drift, where
+  //     re-anchoring is a no-op for the current frame).
+  // Idle sprites the animator didn't touch sit at cellCenter+offset on the
+  // first frame after a cascade, fail the exact-center test, keep their
+  // existing anchor, and continue drifting seamlessly.
   private tickFloat(dtMs: number, animating: boolean): void {
     // Freeze the clock during animations so when breathing resumes, sin(t)
     // returns exactly the value it had on the last idle frame — the next
@@ -870,10 +800,17 @@ export class BoardScene {
     const wx2 = (2 * Math.PI) / FLOAT_PERIOD_X2_MS
     const wy1 = (2 * Math.PI) / FLOAT_PERIOD_Y1_MS
     const wy2 = (2 * Math.PI) / FLOAT_PERIOD_Y2_MS
+    // Tolerance for "sprite is at exact cellCenter". The animator writes
+    // integer-aligned values to cellCenter; breath offsets are sub-pixel
+    // but never exactly zero except at sin zero-crossings (which the
+    // re-anchor handles harmlessly). 0.01px is well below human perception
+    // and well above floating-point noise.
+    const CENTER_EPS = 0.01
     for (let y = 0; y < BOARD_DIM; y++) {
       for (let x = 0; x < BOARD_DIM; x++) {
         const sprite = animator.peekSprite({ x, y })
         if (!sprite) continue
+        const center = cellCenter(x, y)
         let phases = this.floatPhases.get(sprite)
         if (!phases) {
           const TAU = 2 * Math.PI
@@ -882,29 +819,35 @@ export class BoardScene {
             px2: Math.random() * TAU,
             py1: Math.random() * TAU,
             py2: Math.random() * TAU,
+            // Will be set right after we sample curDx/curDy below.
+            initDx: 0,
+            initDy: 0,
           }
           this.floatPhases.set(sprite, phases)
         }
-        const dx =
+        const curDx =
           0.6 * Math.sin(t * wx1 + phases.px1) +
           0.4 * Math.sin(t * wx2 + phases.px2)
-        const dy =
+        const curDy =
           0.6 * Math.sin(t * wy1 + phases.py1) +
           0.4 * Math.sin(t * wy2 + phases.py2)
-        // Compose: hover-base (or cell-center) + eased hover offset + breath.
-        // Hover anims keep their cellCenter-derived base; both states agree
-        // on baseline, so the transition into/out of hoverAnims is seamless.
-        const hover = this.hoverAnims.get(sprite)
-        if (hover) {
-          sprite.x =
-            hover.baseX + hover.currentOffsetX + FLOAT_AMPLITUDE_X_PX * dx
-          sprite.y =
-            hover.baseY + hover.currentOffsetY + FLOAT_AMPLITUDE_Y_PX * dy
-        } else {
-          const center = cellCenter(x, y)
-          sprite.x = center.x + FLOAT_AMPLITUDE_X_PX * dx
-          sprite.y = center.y + FLOAT_AMPLITUDE_Y_PX * dy
+        // Re-anchor when the sprite is at exact cellCenter — either it's
+        // just been seen for the first time (default initDx/Dy = 0, sprite
+        // at center because the animator placed it) or the animator just
+        // finalized a drop/swap/spawn there. Idle sprites the animator
+        // didn't touch sit at cellCenter+breath_offset and fail this test,
+        // keeping their existing anchor and drift.
+        if (
+          Math.abs(sprite.x - center.x) < CENTER_EPS &&
+          Math.abs(sprite.y - center.y) < CENTER_EPS
+        ) {
+          phases.initDx = curDx
+          phases.initDy = curDy
         }
+        const dx = curDx - phases.initDx
+        const dy = curDy - phases.initDy
+        sprite.x = center.x + FLOAT_AMPLITUDE_X_PX * dx
+        sprite.y = center.y + FLOAT_AMPLITUDE_Y_PX * dy
       }
     }
   }

@@ -20,6 +20,7 @@ const COLOR_HEX: Record<GemColor, number> = {
 export type ScreenPoint = { x: number; y: number }
 export type Attractor = () => ScreenPoint | null
 
+
 type PhysicsEffect = {
   kind: 'physics'
   view: Container
@@ -523,12 +524,11 @@ export class OverlayScene {
     const t = new Text({
       text,
       style: {
-        // Russo One — geometric heavy display sans, single black weight by
-        // design. Sits between Anton (too condensed) and Archivo Black (too
-        // wide). Squared geometric forms read as powerful/poster-grade
-        // without the elegance of a serif or the comic-book look of bold
-        // system-ui.
-        fontFamily: '"Russo One", "Helvetica Neue", Arial, sans-serif',
+        // Paytone One — heavy rounded display, won an A/B against ~34
+        // other display fonts (Russo One, Bowlby One, Sansita Black,
+        // Anton, Mochiy Pop One, etc). Best short-text legibility for
+        // the floating ×N / POW! / BOOM! / damage-number popups.
+        fontFamily: '"Paytone One", "Helvetica Neue", Arial, sans-serif',
         fontSize: opts.fontSize ?? 26,
         fontWeight: '400',
         letterSpacing: 1,

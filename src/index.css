@@ -1267,3 +1267,4 @@ body.vignette-damage::before {
 .enemy-frame.hit {
   animation: enemy-hit 280ms ease-out;
 }
+

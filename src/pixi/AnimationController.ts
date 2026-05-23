@@ -13,8 +13,20 @@ import {
 // Per-cell visual timings.
 const SWAP_MS = 200
 const CLEAR_MS = 280
-const DROP_PER_CELL_MS = 80
-const DROP_MIN_MS = 150
+const DROP_PER_CELL_MS = 45
+// Minimum fall portion (gem in flight) before the bounce window. We let
+// fall time scale with distance so a column of gems lands in cascade —
+// short drops finish and start bouncing before longer drops touch down.
+// This floor only prevents pathologically fast 1-frame falls.
+const DROP_MIN_FALL_MS = 65
+// Position-derived per-gem start delay (0–24ms). Same-distance falls
+// would otherwise land in synchronized batches; this small offset
+// desynchronizes them so each gem reads as its own landing instead of
+// a chord. Deterministic from (x, y) — no RNG, animations stay
+// reproducible — but spread enough to break the perceived chord.
+function dropJitterMs(x: number, y: number): number {
+  return (x * 17 + y * 31) % 25
+}
 const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
 
 // Combat beat pacing — each event gets its own breath so the player can read
@@ -95,11 +107,12 @@ const STORED_HEX: Record<GemColor, number> = {
   purple: 0xa46be3,
 }
 
+// Pazudora-style numeric multiplier. The rising chime + intensifying
+// particles carry the dopamine; aggressive verbs ("RAMPAGE!") clashed with
+// the bright/upbeat audio. POW!/BOOM! still fire on big line matches —
+// those are impact moments, not chain escalation.
 function cascadeCalloutText(displayLevel: number): string {
-  if (displayLevel <= 2) return 'CHAIN!'
-  if (displayLevel === 3) return 'FRENZY!'
-  if (displayLevel === 4) return 'RAMPAGE!'
-  return 'UNREAL!'
+  return `×${displayLevel}`
 }
 
 // Per-match dopamine callout. Only line matches of size 4+ get a word —
@@ -288,6 +301,7 @@ export class AnimationController {
         await wait(phaseBeat(event.phase))
         return
       case 'extra-turn-granted':
+        this.spawnExtraTurnBannerBurst()
         await wait(BEAT.phaseToPlayer)
         return
       case 'block-absorbed':
@@ -366,8 +380,10 @@ export class AnimationController {
     const promises = moves.map(({ sprite, from, to }) => {
       const target = this.geometry.cellCenter(to.x, to.y)
       const distance = Math.abs(to.y - from.y)
-      const duration = Math.max(DROP_MIN_MS, DROP_PER_CELL_MS * distance)
-      return tweenDrop(sprite, target.x, target.y, duration)
+      const fallMs = Math.max(DROP_MIN_FALL_MS, DROP_PER_CELL_MS * distance)
+      const delay = dropJitterMs(to.x, to.y)
+      const tween = () => tweenDrop(sprite, target.x, target.y, fallMs)
+      return delay > 0 ? wait(delay).then(tween) : tween()
     })
     await Promise.all(promises)
     for (const { sprite, to } of moves) this.setSprite(to, sprite)
@@ -451,8 +467,10 @@ export class AnimationController {
       this.parent.addChild(sprite)
       created.push({ sprite, pos: at })
       const distance = at.y + 1
-      const duration = Math.max(DROP_MIN_MS, DROP_PER_CELL_MS * distance)
-      promises.push(tweenDrop(sprite, target.x, target.y, duration))
+      const fallMs = Math.max(DROP_MIN_FALL_MS, DROP_PER_CELL_MS * distance)
+      const delay = dropJitterMs(at.x, at.y)
+      const tween = () => tweenDrop(sprite, target.x, target.y, fallMs)
+      promises.push(delay > 0 ? wait(delay).then(tween) : tween())
     }
     await Promise.all(promises)
     for (const { sprite, pos } of created) this.setSprite(pos, sprite)
@@ -464,7 +482,7 @@ export class AnimationController {
     const overlay = this.overlay
     if (!overlay) return
     // Chain links throw bigger explosions: +4 particles per cascade step,
-    // capped so a level-5 RAMPAGE doesn't drown the frame in confetti.
+    // capped so a deep cascade doesn't drown the frame in confetti.
     const step = Math.min(this.currentCascadeLevel, 4)
     const count = 9 + step * 4
     const speedMax = 180 + step * 25
@@ -541,10 +559,10 @@ export class AnimationController {
     // earlier `>= 3` threshold on typical streaks. Tying shake to depth
     // makes each chain link guaranteed-more-shaky than the last.
     // displayLevel = event.level + 1:
-    //   2 (first cascade,  CHAIN!)   → 0.55
-    //   3 (FRENZY!)                  → 1.05
-    //   4 (RAMPAGE!)                 → 1.45
-    //   5+ (UNREAL!)                 → 1.75 (cap)
+    //   2 (first cascade)            → 0.55
+    //   3                            → 1.05
+    //   4                            → 1.45
+    //   5+                           → 1.75 (cap)
     const streakMag = Math.min(1.75, 0.15 + 0.4 * (displayLevel - 1))
     emitGameEvent({ kind: 'screen-shake', magnitude: streakMag })
     if (heat >= 4) {
@@ -620,10 +638,10 @@ export class AnimationController {
     })
   }
 
-  // The "+1 TURN" pop fired at the moment a 4+ match locks in. Layered on
-  // top of the existing POW/BOOM callout so the *cause* (the big match) and
-  // the *reward* (the bonus turn) are visually co-located. Replaces the old
-  // post-cascade "Bonus Turn" banner.
+  // The "+1 TURN" text fired at the moment a 4+ match locks in — the
+  // per-match cause cue. The matching banner-anchored burst (sparkle +
+  // particles + shake) fires later on `extra-turn-granted`, so the visual
+  // reward lands with the "Bonus Turn" banner.
   private spawnExtraTurnCallout(cells: Pos[]): void {
     const overlay = this.overlay
     if (!overlay || cells.length === 0) return
@@ -640,6 +658,29 @@ export class AnimationController {
     if (!at) return
     // Anchor above the match so it doesn't collide with the POW/BOOM word.
     const textAt = { x: at.x, y: at.y - 36 }
+    overlay.spawnFloatingText(textAt, '+1 TURN', {
+      color: CASCADE_HEX,
+      fontSize: 38,
+      lifeMs: 900,
+      driftY: -42,
+      scaleCurve: popScaleCurve,
+      rotationFrom: this.nextTiltRadians(),
+      rotationEase: 0,
+    })
+  }
+
+  // Burst + sparkle + shake that lands with the "Bonus Turn" PhaseBanner.
+  // The banner is anchored to the board center (see PhaseBanner.tsx), so
+  // we query the same element here to keep the visual moment unified.
+  // Falls back to viewport center if the board element isn't mounted yet.
+  private spawnExtraTurnBannerBurst(): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const el = document.getElementById('board-mount')
+    const at = (el && elementCenter(el)) ?? {
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    }
     overlay.spawnBurst(at, CASCADE_HEX, {
       count: 28,
       speedMin: 130,
@@ -650,16 +691,7 @@ export class AnimationController {
       gravity: 100,
       spread: 1,
     })
-    overlay.spawnSparkle(textAt, 8)
-    overlay.spawnFloatingText(textAt, '+1 TURN', {
-      color: CASCADE_HEX,
-      fontSize: 38,
-      lifeMs: 900,
-      driftY: -42,
-      scaleCurve: popScaleCurve,
-      rotationFrom: this.nextTiltRadians(),
-      rotationEase: 0,
-    })
+    overlay.spawnSparkle(at, 8)
     emitGameEvent({ kind: 'screen-shake', magnitude: 1.2 })
   }
 
