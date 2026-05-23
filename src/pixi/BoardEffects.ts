@@ -1,16 +1,26 @@
 import { type Container } from 'pixi.js'
-import { ShockwaveFilter } from 'pixi-filters'
+import { RGBSplitFilter, ShockwaveFilter } from 'pixi-filters'
 import type { GameEvent, Pos } from '../types'
 import { subscribeGameEvents } from '../core/events/emitter'
 import { getFXSettings, subscribeFXSettings, type FXSettings } from '../fx/settings'
 
-// Board-stage post-processing. Single filter: a transient shockwave
-// anchored at the match centroid that triggered it. Other effects we
-// explored (bloom, chromatic aberration, fisheye, full-stage CRT) all
-// either rejected or moved elsewhere — bloom was removed for being
-// sci-fi, fisheye couldn't be done cleanly without breaking pointer
-// hit-testing, RGB-split lives on the popup text layer in OverlayScene,
-// and CRT scanlines moved to a screen-wide canvas (CRTOverlay).
+// Board-stage post-processing:
+//   - persistent sub-pixel RGB split for chromatic refraction on every
+//     gem edge (this used to be a screen-wide SVG filter, but the SVG
+//     approach broke pointer hit-testing; pixi keeps it GPU-local and
+//     cursor-safe)
+//   - transient shockwave anchored at the match centroid that triggered
+//     it.
+// Other effects we explored (bloom, fisheye, full-stage CRT) are gone:
+// bloom rejected for being sci-fi, fisheye couldn't be done cleanly
+// without breaking hit-testing. RGB split also runs on the popup text
+// layer in OverlayScene at a slightly higher offset.
+
+// Baseline RGB split on the board stage — barely-there sub-pixel
+// refraction on gem silhouettes. Stays static; the popup text layer
+// in OverlayScene runs a slightly higher offset for accent on the
+// floating callouts.
+const BOARD_RGB_OFFSET = 0.7
 
 // Single shockwave at a time — board is small; multiple ripples just
 // overlap into mush. New triggers re-arm the same filter.
@@ -32,6 +42,7 @@ export type CellToStage = (pos: Pos) => { x: number; y: number } | null
 export class BoardEffects {
   private readonly stage: Container
   private readonly cellToStage: CellToStage
+  private readonly rgbSplit: RGBSplitFilter
   private readonly shockwave: ShockwaveFilter
   private unsubscribe: (() => void) | null = null
   private unsubscribeFX: (() => void) | null = null
@@ -55,6 +66,12 @@ export class BoardEffects {
       '(prefers-reduced-motion: reduce)',
     ).matches
 
+    this.rgbSplit = new RGBSplitFilter({
+      red: { x: -BOARD_RGB_OFFSET, y: 0 },
+      green: { x: 0, y: 0 },
+      blue: { x: BOARD_RGB_OFFSET, y: 0 },
+    })
+
     this.shockwave = new ShockwaveFilter({
       center: { x: 0, y: 0 },
       speed: SHOCKWAVE_SPEED,
@@ -66,7 +83,9 @@ export class BoardEffects {
     })
     this.shockwave.enabled = false
 
-    stage.filters = [this.shockwave]
+    // RGB split first (chromatic refraction on the raw frame), then
+    // shockwave warps the composited image.
+    stage.filters = [this.rgbSplit, this.shockwave]
 
     this.applyFXSettings(getFXSettings())
     this.unsubscribeFX = subscribeFXSettings((s) => this.applyFXSettings(s))
@@ -79,10 +98,12 @@ export class BoardEffects {
     this.unsubscribeFX?.()
     this.unsubscribeFX = null
     this.stage.filters = []
+    this.rgbSplit.destroy()
     this.shockwave.destroy()
   }
 
   private applyFXSettings(s: FXSettings): void {
+    this.rgbSplit.enabled = s.rgbSplit
     if (!s.shockwave) this.shockwave.enabled = false
     this.shockwaveAllowed = s.shockwave
   }

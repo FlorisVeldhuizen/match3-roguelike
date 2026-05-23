@@ -30,31 +30,29 @@ void main() {
   vec2 uv = frag / u_resolution.xy;
 
   // Horizontal scanlines, ~2px period. Even rows are clear, odd rows get
-  // a faint black overlay. Density picked by eye — denser reads as
-  // mosquito netting, sparser disappears.
+  // a faint black overlay.
   float scan = step(1.0, mod(frag.y, 2.0));
-  float scanAlpha = scan * 0.08;
+  float scanAlpha = scan * 0.05;
 
   // Animated grain: hash on (frag, seed) where seed is time-quantized so
-  // the pattern reseeds at ~7Hz. Faster rates plus high speck density
-  // read as a sandstorm — keep this slow and sparse so it sits behind the
+  // the pattern reseeds at ~5Hz. Slow + sparse so it sits behind the
   // image rather than fighting it.
-  float seed = floor(u_time * 7.0);
+  float seed = floor(u_time * 5.0);
   float n = hash(frag + vec2(seed * 0.31, seed * 0.17));
-  // Dark specks — top ~2% of the noise distribution.
-  float dark = step(0.98, n) * (n - 0.98) * 8.0;
-  // Bright flecks — top ~1.5%.
-  float light = step(0.985, 1.0 - n) * (0.015 - n) * -8.0;
+  // Dark specks — top ~1.5% of the noise distribution.
+  float dark = step(0.985, n) * (n - 0.985) * 8.0;
+  // Bright flecks — top ~1%.
+  float light = step(0.99, 1.0 - n) * (0.01 - n) * -8.0;
 
   // Soft vignette — dims the corners so the screen feels framed.
   float d = distance(uv, vec2(0.5));
   float vig = smoothstep(0.45, 1.05, d);
-  float vigAlpha = vig * 0.32;
+  float vigAlpha = vig * 0.22;
 
-  float blackAlpha = clamp(scanAlpha + dark * 0.18 + vigAlpha, 0.0, 0.55);
+  float blackAlpha = clamp(scanAlpha + dark * 0.12 + vigAlpha, 0.0, 0.45);
   // Light flecks contribute a small white add over the darkened pixel.
-  vec3 rgb = vec3(light * 0.35);
-  float a = blackAlpha + light * 0.22;
+  vec3 rgb = vec3(light * 0.22);
+  float a = blackAlpha + light * 0.15;
   // Premultiply so the canvas composites correctly with the page below.
   gl_FragColor = vec4(rgb * a, a);
 }

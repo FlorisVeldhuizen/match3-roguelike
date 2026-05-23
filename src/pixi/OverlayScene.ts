@@ -91,9 +91,9 @@ try {
 }
 
 // RGB-split offset applied to the chromatic text layer (in-board WORD_POP
-// callouts only). Kept under 2px so glyph interiors stay legible — the
-// priority on text is readability over chromatic punch.
-const OVERLAY_RGB_OFFSET = 1.5
+// callouts only). Kept low so glyph interiors stay legible — the priority
+// on text is readability over chromatic punch.
+const OVERLAY_RGB_OFFSET = 1.0
 
 export class OverlayScene {
   private app: Application | null = null
