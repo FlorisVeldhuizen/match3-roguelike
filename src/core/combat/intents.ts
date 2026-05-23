@@ -16,7 +16,22 @@ export function rollIntent(
   if (kind === undefined) throw new Error('rollIntent: empty pattern')
   if (kind === 'attack') {
     const [amount, r2] = rollInRange(rng, def.attackRange)
-    return { intent: { kind: 'attack', amount }, rng: r2 }
+    // Carry the archetype's onHitStatus onto the intent itself so the
+    // UI can telegraph it (e.g. Bleeder's attacks show "⚔ 3 +🔥") and
+    // executeEnemyTurn doesn't have to round-trip through the registry.
+    const onHit = def.onHitStatus
+      ? {
+          status: def.onHitStatus.kind,
+          stacks: def.onHitStatus.stacks,
+          duration: def.onHitStatus.duration,
+        }
+      : undefined
+    return {
+      intent: onHit
+        ? { kind: 'attack', amount, onHit }
+        : { kind: 'attack', amount },
+      rng: r2,
+    }
   }
   if (kind === 'block') {
     const [amount, r2] = rollInRange(rng, def.blockRange)

@@ -2245,3 +2245,25 @@ body.vignette-damage::before {
     animation: none;
   }
 }
+
+/* Status rider on an attack intent badge — e.g. Bleeder's attack
+   carries +🔥. Sits flush against the amount with a faint ember tint
+   so the player reads "this attack also applies Burn" before it lands. */
+.intent-rider {
+  margin-left: 0.18rem;
+  font-size: 0.78em;
+  opacity: 0.95;
+  text-shadow: 0 0 6px var(--ember-glow);
+}
+
+.intent-rider.rider-burn {
+  filter: drop-shadow(0 0 5px var(--ember-glow));
+}
+
+.intent-rider.rider-vulnerable {
+  filter: drop-shadow(0 0 5px rgba(196, 126, 60, 0.5));
+}
+
+.intent-rider.rider-weak {
+  filter: drop-shadow(0 0 5px rgba(201, 184, 150, 0.45));
+}

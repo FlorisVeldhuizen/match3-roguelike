@@ -148,10 +148,12 @@ export function executeEnemyTurn(
         // damage), apply the configured status to the player. Status
         // riders only fire on real hits — fully-blocked attacks don't
         // tag the player (consistent with the "block matters" theme).
-        const onHit = getArchetype(updatedEnemy.archetype).onHitStatus
+        // The rider lives on the intent itself (set when rolled) so the
+        // UI's intent badge sees the same payload we resolve from.
+        const onHit = intent.onHit
         if (onHit && res.hpDamage > 0) {
           const newStatus = {
-            kind: onHit.kind,
+            kind: onHit.status,
             stacks: onHit.stacks,
             duration: onHit.duration,
           }

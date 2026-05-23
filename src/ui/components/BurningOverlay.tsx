@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { TRAIL_ARRIVAL_MS } from '../../timing'
 import type { Pos } from '../../types'
 
 // Animation-timed overlay. We deliberately do NOT mirror s.board.cells:
@@ -53,13 +54,20 @@ export function BurningOverlay() {
     return subscribeGameEvents((event) => {
       if (event.kind === 'tile-burn-placed') {
         const burning = burnDurationFromStore()
-        setFlames((prev) => {
-          const next = new Map(prev)
-          for (const c of event.cells) {
-            next.set(keyOf(c), { x: c.x, y: c.y, remaining: burning })
-          }
-          return next
-        })
+        const cells = event.cells
+        // Delay flame appearance to the trail-arrival beat — the
+        // AnimationController spawns ember particles from the enemy
+        // to each cell, and the flame should "ignite" when those
+        // particles land, not the instant the event fires.
+        window.setTimeout(() => {
+          setFlames((prev) => {
+            const next = new Map(prev)
+            for (const c of cells) {
+              next.set(keyOf(c), { x: c.x, y: c.y, remaining: burning })
+            }
+            return next
+          })
+        }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'tile-burn-triggered') {
         // Spawn a burst at each cell, then strip those flames so they
         // resolve visually rather than vanishing on store commit.

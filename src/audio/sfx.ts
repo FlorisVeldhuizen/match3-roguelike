@@ -2115,11 +2115,13 @@ export function installSfxBindings(): void {
       case 'board-shuffled':
         playShuffleSfx()
         return
-      case 'tile-burn-placed':
-        // Bleeder lights cells. Pass the count so igniting two tiles
-        // sounds slightly fuller than one.
-        playBurnIgniteSfx(event.cells.length)
+      case 'tile-burn-placed': {
+        // Bleeder lights cells. Particles fly enemy → cells and the
+        // flame appears at arrival, so the ignite cue lands then too.
+        const ct = event.cells.length
+        scheduleAtTrailArrival(() => playBurnIgniteSfx(ct))
         return
+      }
       case 'tile-burn-triggered':
         // Each burning cell cleared in a match → one burst. Stagger by
         // a few ms so multi-cell clears don't sample-loop into a single

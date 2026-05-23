@@ -66,7 +66,11 @@ const mkBoard = (rows: string[]): Cell[][] => {
 describe('Bleeder attack — onHitStatus rider', () => {
   it('applies Burn to the player when the attack lands hp damage', () => {
     const player = makePlayer()
-    const bleeder = makeBleeder({ currentIntent: { kind: 'attack', amount: 4 } })
+    const bleeder = makeBleeder({ currentIntent: {
+        kind: 'attack',
+        amount: 4,
+        onHit: { status: 'burn', stacks: 1, duration: 3 },
+      } })
     const res = executeEnemyTurn(player, [bleeder], [], { seed: 1 })
     expect(res.player.hp).toBe(36)
     const burn = res.player.statuses.find((s) => s.kind === 'burn')
@@ -76,7 +80,11 @@ describe('Bleeder attack — onHitStatus rider', () => {
 
   it('does NOT apply Burn when block fully absorbs the attack', () => {
     const player = makePlayer({ block: 10 })
-    const bleeder = makeBleeder({ currentIntent: { kind: 'attack', amount: 4 } })
+    const bleeder = makeBleeder({ currentIntent: {
+        kind: 'attack',
+        amount: 4,
+        onHit: { status: 'burn', stacks: 1, duration: 3 },
+      } })
     const res = executeEnemyTurn(player, [bleeder], [], { seed: 1 })
     expect(res.player.hp).toBe(40)
     expect(res.player.statuses.find((s) => s.kind === 'burn')).toBeUndefined()

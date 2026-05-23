@@ -13,6 +13,7 @@ import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
 import type { Enemy, Intent, Player } from '../../types'
 import { composeDamage } from '../../core/combat/statuses'
+import { getStatusDef } from '../../content/statuses'
 import { StatusBar } from './StatusBar'
 
 const HIT_FLASH_MS = 280
@@ -40,8 +41,13 @@ function intentLabel(intent: Intent): string {
 }
 
 function intentDescription(intent: Intent): string {
-  if (intent.kind === 'attack')
-    return `Will hit you for ${intent.amount} next turn.`
+  if (intent.kind === 'attack') {
+    const onHit = intent.onHit
+    const base = `Will hit you for ${intent.amount} next turn.`
+    if (!onHit) return base
+    const def = getStatusDef(onHit.status)
+    return `${base} If it lands, you also gain ${onHit.stacks} ${def.name} for ${onHit.duration} turns.`
+  }
   if (intent.kind === 'block')
     return `Armored for ${intent.amount} — your attacks chip through this first.`
   return `Next turn, sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire. Matching a burning tile gives you Burn — one stack per tile in the match.`
@@ -423,6 +429,14 @@ function IntentBadge({
           {intentIcon(intent)}
         </span>
         <span className="intent-amount">{intentNumber(intent)}</span>
+        {intent.kind === 'attack' && intent.onHit && (
+          <span
+            className={`intent-rider rider-${intent.onHit.status}`}
+            aria-hidden
+          >
+            +{getStatusDef(intent.onHit.status).icon}
+          </span>
+        )}
       </div>
       {hovered &&
         createPortal(

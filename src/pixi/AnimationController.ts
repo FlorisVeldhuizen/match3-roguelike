@@ -427,6 +427,14 @@ export class AnimationController {
       case 'status-applied':
         this.spawnStatusTrail(event)
         return
+      case 'tile-burn-placed':
+        // Generic "enemy verb → board cells" trail. Fires one trail per
+        // affected cell from the casting enemy's frame to that cell's
+        // screen center. Future verbs (Caster hex, Defender petrify,
+        // Swarmer shove) plug into this same pattern with their own
+        // event kind + color.
+        this.spawnVerbToCellsTrail(event.enemyId, event.cells, VISUAL.burnEmber)
+        return
       case 'extra-turn-granted':
         this.spawnExtraTurnBannerBurst()
         await wait(BEAT.phaseToPlayer)
@@ -957,6 +965,31 @@ export class AnimationController {
       return el ? elementCenter(el) : null
     }
     overlay.spawnTrail(from, attractor, color, 5)
+  }
+
+  // Particle trail from an enemy → each affected board cell. Used by
+  // Bleeder's tile-burn and by future board-verb casts. The cells are
+  // snapshot once at fire time — if a cell shifts via gravity, the
+  // trail still lands at its original screen position, which matches
+  // where the flame/flag appears on the board.
+  private spawnVerbToCellsTrail(
+    enemyId: string,
+    cells: readonly Pos[],
+    hex: number,
+  ): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const el = this.findEl(`[data-enemy-id="${enemyId}"]`)
+    const from = el ? elementCenter(el) : null
+    if (!from) return
+    for (const cell of cells) {
+      const dest = this.cellScreenCenter(cell)
+      if (!dest) continue
+      // Snapshotted destination — verb-cell trails don't track DOM
+      // reflow because the cells aren't DOM nodes; they're Pixi-space.
+      const attractor: Attractor = () => dest
+      overlay.spawnTrail(from, attractor, hex, 5)
+    }
   }
 
   // Particle trail from caster → target for status applications. Source

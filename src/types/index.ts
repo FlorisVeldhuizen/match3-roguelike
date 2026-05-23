@@ -142,8 +142,17 @@ export type CombatPhase =
 
 export type IntentKind = 'attack' | 'block' | 'tile-burn'
 
+// Optional status rider carried on attack intents. Bleeder uses this
+// to apply Burn on hit. Surfaced on the intent badge so the player
+// sees the rider before the attack lands.
+export type IntentOnHit = {
+  status: StatusKind
+  stacks: number
+  duration: number
+}
+
 export type Intent =
-  | { kind: 'attack'; amount: number }
+  | { kind: 'attack'; amount: number; onHit?: IntentOnHit }
   | { kind: 'block'; amount: number }
   | { kind: 'tile-burn'; count: number }
 
