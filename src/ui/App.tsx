@@ -28,10 +28,12 @@ export function App() {
             {seed}
           </span>
           <span className="hud-build">Phase G · relics</span>
-          <RelicTray />
-          <VolumeSlider />
-          <MuteToggle />
-          <FXToggle />
+          <div className="game-header-controls">
+            <RelicTray />
+            <VolumeSlider />
+            <MuteToggle />
+            <FXToggle />
+          </div>
         </header>
         <EnemyFrame />
         <section className="board-shell" aria-label="Game board">

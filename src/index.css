@@ -12,6 +12,12 @@
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /* Visually-hidden — used for aria-live regions. */
 .sr-only {
   position: absolute;
@@ -62,8 +68,14 @@
 
 body {
   margin: 0;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Allow the page to scroll when the HUD/board don't fit vertically
+     (small phones, landscape on short screens). The board-mount canvas
+     sets touch-action: none so gem drags don't accidentally scroll the
+     page. */
+  overflow-x: hidden;
+  overflow-y: auto;
   /* Transparent so the .arcane-bg WebGL canvas (z-index: -1) shows through;
      the ink-0 backstop on :root prevents any flash during load. */
   background: transparent;
@@ -154,8 +166,10 @@ body::before {
 .game-header {
   width: 100%;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
   padding: 0.55rem 1.1rem;
   border-radius: 0.4rem;
   background:
@@ -195,9 +209,7 @@ body::before {
 .hud-build {
   opacity: 0.55;
   font-size: 0.78rem;
-  flex: 1;
   text-align: right;
-  margin-right: 0.75rem;
   color: var(--parchment-dim);
 }
 
@@ -209,7 +221,6 @@ body::before {
   letter-spacing: 0.02em;
   color: var(--parchment-dim);
   user-select: all;
-  margin-right: 0.6rem;
   transition: opacity 120ms ease;
 }
 .hud-seed:hover {
@@ -219,7 +230,6 @@ body::before {
 .volume-slider {
   display: inline-flex;
   align-items: center;
-  margin-right: 0.5rem;
 }
 .volume-slider input[type='range'] {
   --thumb: var(--gold-1);
@@ -279,12 +289,24 @@ body::before {
   color: var(--gold-2);
 }
 
+/* Right-clustered controls (relics + audio + FX). margin-left:auto on the
+   group pushes the whole bundle to the right edge regardless of which
+   children are conditionally rendered (RelicTray only mounts when relics
+   exist). */
+.game-header-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 /* Visual FX toggle — small dropdown next to the mute button. Wraps the
    button so the popover anchors to it without an extra positioning layer. */
 .fx-toggle {
   position: relative;
   display: inline-flex;
-  margin-left: 0.4rem;
 }
 
 .fx-toggle-button {
@@ -1031,6 +1053,8 @@ body::before {
   place-items: center;
   z-index: 10;
   backdrop-filter: blur(3px);
+  padding: 1rem;
+  overflow-y: auto;
 }
 
 .victory-card {
@@ -1044,7 +1068,7 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-width: 320px;
+  width: min(420px, 100%);
   box-shadow:
     inset 0 0 0 1px rgba(200, 163, 90, 0.15),
     inset 0 0 40px rgba(0, 0, 0, 0.6),
@@ -1118,6 +1142,8 @@ body::before {
   place-items: center;
   z-index: 10;
   backdrop-filter: blur(3px);
+  padding: 1rem;
+  overflow-y: auto;
 }
 
 .game-over-card {
@@ -1131,7 +1157,7 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-width: 320px;
+  width: min(420px, 100%);
   box-shadow:
     inset 0 0 0 1px rgba(238, 94, 87, 0.15),
     inset 0 0 40px rgba(0, 0, 0, 0.6),
@@ -1232,13 +1258,16 @@ body::before {
   transform: translate(-50%, -50%);
   z-index: 9;
   pointer-events: none;
-  padding: 1rem 2.8rem;
+  padding: clamp(0.6rem, 2vw, 1rem) clamp(1.1rem, 4.5vw, 2.8rem);
   border-radius: 0.4rem;
   font-family: 'Cinzel', serif;
-  font-size: 2.4rem;
+  font-size: clamp(1.4rem, 6vw, 2.4rem);
   font-weight: 900;
-  letter-spacing: 0.2em;
+  letter-spacing: clamp(0.1em, 0.6vw, 0.2em);
   text-transform: uppercase;
+  text-align: center;
+  max-width: calc(100vw - 1rem);
+  white-space: nowrap;
   color: var(--parchment);
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 22px rgba(0, 0, 0, 0.7);
   background: rgba(8, 6, 4, 0.6);
@@ -1309,7 +1338,7 @@ body::before {
     0 0 50px rgba(200, 163, 90, 0.36),
     0 10px 30px rgba(0, 0, 0, 0.55);
   color: var(--gold-2);
-  font-size: 2.1rem;
+  font-size: clamp(1.25rem, 5.4vw, 2.1rem);
 }
 
 /* Player broke the enemy's shield — the enemy's turn is spent recovering.
@@ -1861,7 +1890,6 @@ body.vignette-damage::before {
      phones — the page can scroll instead of the board collapsing. */
   width: max(280px, min(640px, calc(100dvh - var(--board-chrome)), 100%));
   aspect-ratio: 1 / 1;
-  box-sizing: content-box;
 }
 
 /* Mobile portrait: the spell tray + status + HP rows take less stacked
@@ -1883,6 +1911,10 @@ body.vignette-damage::before {
   height: 100% !important;
   max-width: 100%;
   max-height: 100%;
+  /* Drag-to-swap on touch must not scroll the page — once the body can
+     scroll (mobile), default touch-action would treat a vertical drag as
+     a scroll instead of a swap. */
+  touch-action: none;
 }
 
 @media (max-width: 760px) {
@@ -1959,6 +1991,34 @@ body.vignette-damage::before {
   }
 }
 
+/* Mobile modal sizing — the desktop cards have generous padding/min-width
+   that overflow a 360px viewport. Tighten everything and let the reward
+   grid stack vertically. */
+@media (max-width: 760px) {
+  .victory-card,
+  .game-over-card {
+    padding: 1.5rem 1.25rem;
+  }
+  .victory-title,
+  .game-over-title {
+    font-size: 1.7rem;
+    letter-spacing: 0.12em;
+  }
+  .reward-card {
+    padding: 1.25rem 1rem;
+  }
+  .reward-title {
+    font-size: 1.5rem;
+    letter-spacing: 0.12em;
+  }
+  .reward-grid {
+    gap: 0.6rem;
+  }
+  .reward-relic {
+    padding: 0.9rem 0.85rem;
+  }
+}
+
 @media (max-width: 420px) {
   .hud-title {
     font-size: 0.82rem;
@@ -2029,6 +2089,19 @@ body.vignette-damage::before {
   /* So the anchor's bounding rect tightly fits the button it wraps; no
      extra whitespace around the trigger. */
   align-items: stretch;
+}
+
+/* When a fullscreen overlay (reward / victory / game-over) is mounted,
+   any spell-tray / relic tooltip pinned open by a touch tap would float
+   above the modal and look stuck. Hide them while the modal is up — the
+   tooltips are non-essential and reopen on the next interaction. */
+body:has(.reward-overlay) .hover-tooltip,
+body:has(.victory-overlay) .hover-tooltip,
+body:has(.game-over-overlay) .hover-tooltip,
+body:has(.reward-overlay) .intent-tooltip,
+body:has(.victory-overlay) .intent-tooltip,
+body:has(.game-over-overlay) .intent-tooltip {
+  display: none;
 }
 
 .hover-tooltip {
@@ -2476,8 +2549,6 @@ body.vignette-damage::before {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-left: auto;
-  margin-right: 0.5rem;
   /* High stacking context so tooltips rendered inside slots float above
      EnemyFrame and the Pixi canvas siblings below the header. */
   position: relative;
@@ -2593,6 +2664,8 @@ body.vignette-damage::before {
   place-items: center;
   z-index: 11;
   backdrop-filter: blur(4px);
+  padding: 1rem;
+  overflow-y: auto;
 }
 
 .reward-card {
@@ -2603,8 +2676,7 @@ body.vignette-damage::before {
   border: 1px solid var(--gold-1);
   border-radius: 0.5rem;
   text-align: center;
-  min-width: 720px;
-  max-width: 880px;
+  width: min(880px, 100%);
   box-shadow:
     inset 0 0 0 1px rgba(200, 163, 90, 0.15),
     0 24px 80px rgba(0, 0, 0, 0.7),
@@ -2631,7 +2703,10 @@ body.vignette-damage::before {
 
 .reward-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* auto-fit + minmax gives 3 columns on desktop and gracefully collapses
+     to 2 then 1 as the viewport narrows — no separate mobile rule needed
+     to avoid the 3 cards getting crammed into ~80px each on phones. */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
   margin-bottom: 1.2rem;
 }
