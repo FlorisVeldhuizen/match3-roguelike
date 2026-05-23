@@ -1968,20 +1968,20 @@ body.vignette-damage::before {
 }
 
 /* --- Burning tile overlay (Bleeder verb) ---
-   8×8 grid laid over the Pixi canvas. Aligns with the canvas because
-   .board-shell uses content-box sizing with 8px padding on each side
-   and the canvas fills the content area exactly. */
-.board-shell {
+   Sits inside .board-mount alongside the Pixi canvas (which Pixi
+   appendChild's). board-mount and the canvas share the same CSS box,
+   so insetting by BOARD_PADDING / LOGICAL_SIZE = 8/528 lines the 8×8
+   grid up with the gem grid inside the canvas. */
+.board-mount {
   position: relative;
 }
 
 .burning-overlay {
   position: absolute;
-  /* Match the board-shell's padding so the grid aligns to the canvas. */
-  top: 8px;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  top: calc(8 / 528 * 100%);
+  left: calc(8 / 528 * 100%);
+  right: calc(8 / 528 * 100%);
+  bottom: calc(8 / 528 * 100%);
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(8, 1fr);
@@ -1990,12 +1990,35 @@ body.vignette-damage::before {
 }
 
 .burning-cell {
+  position: relative;
   display: grid;
   place-items: center;
   font-size: clamp(1rem, 4.5vmin, 1.7rem);
   filter: drop-shadow(0 0 6px var(--ember-glow));
   animation: burning-pulse 1.3s ease-in-out infinite;
   pointer-events: auto;
+}
+
+.burning-flame {
+  display: inline-block;
+}
+
+.burning-count {
+  position: absolute;
+  bottom: 4%;
+  right: 6%;
+  background: var(--ink-0);
+  color: var(--ember-2);
+  border: 1px solid var(--ember-1);
+  border-radius: 999px;
+  padding: 0 0.32em;
+  font-size: 0.5em;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  line-height: 1.4;
+  min-width: 1.2em;
+  text-align: center;
+  filter: none;
 }
 
 @keyframes burning-pulse {
@@ -2009,8 +2032,85 @@ body.vignette-damage::before {
   }
 }
 
+/* Burst plays once when a burning tile is cleared by a match. The
+   core flame scales up while four sparks fly outward + fade. */
+.burning-burst {
+  position: relative;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.burst-core {
+  position: absolute;
+  font-size: clamp(1.2rem, 5vmin, 2rem);
+  animation: burst-core-anim 720ms cubic-bezier(0.18, 0.84, 0.32, 1) forwards;
+}
+
+@keyframes burst-core-anim {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(238, 94, 87, 0.7));
+  }
+  35% {
+    transform: scale(1.7);
+    opacity: 1;
+    filter: drop-shadow(0 0 22px rgba(238, 94, 87, 1));
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+    filter: drop-shadow(0 0 0 rgba(238, 94, 87, 0));
+  }
+}
+
+.burst-spark {
+  position: absolute;
+  font-size: clamp(0.55rem, 2.2vmin, 1rem);
+  color: var(--ember-2);
+  opacity: 0;
+  text-shadow: 0 0 6px rgba(255, 184, 110, 0.95);
+}
+
+.burst-spark.spark-1 {
+  animation: burst-spark-up 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.burst-spark.spark-2 {
+  animation: burst-spark-right 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.burst-spark.spark-3 {
+  animation: burst-spark-down 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.burst-spark.spark-4 {
+  animation: burst-spark-left 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes burst-spark-up {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(-32%, -95%) scale(1.15) rotate(-22deg); opacity: 0; }
+}
+@keyframes burst-spark-right {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(100%, -28%) scale(1.15) rotate(38deg); opacity: 0; }
+}
+@keyframes burst-spark-down {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(38%, 90%) scale(1.15) rotate(14deg); opacity: 0; }
+}
+@keyframes burst-spark-left {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(-100%, 32%) scale(1.15) rotate(-52deg); opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .burning-cell {
+  .burning-cell,
+  .burst-core,
+  .burst-spark {
     animation: none;
   }
 }

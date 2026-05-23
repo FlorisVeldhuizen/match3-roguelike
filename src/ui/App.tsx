@@ -32,8 +32,13 @@ export function App() {
         </header>
         <EnemyFrame />
         <section className="board-shell" aria-label="Game board">
-          <div id={BOARD_MOUNT_ID} className="board-mount" />
-          <BurningOverlay />
+          <div id={BOARD_MOUNT_ID} className="board-mount">
+            {/* Pixi appends its canvas to board-mount via appendChild.
+                React leaves DOM nodes it didn't create alone, so the
+                canvas and this overlay coexist as siblings inside the
+                mount div. */}
+            <BurningOverlay />
+          </div>
         </section>
         <HUD />
         <VictoryOverlay />
