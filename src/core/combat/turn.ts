@@ -7,6 +7,7 @@ import type {
 import type { PoolDeltas } from './pools'
 import { applyDamage } from './damage'
 import { composeDamage, tickStatuses } from './statuses'
+import { interceptFatalDamage, snapshotOf } from '../relics/engine'
 
 // Yellow → mana, purple → skill charge credit immediately.
 // Red/blue/green accumulate in phasePools and resolve at end of player phase.
@@ -149,7 +150,15 @@ export type PlayerPhaseBeginResult = {
 // first — armor protects from fire too. After the tick, block is zeroed
 // (the wall is spent), unless Reinforce's carryBlockNextPhase flag is
 // set. If Burn kills the player, returns phase='game-over'.
-export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
+// Stoneheart needs to see lethal damage from any source, including burn
+// ticks at phase start, so the engine fatal-intercept call lives here.
+// `enemies` + `targetEnemyId` are passed through purely so the engine's
+// snapshot is accurate (relics may read enemies); they're not mutated.
+export function beginPlayerPhase(
+  player: Player,
+  enemies: readonly Enemy[] = [],
+  targetEnemyId: string | null = null,
+): PlayerPhaseBeginResult {
   const events: GameEvent[] = []
   const ticked = tickStatuses('player', player.statuses)
 
@@ -160,9 +169,31 @@ export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
   // expiry plays after the trail is already in flight.
   let hp = player.hp
   let block = player.block
+  let relics = player.relics
   if (ticked.burnDamage > 0 && hp > 0) {
     const res = applyDamage(block, hp, ticked.burnDamage)
-    hp = res.hpAfter
+    let finalHp = res.hpAfter
+    // Stoneheart (and any future on-fatal relic): if burn would kill,
+    // give the chain a chance to pin HP to a floor.
+    if (res.killed) {
+      const snap = snapshotOf(player, enemies, targetEnemyId, 0)
+      const writeRelics = relics.map((r) => ({
+        ...r,
+        runFlags: { ...r.runFlags },
+        fightFlags: { ...r.fightFlags },
+      }))
+      const intercept = interceptFatalDamage(
+        { incoming: ticked.burnDamage, source: 'burn' },
+        writeRelics,
+        snap,
+      )
+      if (intercept.result) {
+        finalHp = intercept.result.hpFloor
+        relics = writeRelics
+        events.push(...intercept.events)
+      }
+    }
+    hp = finalHp
     block = res.blockAfter
     events.push({
       kind: 'damage-taken',
@@ -191,6 +222,7 @@ export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
       phasePools: { red: 0, blue: 0, green: 0 },
       statuses: ticked.statuses,
       carryBlockNextPhase: false,
+      relics,
     },
     events,
     phase,

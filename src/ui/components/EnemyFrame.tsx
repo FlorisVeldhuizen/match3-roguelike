@@ -66,7 +66,6 @@ function intentDescription(intent: Intent): string {
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
-  const rootSeed = useGameStore((s) => s.rootSeed)
   // Drive the lethal-intent warning. Store values (not HUD's display-timed
   // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
@@ -285,14 +284,13 @@ export function EnemyFrame() {
     return unsub
   }, [])
 
-  // Hard-resync displayed HP on run reset. Subscribe to the store so
-  // the setState happens in the callback (external-system update),
-  // not in the effect body.
+  // Hard-resync displayed HP on fight reset (new fight via reward,
+  // skip, or restart — fightCounter bumps in all three).
   useEffect(() => {
-    let prevSeed = rootSeed
+    let prevFightCounter = useGameStore.getState().fightCounter
     return useGameStore.subscribe((s) => {
-      if (s.rootSeed === prevSeed) return
-      prevSeed = s.rootSeed
+      if (s.fightCounter === prevFightCounter) return
+      prevFightCounter = s.fightCounter
       const freshHp: Record<string, number> = {}
       const freshBlock: Record<string, number> = {}
       const freshStatuses: Record<string, StatusInstance[]> = {}
@@ -306,7 +304,7 @@ export function EnemyFrame() {
       setDisplayedStatuses(freshStatuses)
       setStatusTickMarks({})
     })
-  }, [rootSeed])
+  }, [])
 
   return (
     <section className="enemy-row" aria-label="Enemies">

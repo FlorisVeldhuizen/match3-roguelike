@@ -1,6 +1,8 @@
 # Implementation roadmap
 
-Status: **Phase F complete.** Working on Phase G next.
+Status: **Phase G complete.** Working on Phase H1 next.
+
+> **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
 > **Design update (2026-05-22):** *Enemies share the board* pillar added to `01-design.md`. Every identity enemy archetype now gets a **board verb** (column smash, color hex, row petrify, cluster shove, tile burn). Implications:
 > - **Brute** shipped in Phase E without a board verb. Retrofit "column smash" is queued — either as a small dedicated retrofit between F and G, or folded into Phase H2 alongside the other archetypes. Decision pending.

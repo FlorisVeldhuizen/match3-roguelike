@@ -4,19 +4,29 @@ import { nextInt, type RngState } from '../rng/mulberry32'
 import { generateBoard, hasValidSwap } from '../board/generation'
 import { resolveSwap, type SwapResolution } from '../board/cascade'
 import { forkStreams, type RngStreams } from '../rng/streams'
-import {
-  applyPoolDeltas,
-  beginPlayerPhase,
-  resolveEndOfPhase,
-} from '../combat/turn'
+import { beginPlayerPhase, resolveEndOfPhase } from '../combat/turn'
 import { executeEnemyTurn } from '../combat/enemyTurn'
 import { rollIntent } from '../combat/intents'
 import { applyDamage } from '../combat/damage'
+import { hasExtraTurnMatch } from '../combat/pools'
+import { applyMultiplier } from '../combat/math'
+import { getCascadeMultiplier } from '../combat/multipliers'
+import { rollReward } from '../relics/reward'
 import {
-  computeMatchPayouts,
-  hasExtraTurnMatch,
-  withPoolGainedEvents,
-} from '../combat/pools'
+  runOnMatch,
+  runOnCascade,
+  runOnEnemyKilled,
+  runOnBlockGained,
+  runOnSpellCast,
+  runOnUltimateUsed,
+  runOnPhaseStart,
+  runOnPhaseEnd,
+  runOnRelicGained,
+  runOnRoundStarted,
+  snapshotOf,
+  acquireRelic as engineAcquireRelic,
+  resetFightFlags,
+} from '../relics/engine'
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
@@ -26,8 +36,10 @@ import {
   type EnemyArchetype,
   type FightState,
   type GameEvent,
+  type PendingReward,
   type Player,
   type Pos,
+  type RelicInstance,
   type SpellId,
   type UltimateId,
 } from '../../types'
@@ -52,16 +64,26 @@ export type GameStore = {
   rng: RngStreams
   rootSeed: string
   fight: FightState
+  // Monotonic counter bumped each time a fresh fight starts (initial,
+  // acquireRelic, skipReward). UI layers (Pixi BoardScene, HUD displays)
+  // watch this for "rebuild from scratch" — wholesale board.cells swaps
+  // are otherwise invisible to subscribers that compare references.
+  fightCounter: number
+  // Rolled when a fight transitions to 'victory'; nulled by acquireRelic /
+  // skipReward. UI mounts RewardScreen when this is non-null.
+  pendingReward: PendingReward | null
   selectCell: (pos: Pos | null) => void
   attemptSwap: (a: Pos, b: Pos) => { valid: boolean; events: GameEvent[] }
   castSpell: (id: SpellId) => { ok: boolean; events: GameEvent[] }
   castUltimate: (id: UltimateId) => { ok: boolean; events: GameEvent[] }
+  acquireRelic: (id: string) => { ok: boolean; events: GameEvent[] }
+  skipReward: () => void
   restart: () => void
 }
 
 const PLAYER_MAX_HP = 40
 
-function freshPlayer(): Player {
+function freshPlayer(relics: RelicInstance[] = []): Player {
   return {
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
@@ -72,10 +94,14 @@ function freshPlayer(): Player {
     statuses: [],
     pendingSpells: [],
     carryBlockNextPhase: false,
+    relics,
   }
 }
 
-function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
+function freshFight(
+  enemyRng: RngState,
+  relics: RelicInstance[] = [],
+): { fight: FightState; rng: RngState } {
   // Phase F ships two archetypes (Brute, Smolder). Pick from rng.enemy
   // so a given seed reproduces the same opponent across restarts.
   // H1's map will replace this with archetype assignment per node.
@@ -101,7 +127,7 @@ function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
   return {
     fight: {
       phase: 'player-acting',
-      player: freshPlayer(),
+      player: freshPlayer(resetFightFlags(relics)),
       enemies: [enemy],
       targetEnemyId: enemy.id,
     },
@@ -114,6 +140,8 @@ function initialState(seed: string): {
   rng: RngStreams
   rootSeed: string
   fight: FightState
+  fightCounter: number
+  pendingReward: PendingReward | null
 } {
   const streams = forkStreams(seed)
   const { board, rng: nextBoardRng } = generateBoard(streams.board)
@@ -128,6 +156,8 @@ function initialState(seed: string): {
     rng: { ...streams, board: nextBoardRng, enemy: nextEnemyRng },
     rootSeed: seed,
     fight,
+    fightCounter: 1,
+    pendingReward: null,
   }
 }
 
@@ -176,18 +206,16 @@ export const useGameStore = create<GameStore>()(
       let targetEnemyId = current.fight.targetEnemyId
       let enemyRng = current.rng.enemy
 
-      const deltas = computeMatchPayouts(swap.events)
-      const decoratedSwap = withPoolGainedEvents(swap.events)
-      player = applyPoolDeltas(player, deltas)
-
-      // Walk the pool-gained-decorated stream and, after each red/green
-      // pool-gained, apply the matched amount and inject a follow-up
-      // damage-dealt / healed event in-place so damage and heal commit
-      // *with* their gem match (animation-timed). Block (blue) still
-      // pools to EOP — defensive setup must be ready before the enemy
-      // attack.
+      // Walk the swap's cascade stream, inlining the relic engine's
+      // onMatch hook per match-found. Each match builds a per-match
+      // MatchPayload (single Match + cascade-level-scaled deltas) that
+      // relics can modify; the post-hook deltas drive immediate
+      // credit (mana/charge), per-match damage/heal commit (red/green),
+      // pool accumulation (blue), and the pool-gained events that the
+      // animator/SFX layer hangs off.
       const damageHealStream: GameEvent[] = []
-      for (const ev of decoratedSwap) {
+      let cascadeLevel = 0
+      for (const ev of swap.events) {
         damageHealStream.push(ev)
         // Cascade cleared cells with the `burning` flag → apply Burn to
         // the player. Each cleared burning cell contributes a Burn
@@ -219,48 +247,107 @@ export const useGameStore = create<GameStore>()(
           })
           continue
         }
-        if (ev.kind !== 'pool-gained') continue
-        if (ev.color === 'red') {
-          if (targetEnemyId == null) continue
-          const target = enemies.find((e) => e.id === targetEnemyId)
-          if (!target || target.hp <= 0) continue
-          const finalDmg = composeDamage(ev.amount, player.statuses, target.statuses)
-          const res = applyDamage(target.block, target.hp, finalDmg)
-          if (res.blocked + res.hpDamage <= 0) continue
-          enemies = enemies.map((e) =>
-            e.id === target.id
-              ? { ...e, block: res.blockAfter, hp: res.hpAfter }
-              : e,
+        if (ev.kind === 'cascade-start') {
+          cascadeLevel = ev.level
+          const cascadeEvents = runOnCascade(
+            { level: ev.level },
+            player.relics,
+            snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
           )
-          damageHealStream.push({
-            kind: 'damage-dealt',
-            targetId: target.id,
-            amount: res.hpDamage,
-            blocked: res.blocked,
-            source: 'player-attack',
-          })
-          if (res.blockBroken) {
-            damageHealStream.push({ kind: 'block-broken', targetId: target.id })
-          } else if (res.blockAbsorbed) {
-            damageHealStream.push({
-              kind: 'block-absorbed',
-              targetId: target.id,
-            })
-          }
-          if (res.killed) {
-            damageHealStream.push({ kind: 'enemy-killed', enemyId: target.id })
-            const nextLiving = enemies.find(
-              (e) => e.id !== target.id && e.hp > 0,
+          damageHealStream.push(...cascadeEvents)
+          continue
+        }
+        if (ev.kind !== 'match-found') continue
+
+        // Per-match payload: raw amount = size × cascade multiplier,
+        // assigned to the match's color slot. Relics' onMatch hooks
+        // mutate these deltas in acquisition order.
+        const mult = getCascadeMultiplier(cascadeLevel)
+        const raw = applyMultiplier(ev.size, mult)
+        const initialDeltas = {
+          red: ev.color === 'red' ? raw : 0,
+          blue: ev.color === 'blue' ? raw : 0,
+          green: ev.color === 'green' ? raw : 0,
+          yellow: ev.color === 'yellow' ? raw : 0,
+          purple: ev.color === 'purple' ? raw : 0,
+        }
+        const matchResult = runOnMatch(
+          { match: { cells: ev.cells, color: ev.color, size: ev.size, shape: ev.shape }, deltas: initialDeltas, cascadeLevel },
+          player.relics,
+          snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
+        )
+        damageHealStream.push(...matchResult.events)
+        const finalDeltas = matchResult.payload.deltas
+
+        // Credit immediate-credit colors (yellow/purple) + accumulate
+        // running meters in phasePools (R/B/G).
+        player = {
+          ...player,
+          mana: player.mana + finalDeltas.yellow,
+          skillCharge: player.skillCharge + finalDeltas.purple,
+          phasePools: {
+            red: player.phasePools.red + finalDeltas.red,
+            blue: player.phasePools.blue + finalDeltas.blue,
+            green: player.phasePools.green + finalDeltas.green,
+          },
+        }
+
+        // Emit pool-gained per non-zero delta in the canonical
+        // red/blue/green/yellow/purple order so the animator/SFX layer
+        // sees a deterministic sequence (matches the old
+        // withPoolGainedEvents shape, just per-color instead of per-match).
+        for (const color of ['red', 'blue', 'green', 'yellow', 'purple'] as const) {
+          const amount = finalDeltas[color]
+          if (amount <= 0) continue
+          damageHealStream.push({ kind: 'pool-gained', color, amount })
+          if (color === 'red') {
+            if (targetEnemyId == null) continue
+            const target = enemies.find((e) => e.id === targetEnemyId)
+            if (!target || target.hp <= 0) continue
+            const finalDmg = composeDamage(amount, player.statuses, target.statuses)
+            const res = applyDamage(target.block, target.hp, finalDmg)
+            if (res.blocked + res.hpDamage <= 0) continue
+            enemies = enemies.map((e) =>
+              e.id === target.id
+                ? { ...e, block: res.blockAfter, hp: res.hpAfter }
+                : e,
             )
-            targetEnemyId = nextLiving?.id ?? null
+            damageHealStream.push({
+              kind: 'damage-dealt',
+              targetId: target.id,
+              amount: res.hpDamage,
+              blocked: res.blocked,
+              source: 'player-attack',
+            })
+            if (res.blockBroken) {
+              damageHealStream.push({ kind: 'block-broken', targetId: target.id })
+            } else if (res.blockAbsorbed) {
+              damageHealStream.push({
+                kind: 'block-absorbed',
+                targetId: target.id,
+              })
+            }
+            if (res.killed) {
+              damageHealStream.push({ kind: 'enemy-killed', enemyId: target.id })
+              const killEvents = runOnEnemyKilled(
+                { enemyId: target.id },
+                player.relics,
+                snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
+              )
+              damageHealStream.push(...killEvents)
+              const nextLiving = enemies.find(
+                (e) => e.id !== target.id && e.hp > 0,
+              )
+              targetEnemyId = nextLiving?.id ?? null
+            }
+          } else if (color === 'green') {
+            const before = player.hp
+            const next = Math.min(player.maxHp, player.hp + amount)
+            const healed = next - before
+            if (healed <= 0) continue
+            player = { ...player, hp: next }
+            damageHealStream.push({ kind: 'healed', amount: healed })
           }
-        } else if (ev.color === 'green') {
-          const before = player.hp
-          const next = Math.min(player.maxHp, player.hp + ev.amount)
-          const healed = next - before
-          if (healed <= 0) continue
-          player = { ...player, hp: next }
-          damageHealStream.push({ kind: 'healed', amount: healed })
         }
       }
 
@@ -318,6 +405,27 @@ export const useGameStore = create<GameStore>()(
         phase = resolved.phase
         tailEvents.push(...resolved.events)
 
+        // onPhaseEnd listeners fire after EOP resolution. onBlockGained
+        // fires once if the EOP produced a block-gained event (player
+        // side; enemy block-gained is wired in enemyTurn).
+        const phaseEndEvents = runOnPhaseEnd(
+          { phaseKind: 'player' },
+          player.relics,
+          snapshotOf(player, enemies, targetEnemyId, 0),
+        )
+        tailEvents.push(...phaseEndEvents)
+        const playerBlockGained = resolved.events.find(
+          (e) => e.kind === 'block-gained',
+        )
+        if (playerBlockGained && playerBlockGained.kind === 'block-gained') {
+          const blockEvents = runOnBlockGained(
+            { amount: playerBlockGained.amount, target: 'player' },
+            player.relics,
+            snapshotOf(player, enemies, targetEnemyId, 0),
+          )
+          tailEvents.push(...blockEvents)
+        }
+
         // If enemies still alive, tick board-flag durations (Phase F:
         // burning cells lose one charge per player phase that ends
         // without them being matched), then the enemy turn fires. Then
@@ -342,10 +450,19 @@ export const useGameStore = create<GameStore>()(
           tailEvents.push(...enemyResult.events)
 
           if (phase === 'player-acting') {
-            const begin = beginPlayerPhase(player)
+            const begin = beginPlayerPhase(player, enemies, targetEnemyId)
             player = begin.player
             phase = begin.phase
             tailEvents.push(...begin.events)
+            // Run onPhaseStart listeners for the new player phase.
+            if (phase === 'player-acting') {
+              const startEvents = runOnPhaseStart(
+                { phaseKind: 'player' },
+                player.relics,
+                snapshotOf(player, enemies, targetEnemyId, 0),
+              )
+              tailEvents.push(...startEvents)
+            }
             // Emit phase-changed AFTER begin.events so the HUD's
             // block-zero (and other phase-gated UI like the banner)
             // lands once the burn tick and status decrements have
@@ -356,15 +473,36 @@ export const useGameStore = create<GameStore>()(
         }
       }
 
+      // On victory transition, roll the post-fight reward set
+      // deterministically from rng.loot. Phase G only rolls 'common'
+      // (no map-tier yet); H1+ will pass rarity from the node type.
+      let nextLootRng = current.rng.loot
+      let pendingReward = current.pendingReward
+      if (
+        phase === 'victory' &&
+        pendingReward == null
+      ) {
+        const rolled = rollReward(player.relics, 'common', nextLootRng, 0)
+        pendingReward = rolled.reward
+        nextLootRng = rolled.rng
+        tailEvents.push({
+          kind: 'reward-offered',
+          offeredRelicIds: rolled.reward.offeredRelicIds,
+          gold: rolled.reward.gold,
+        })
+      }
+
       set((s) => {
         s.board.cells = finalBoard
         s.rng.board = finalBoardRng
         s.rng.enemy = enemyRng
+        s.rng.loot = nextLootRng
         s.board.selected = null
         s.fight.phase = phase
         s.fight.player = player
         s.fight.enemies = enemies
         s.fight.targetEnemyId = targetEnemyId
+        s.pendingReward = pendingReward
       })
 
       return {
@@ -391,11 +529,27 @@ export const useGameStore = create<GameStore>()(
         return { ok: false, events: [] }
       }
       const event: GameEvent = { kind: 'spell-cast', spellId: id }
+      const writeRelics = current.fight.player.relics.map((r) => ({
+        ...r,
+        runFlags: { ...r.runFlags },
+        fightFlags: { ...r.fightFlags },
+      }))
+      const hookEvents = runOnSpellCast(
+        { spellId: id },
+        writeRelics,
+        snapshotOf(
+          current.fight.player,
+          current.fight.enemies,
+          current.fight.targetEnemyId,
+          0,
+        ),
+      )
       set((s) => {
         s.fight.player.mana -= def.manaCost
         s.fight.player.pendingSpells.push(id)
+        s.fight.player.relics = writeRelics
       })
-      return { ok: true, events: [event] }
+      return { ok: true, events: [event, ...hookEvents] }
     },
     castUltimate: (id: UltimateId) => {
       const current = get()
@@ -410,11 +564,97 @@ export const useGameStore = create<GameStore>()(
         return { ok: false, events: [] }
       }
       const event: GameEvent = { kind: 'spell-cast', spellId: id }
+      const writeRelics = current.fight.player.relics.map((r) => ({
+        ...r,
+        runFlags: { ...r.runFlags },
+        fightFlags: { ...r.fightFlags },
+      }))
+      const hookEvents = runOnUltimateUsed(
+        { spellId: id },
+        writeRelics,
+        snapshotOf(
+          current.fight.player,
+          current.fight.enemies,
+          current.fight.targetEnemyId,
+          0,
+        ),
+      )
       set((s) => {
         s.fight.player.skillCharge -= def.chargeCost
         s.fight.player.pendingSpells.push(id)
+        s.fight.player.relics = writeRelics
       })
-      return { ok: true, events: [event] }
+      return { ok: true, events: [event, ...hookEvents] }
+    },
+    acquireRelic: (id: string) => {
+      const current = get()
+      if (current.pendingReward == null) {
+        return { ok: false, events: [] }
+      }
+      if (!current.pendingReward.offeredRelicIds.includes(id)) {
+        return { ok: false, events: [] }
+      }
+      const nextRelics = engineAcquireRelic(current.fight.player.relics, id)
+      const events: GameEvent[] = [{ kind: 'relic-gained', relicId: id }]
+      // onRelicGained listeners (any other relic in your inventory that
+      // cares about new acquisitions). Phase G has no consumer; J2 will.
+      const gainEvents = runOnRelicGained(
+        { relicId: id },
+        nextRelics,
+        snapshotOf(
+          { ...current.fight.player, relics: nextRelics },
+          current.fight.enemies,
+          current.fight.targetEnemyId,
+          0,
+        ),
+      )
+      events.push(...gainEvents)
+
+      // Spin up the next fight with the new relic inventory. Same run,
+      // so HP/mana/charge persist? Per Phase G slice scope it's a fresh
+      // fight (no map yet); preserve relics, reset combat state.
+      const enemyRoll = freshFight(current.rng.enemy, nextRelics)
+      const boardRoll = generateBoard(current.rng.board)
+      // Run onRoundStarted at the start of the new encounter.
+      const roundEvents = runOnRoundStarted(
+        { fightId: 0 },
+        enemyRoll.fight.player.relics,
+        snapshotOf(
+          enemyRoll.fight.player,
+          enemyRoll.fight.enemies,
+          enemyRoll.fight.targetEnemyId,
+          0,
+        ),
+      )
+      events.push(...roundEvents)
+
+      set((s) => {
+        s.pendingReward = null
+        s.fight = enemyRoll.fight
+        s.rng.enemy = enemyRoll.rng
+        s.board.cells = boardRoll.board
+        s.rng.board = boardRoll.rng
+        s.board.selected = null
+        s.fightCounter += 1
+      })
+      return { ok: true, events }
+    },
+    skipReward: () => {
+      const current = get()
+      if (current.pendingReward == null) return
+      // Skip → also start the next fight (no map yet). Gold-on-skip is a
+      // J2 / I concern; ignored in slice.
+      const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics)
+      const boardRoll = generateBoard(current.rng.board)
+      set((s) => {
+        s.pendingReward = null
+        s.fight = enemyRoll.fight
+        s.rng.enemy = enemyRoll.rng
+        s.board.cells = boardRoll.board
+        s.rng.board = boardRoll.rng
+        s.board.selected = null
+        s.fightCounter += 1
+      })
     },
     restart: () => {
       const fresh = initialState(newSliceSeed())
@@ -423,6 +663,8 @@ export const useGameStore = create<GameStore>()(
         s.rng = fresh.rng
         s.rootSeed = fresh.rootSeed
         s.fight = fresh.fight
+        s.pendingReward = fresh.pendingReward
+        s.fightCounter += 1
       })
     },
   })),

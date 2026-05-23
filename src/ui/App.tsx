@@ -10,6 +10,8 @@ import { ArcaneBackground } from './components/ArcaneBackground'
 import { AriaLiveAnnouncer } from './components/AriaLiveAnnouncer'
 import { CRTOverlay } from './components/CRTOverlay'
 import { BurningOverlay } from './components/BurningOverlay'
+import { RelicTray } from './components/RelicTray'
+import { RewardScreen } from './components/RewardScreen'
 import { useGameStore } from '../core/state/store'
 
 export const BOARD_MOUNT_ID = 'board-mount'
@@ -25,7 +27,8 @@ export function App() {
           <span className="hud-seed" title="Run seed (select to copy)">
             {seed}
           </span>
-          <span className="hud-build">Phase F · spells & statuses</span>
+          <span className="hud-build">Phase G · relics</span>
+          <RelicTray />
           <VolumeSlider />
           <MuteToggle />
           <FXToggle />
@@ -42,6 +45,7 @@ export function App() {
         </section>
         <HUD />
         <VictoryOverlay />
+        <RewardScreen />
         <GameOverOverlay />
       </main>
       {/* Outside .game so the screenshake transform doesn't drag it around

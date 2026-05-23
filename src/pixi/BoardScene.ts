@@ -314,6 +314,7 @@ export class BoardScene {
       cellScreenCenter: (pos) => this.cellScreenCenter(pos),
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
+    void this.animator.playInitialFill()
     this.subscribeSelection()
     this.attachPointerEvents(app.canvas)
     this.attachKeyboardEvents()
@@ -406,6 +407,7 @@ export class BoardScene {
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
     this.updateSelectionRing()
+    void this.animator.playInitialFill()
   }
 
   private async loadGemTextures(): Promise<Record<GemColor, Texture>> {
@@ -500,11 +502,13 @@ export class BoardScene {
       this.updateSelectionRing()
     })
     this.updateSelectionRing()
-    // rootSeed flip = restart → rebuild sprites in place.
-    let prevSeed = useGameStore.getState().rootSeed
+    // fightCounter bumps on any wholesale board swap (restart, accept-
+    // reward → next fight, skip-reward → next fight). Rebuild sprites
+    // in place from the new board state.
+    let prevFightCounter = useGameStore.getState().fightCounter
     this.unsubscribeRestart = useGameStore.subscribe((s) => {
-      if (s.rootSeed === prevSeed) return
-      prevSeed = s.rootSeed
+      if (s.fightCounter === prevFightCounter) return
+      prevFightCounter = s.fightCounter
       void this.rebuildBoard()
     })
   }

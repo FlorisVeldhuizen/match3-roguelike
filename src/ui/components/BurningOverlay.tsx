@@ -13,7 +13,7 @@ import type { Pos } from '../../types'
 //                          them from the displayed set after the burst.
 //   - cell-flag-ticked / 'burning': decrement the visible countdown so
 //     the number on each flame matches the game state.
-// We also resync the full set from the store on restart (rootSeed flip).
+// We also resync the full set from the store on fight reset (fightCounter bump).
 //
 // The overlay sits INSIDE .board-mount with a small percentage inset
 // (BOARD_PADDING / LOGICAL_SIZE = 8/528 ≈ 1.515%) so the 8×8 grid lines
@@ -28,7 +28,6 @@ const BURST_MS = 720
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
 export function BurningOverlay() {
-  const rootSeed = useGameStore((s) => s.rootSeed)
   // Lazy initializer reads the store once at mount; matches the store
   // state for that first frame without firing a setState in an effect.
   const [flames, setFlames] = useState<Map<string, Flame>>(() =>
@@ -42,18 +41,16 @@ export function BurningOverlay() {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const burstIdRef = useRef(0)
 
-  // Resync on restart. Subscribe handler is on the "external system
-  // update" side of React's effect rules — no setState in the effect
-  // body itself.
+  // Resync on fight reset (new fight via reward, skip, or restart).
   useEffect(() => {
-    let prevSeed = rootSeed
+    let prevFightCounter = useGameStore.getState().fightCounter
     return useGameStore.subscribe((s) => {
-      if (s.rootSeed === prevSeed) return
-      prevSeed = s.rootSeed
+      if (s.fightCounter === prevFightCounter) return
+      prevFightCounter = s.fightCounter
       setFlames(initialFlamesFromStore())
       setBursts([])
     })
-  }, [rootSeed])
+  }, [])
 
   useEffect(() => {
     return subscribeGameEvents((event) => {

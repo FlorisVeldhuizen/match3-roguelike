@@ -123,4 +123,14 @@ export default defineConfig([
       ],
     },
   },
+  // Test files in core/ commonly need to side-effect-import content/ to
+  // populate registries before exercising engine code. Loosen the
+  // boundaries rule for *.test.* files only — listed last so it
+  // overrides the rule above.
+  {
+    files: ['src/**/*.test.{ts,tsx}'],
+    rules: {
+      'boundaries/dependencies': 'off',
+    },
+  },
 ])

@@ -4,6 +4,7 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 
 export function VictoryOverlay() {
   const phase = useGameStore((s) => s.fight.phase)
+  const pendingReward = useGameStore((s) => s.pendingReward)
   // Gate on the animation-timed phase-changed event so the overlay waits
   // for the kill beat to play before appearing.
   const [reveal, setReveal] = useState(phase === 'victory')
@@ -16,6 +17,9 @@ export function VictoryOverlay() {
     [],
   )
 
+  // RewardScreen mounts on pendingReward and replaces this overlay — the
+  // 3-pick is the win celebration in Phase G.
+  if (pendingReward) return null
   if (!reveal || phase !== 'victory') return null
 
   const handleRestart = () => useGameStore.getState().restart()

@@ -27,7 +27,6 @@ const PULSE_MS = 380
 export function HUD() {
   const player = useGameStore((s) => s.fight.player)
   const phase = useGameStore((s) => s.fight.phase)
-  const rootSeed = useGameStore((s) => s.rootSeed)
   // Status icons are animation-timed (driven by status-applied /
   // status-ticked / status-expired events) so the chip lands when the
   // particles arrive, not at swap commit. Mirrors the
@@ -224,15 +223,15 @@ export function HUD() {
     return unsub
   }, [])
 
-  // Run reset (restart, new run): hard-resync to canonical state.
-  // Subscribe to the store so the setState call happens in the
-  // subscription callback rather than in the effect body — keeps it on
-  // the "external system update" side of React's effect rules.
+  // Run reset (restart, accept-reward → next fight, skip-reward): hard-
+  // resync to canonical state. Keyed on fightCounter so it fires for
+  // both same-run new-fight transitions and full restarts (which also
+  // bump the counter).
   useEffect(() => {
-    let prevSeed = rootSeed
+    let prevFightCounter = useGameStore.getState().fightCounter
     return useGameStore.subscribe((s) => {
-      if (s.rootSeed === prevSeed) return
-      prevSeed = s.rootSeed
+      if (s.fightCounter === prevFightCounter) return
+      prevFightCounter = s.fightCounter
       const p = s.fight.player
       setDisplayedHp(p.hp)
       setDisplayedMana(p.mana)
@@ -242,9 +241,7 @@ export function HUD() {
       setDisplayedStatuses(p.statuses)
       setStatusTickMarks({})
     })
-    // rootSeed intentionally captured once for initial baseline; the
-    // subscription itself tracks subsequent transitions.
-  }, [rootSeed])
+  }, [])
 
   // Clean up the shake timer on unmount so a late timeout doesn't poke
   // the DOM. The .game element is the wrapper around HUD + Pixi canvas;

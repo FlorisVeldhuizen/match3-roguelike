@@ -29,6 +29,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   statuses: [],
   pendingSpells: [],
   carryBlockNextPhase: false,
+  relics: [],
   ...overrides,
 })
 

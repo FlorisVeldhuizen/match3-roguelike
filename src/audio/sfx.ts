@@ -2147,6 +2147,12 @@ export function installSfxBindings(): void {
           scheduleDrop(maxDist)
         }
         return
+      case 'board-intro-landed':
+        // Level-start intro emits one of these per column, already scheduled
+        // by the animator to fire at that column's visual touchdown. Just
+        // play the thunk — no extra timing math.
+        playDropSfx()
+        return
       case 'gems-spawned':
         // Spawned gems fall in alongside gems-fell (AnimationController runs
         // animateFall and animateSpawn in parallel), so this thunk fires near

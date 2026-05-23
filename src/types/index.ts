@@ -39,6 +39,7 @@ export type DamageSource =
   | 'player-attack'
   | 'burn'
   | 'riposte'
+  | 'thornmail'
 
 export type StatusKind = 'burn' | 'vulnerable' | 'weak'
 
@@ -79,6 +80,10 @@ export type GameEvent =
   | { kind: 'gems-fell'; movements: { from: Pos; to: Pos }[] }
   | { kind: 'gems-spawned'; spawns: { at: Pos; color: GemColor }[] }
   | { kind: 'board-shuffled'; cells: { at: Pos; color: GemColor }[] }
+  // Fires once per column during the level-start intro animation, scheduled
+  // to land with that column's visual touchdown. Purely cosmetic — audio
+  // subscribes to play a drop thunk; gameplay subscribers should ignore it.
+  | { kind: 'board-intro-landed'; column: number }
   | { kind: 'pool-gained'; color: GemColor; amount: number }
   | {
       kind: 'damage-dealt'
@@ -145,6 +150,14 @@ export type GameEvent =
   | { kind: 'turn-ended' }
   | { kind: 'phase-changed'; phase: CombatPhase }
   | { kind: 'screen-shake'; magnitude: number }
+  // Fired by the relic engine when a relic's hook actually mutates state /
+  // emits a follow-up. UI uses it for the relic-tray pulse + future
+  // battle log; `effect` is a short human label ("reflected 1 damage").
+  | { kind: 'relic-triggered'; relicId: string; effect: string }
+  | { kind: 'relic-gained'; relicId: string }
+  // Emitted when a fight ends and a reward roll has been generated.
+  // RewardScreen mounts on this; engine could also use it for run logging.
+  | { kind: 'reward-offered'; offeredRelicIds: string[]; gold: number }
   // UI-only signal: the player's cursor is over a board cell (or
   // null = pointer left the board). Emitted by BoardScene when its
   // internal hoveredCell transitions. BurningOverlay listens to react
@@ -180,6 +193,24 @@ export type PhasePools = {
   green: number
 }
 
+// One acquired relic in the player's inventory. Array order = acquisition
+// order = modifier-chain evaluation order. `runFlags` persists across the
+// whole run (Stoneheart.triggered); `fightFlags` is cleared by the
+// onRoundStarted step at fight-start (none in Phase G, reserved for J2).
+export type RelicInstance = {
+  id: string
+  runFlags: Record<string, JsonValue>
+  fightFlags: Record<string, JsonValue>
+}
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [k: string]: JsonValue }
+
 export type Player = {
   hp: number
   maxHp: number
@@ -196,7 +227,19 @@ export type Player = {
   // remaining block (instead of zeroing it) and clears the flag — the
   // phase *after* that zeros normally per 01-design §Reinforce.
   carryBlockNextPhase: boolean
+  // Acquisition-ordered. Cleared on restart, grown by acquireRelic.
+  relics: RelicInstance[]
 }
+
+// Rolled at fight-end from rng.loot; persists in the store while the
+// player picks. Cleared by acquireRelic / skipReward.
+export type PendingReward = {
+  rarity: RelicRarity
+  offeredRelicIds: string[]
+  gold: number
+}
+
+export type RelicRarity = 'common' | 'uncommon' | 'rare'
 
 export type Enemy = {
   id: string

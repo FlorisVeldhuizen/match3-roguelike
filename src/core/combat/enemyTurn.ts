@@ -5,6 +5,11 @@ import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage, tickStatuses } from './statuses'
 import { getArchetype } from './archetypeRegistry'
 import { applyFlagToCells, pickRandomCellsWithoutFlag } from '../board/flags'
+import {
+  interceptFatalDamage,
+  runOnDamageTaken,
+  snapshotOf,
+} from '../relics/engine'
 
 export type EnemyTurnResult = {
   player: Player
@@ -148,14 +153,38 @@ export function executeEnemyTurn(
           nextPlayer.statuses,
         )
         const res = applyDamage(nextPlayer.block, nextPlayer.hp, finalDamage)
+        let finalHp = res.hpAfter
+        // Clone all relic flag bags up front so both fatal-intercept and
+        // damage-taken listeners can write to runFlags / fightFlags.
+        const writeRelics = nextPlayer.relics.map((r) => ({
+          ...r,
+          runFlags: { ...r.runFlags },
+          fightFlags: { ...r.fightFlags },
+        }))
+        if (res.killed) {
+          const intercept = interceptFatalDamage(
+            { incoming: finalDamage, source: 'enemy-attack' },
+            writeRelics,
+            snapshotOf(nextPlayer, nextEnemies, null, 0),
+          )
+          if (intercept.result) {
+            finalHp = intercept.result.hpFloor
+            events.push(...intercept.events)
+          }
+        }
         nextPlayer = {
           ...nextPlayer,
           block: res.blockAfter,
-          hp: res.hpAfter,
+          hp: finalHp,
+          relics: writeRelics,
         }
+        // If Stoneheart capped HP above the would-be value, the actual
+        // damage taken is less than res.hpDamage. Recompute from the
+        // delta so the FX layer shows the real number.
+        const actualHpDamage = res.hpDamage - (finalHp - res.hpAfter)
         events.push({
           kind: 'damage-taken',
-          amount: res.hpDamage,
+          amount: actualHpDamage,
           blocked: res.blocked,
           source: 'enemy-attack',
         })
@@ -163,6 +192,55 @@ export function executeEnemyTurn(
           events.push({ kind: 'block-broken', targetId: 'player' })
         } else if (res.blockAbsorbed) {
           events.push({ kind: 'block-absorbed', targetId: 'player' })
+        }
+        // onDamageTaken listeners (Thornmail). Engine emits descriptive
+        // events; we scan for damage-dealt with source='thornmail' and
+        // apply them through the attacker's block.
+        const dtEvents = runOnDamageTaken(
+          {
+            amount: res.hpDamage,
+            blocked: res.blocked,
+            source: 'enemy-attack',
+            attackerId: updatedEnemy.id,
+          },
+          writeRelics,
+          snapshotOf(nextPlayer, nextEnemies, null, 0),
+        )
+        for (const ev of dtEvents) {
+          if (
+            ev.kind === 'damage-dealt' &&
+            ev.source === 'thornmail' &&
+            updatedEnemy.hp > 0
+          ) {
+            const reflectRes = applyDamage(
+              updatedEnemy.block,
+              updatedEnemy.hp,
+              ev.amount,
+            )
+            updatedEnemy = {
+              ...updatedEnemy,
+              block: reflectRes.blockAfter,
+              hp: reflectRes.hpAfter,
+            }
+            // Push the resolved damage-dealt with corrected block/hp split.
+            events.push({
+              kind: 'damage-dealt',
+              targetId: updatedEnemy.id,
+              amount: reflectRes.hpDamage,
+              blocked: reflectRes.blocked,
+              source: 'thornmail',
+            })
+            if (reflectRes.blockBroken) {
+              events.push({ kind: 'block-broken', targetId: updatedEnemy.id })
+            } else if (reflectRes.blockAbsorbed) {
+              events.push({ kind: 'block-absorbed', targetId: updatedEnemy.id })
+            }
+            if (reflectRes.killed) {
+              events.push({ kind: 'enemy-killed', enemyId: updatedEnemy.id })
+            }
+          } else {
+            events.push(ev)
+          }
         }
         // Smolder's onHitStatus rider: if the attack landed (any HP
         // damage), apply the configured status to the player. Status

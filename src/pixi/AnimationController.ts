@@ -29,6 +29,24 @@ const DROP_MIN_FALL_MS = 65
 function dropJitterMs(x: number, y: number): number {
   return (x * 17 + y * 31) % 25
 }
+// Per-column start delay for the level-start intro. A fresh Fisher-Yates
+// shuffle per call so each level-start reads differently (intro is purely
+// cosmetic — gameplay determinism is unaffected). Step is tuned so the last
+// column starts just before the first column's bottom-row visually lands
+// (~245ms total spread for width 8).
+const INITIAL_FILL_COLUMN_STEP_MS = 35
+function shuffledColumnOrder(width: number): number[] {
+  const order = Array.from({ length: width }, (_, i) => i)
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const a = order[i]
+    const b = order[j]
+    if (a === undefined || b === undefined) continue
+    order[i] = b
+    order[j] = a
+  }
+  return order
+}
 const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
 
 // Brief freeze before damage popup + shake. Heavy hits (5+) get a
@@ -311,6 +329,61 @@ export class AnimationController {
   // given cell right now.
   peekSprite(pos: Pos): Sprite | null {
     return this.getSprite(pos)
+  }
+
+  // Level-start intro: every sprite already lives at its final cell center
+  // (BoardScene.buildSprites snaps them on construction). Offset each upward
+  // and tween back down with the same per-cell jitter + distance-scaled fall
+  // time the cascade refill uses. Per-column delay is a deterministic shuffle
+  // (not a left-to-right wave) so the board doesn't read as a single sheet
+  // sliding down — each column starts its own waterfall.
+  async playInitialFill(): Promise<void> {
+    const prev = this.playing
+    const next = (async () => {
+      await prev
+      this.busy = true
+      try {
+        const promises: Promise<void>[] = []
+        const height = this.sprites.length
+        const width = this.sprites[0]?.length ?? 0
+        const columnOrder = shuffledColumnOrder(width)
+        // Deepest gem's fall time — used to schedule the per-column drop SFX
+        // event so the thunk lands with that column's bottom-row touchdown.
+        const deepestFallMs = Math.max(
+          DROP_MIN_FALL_MS,
+          DROP_PER_CELL_MS * height,
+        )
+        for (let x = 0; x < width; x++) {
+          const slot = columnOrder[x] ?? 0
+          const columnDelay = slot * INITIAL_FILL_COLUMN_STEP_MS
+          for (let y = 0; y < height; y++) {
+            const sprite = this.sprites[y]?.[x]
+            if (!sprite) continue
+            const target = this.geometry.cellCenter(x, y)
+            sprite.y = target.y - this.geometry.cellSize * (y + 1)
+            const distance = y + 1
+            const fallMs = Math.max(
+              DROP_MIN_FALL_MS,
+              DROP_PER_CELL_MS * distance,
+            )
+            const delay = columnDelay + dropJitterMs(x, y)
+            const tween = () => tweenDrop(sprite, target.x, target.y, fallMs)
+            promises.push(delay > 0 ? wait(delay).then(tween) : tween())
+          }
+          // One drop thunk per column at touchdown. Captured in a local so
+          // the closure doesn't reference the loop variable.
+          const col = x
+          void wait(columnDelay + deepestFallMs).then(() =>
+            emitGameEvent({ kind: 'board-intro-landed', column: col }),
+          )
+        }
+        await Promise.all(promises)
+      } finally {
+        this.busy = false
+      }
+    })()
+    this.playing = next
+    return next
   }
 
   async play(events: GameEvent[]): Promise<void> {
