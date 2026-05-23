@@ -2020,6 +2020,33 @@ body.vignette-damage::before {
   }
 }
 
+/* Final turn: faster, flickerier — opacity dips like a candle about to
+   go out, with a tighter scale pulse. Players who only see the small
+   flame still get a strong "about to fizz out" read. */
+.burning-cell.is-fizzling {
+  animation: burning-fizzle 620ms ease-in-out infinite;
+}
+
+@keyframes burning-fizzle {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px var(--ember-glow));
+  }
+  30% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 2px rgba(238, 94, 87, 0.35));
+  }
+  55% {
+    transform: translateY(-1.5px) scale(1.05);
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(238, 94, 87, 0.95));
+  }
+  78% {
+    opacity: 0.6;
+  }
+}
+
 /* Burst plays once when a burning tile is cleared by a match. The
    core flame scales up while four sparks fly outward + fade. */
 .burning-burst {
@@ -2097,6 +2124,7 @@ body.vignette-damage::before {
 
 @media (prefers-reduced-motion: reduce) {
   .burning-cell,
+  .burning-cell.is-fizzling,
   .burst-core,
   .burst-spark {
     animation: none;

@@ -1844,6 +1844,116 @@ export function playShieldParticleTickSfx(amount = 1): void {
   synthShieldThump(amount)
 }
 
+// Tile ignite: Bleeder's tile-burn intent lights N cells. Soft whoosh
+// + low rumble — ominous, "fire just took hold". Pitch + amplitude
+// scale modestly with count so 2 tiles ignite louder than 1, but the
+// timbre stays the same.
+function synthBurnIgnite(count: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(count)
+
+  // Filtered noise whoosh: bandpass sweeps up, mimicking air drawn into
+  // a fire as it catches. Short attack, longer tail than the noise itself
+  // by ramping the bandpass center up over ~140ms.
+  const noise = makeNoiseBurst(c)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.setValueAtTime(380 * jitter(0.1), now)
+  bp.frequency.exponentialRampToValueAtTime(1600 * jitter(0.1), now + 0.16)
+  bp.Q.value = 0.9
+  const ng = c.createGain()
+  ng.gain.setValueAtTime(0.0001, now)
+  ng.gain.exponentialRampToValueAtTime(0.18 * jitter(0.2) * I, now + 0.022)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
+  noise.connect(bp).connect(ng).connect(out(c))
+  noise.start(now)
+  noise.stop(now + 0.24)
+
+  // Low rumble: a brief 90→55Hz sine for body. Anchors the cue so the
+  // noise doesn't read as paper-thin.
+  const sub = c.createOscillator()
+  sub.type = 'sine'
+  sub.frequency.setValueAtTime(95 * jitter(0.08), now)
+  sub.frequency.exponentialRampToValueAtTime(55 * jitter(0.08), now + 0.18)
+  const sg = c.createGain()
+  sg.gain.setValueAtTime(0.0001, now)
+  sg.gain.exponentialRampToValueAtTime(0.22 * I, now + 0.012)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.2)
+  sub.connect(sg).connect(out(c))
+  sub.start(now)
+  sub.stop(now + 0.22)
+
+  // High crackle accents — 2-3 short bandpass-noise spikes scattered
+  // across the first 80ms. Make the flame feel alive, not a static
+  // whoosh.
+  const sparks = 2 + Math.floor(Math.random() * 2)
+  for (let i = 0; i < sparks; i++) {
+    const offset = 0.01 + Math.random() * 0.07
+    const n2 = makeNoiseBurst(c)
+    const bp2 = c.createBiquadFilter()
+    bp2.type = 'bandpass'
+    bp2.frequency.value = 2200 + Math.random() * 1800
+    bp2.Q.value = 4
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, now + offset)
+    g.gain.exponentialRampToValueAtTime(0.08 * jitter(0.3), now + offset + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.06)
+    n2.connect(bp2).connect(g).connect(out(c))
+    n2.start(now + offset)
+    n2.stop(now + offset + 0.08)
+  }
+}
+
+// Burn burst: a burning tile got matched and is resolving. Quick fwoosh-
+// pop — the visual burst has a flame core scaling out + sparks flying.
+// Audio matches: short pitched chirp (rising) + crackle layer. Pitched
+// chirp gives the cue "punch" so it reads cleanly even under the clack
+// of the match itself.
+function synthBurnBurst(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+
+  // Pitched chirp — the "fwoosh" curl as the flame jumps and dies.
+  const osc = c.createOscillator()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(260 * jitter(0.1), now)
+  osc.frequency.exponentialRampToValueAtTime(820 * jitter(0.1), now + 0.09)
+  const og = c.createGain()
+  og.gain.setValueAtTime(0.0001, now)
+  og.gain.exponentialRampToValueAtTime(0.22 * jitter(0.2), now + 0.008)
+  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
+  osc.connect(og).connect(out(c))
+  osc.start(now)
+  osc.stop(now + 0.18)
+
+  // Crackle: highpassed noise — sparks flying outward.
+  const noise = makeNoiseBurst(c)
+  const hp = c.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 1800
+  hp.Q.value = 0.8
+  const ng = c.createGain()
+  ng.gain.setValueAtTime(0.0001, now)
+  ng.gain.exponentialRampToValueAtTime(0.14 * jitter(0.2), now + 0.005)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+  noise.connect(hp).connect(ng).connect(out(c))
+  noise.start(now)
+  noise.stop(now + 0.16)
+}
+
+export function playBurnIgniteSfx(count = 1): void {
+  if (muted) return
+  synthBurnIgnite(count)
+}
+
+export function playBurnBurstSfx(): void {
+  if (muted) return
+  synthBurnBurst()
+}
+
 // Wire events → SFX. Idempotent — calling install() twice is safe.
 let installed = false
 export function installSfxBindings(): void {
@@ -2006,6 +2116,19 @@ export function installSfxBindings(): void {
         return
       case 'board-shuffled':
         playShuffleSfx()
+        return
+      case 'tile-burn-placed':
+        // Bleeder lights cells. Pass the count so igniting two tiles
+        // sounds slightly fuller than one.
+        playBurnIgniteSfx(event.cells.length)
+        return
+      case 'tile-burn-triggered':
+        // Each burning cell cleared in a match → one burst. Stagger by
+        // a few ms so multi-cell clears don't sample-loop into a single
+        // unsatisfying thwack.
+        for (let i = 0; i < event.cells.length; i++) {
+          window.setTimeout(playBurnBurstSfx, i * 35)
+        }
         return
       case 'extra-turn-granted':
         // Plays alongside the "+1 TURN" callout. Brighter than turn-start

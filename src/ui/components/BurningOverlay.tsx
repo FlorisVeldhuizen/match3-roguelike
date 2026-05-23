@@ -102,14 +102,17 @@ export function BurningOverlay() {
   return (
     <div className="burning-overlay" aria-hidden>
       {Array.from(flames.values()).map((f) => {
-        // Flame shrinks toward 0.55× as duration approaches 0 — visual
-        // proxy for "how much longer this burns". Clamps so any
-        // remaining > 2 looks full-size.
-        const scale = Math.min(1, 0.55 + 0.225 * f.remaining)
+        // Flame shrinks as duration approaches 0 — visual proxy for
+        // "how much longer this burns". On the final turn we hold the
+        // size at 0.85 (well above the small-end of 0.55) and the
+        // .is-fizzling class layers an urgent opacity flicker on top
+        // so the player gets a clear "about to wink out" tell.
+        const fizzling = f.remaining <= 1
+        const scale = fizzling ? 0.85 : Math.min(1, 0.55 + 0.225 * f.remaining)
         return (
           <span
             key={keyOf(f)}
-            className="burning-cell"
+            className={`burning-cell${fizzling ? ' is-fizzling' : ''}`}
             style={{
               gridColumn: f.x + 1,
               gridRow: f.y + 1,
