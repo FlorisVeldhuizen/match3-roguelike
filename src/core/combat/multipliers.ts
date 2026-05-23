@@ -14,7 +14,3 @@ export function getCascadeMultiplier(level: number): number {
   const idx = Math.min(level, multipliers.length - 1)
   return multipliers[idx] ?? 1
 }
-
-export function getCascadeMultipliers(): readonly number[] {
-  return multipliers
-}

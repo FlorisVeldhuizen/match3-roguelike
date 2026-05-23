@@ -167,7 +167,3 @@ export function detectMatches(board: Cell[][]): Match[] {
   }
   return matches
 }
-
-export function hasAnyMatch(board: Cell[][]): boolean {
-  return findRuns(board).length > 0
-}
