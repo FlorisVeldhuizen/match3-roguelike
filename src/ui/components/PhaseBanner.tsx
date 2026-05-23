@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import type { CombatPhase } from '../../types'
 
-type BannerStyle = 'player' | 'enemy' | 'victory' | 'defeat' | 'bonus'
+type BannerStyle = 'player' | 'enemy' | 'victory' | 'defeat' | 'bonus' | 'staggered'
 
 type BannerEntry = {
   id: number
@@ -42,6 +42,15 @@ export function PhaseBanner() {
         setActive({ id: idRef.current, label: 'Bonus Turn', style: 'bonus' })
         // Reset the dedupe tracker so the eventual "Your Turn" (next real
         // phase change) wouldn't be suppressed by this bonus banner.
+        lastStyleRef.current = null
+        return
+      }
+      if (event.kind === 'enemy-staggered') {
+        // The "Enemy Turn" banner has already fired by this point. Overlay
+        // "Staggered" on top so the player understands why the enemy is
+        // about to do nothing. Don't dedupe — re-stagger is rare but real.
+        idRef.current += 1
+        setActive({ id: idRef.current, label: 'Staggered', style: 'staggered' })
         lastStyleRef.current = null
         return
       }

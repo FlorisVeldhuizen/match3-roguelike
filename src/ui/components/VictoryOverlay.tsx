@@ -10,16 +10,16 @@ export function VictoryOverlay() {
   const [reveal, setReveal] = useState(phase === 'victory')
 
   useEffect(() => {
+    // Single source of truth: any phase-changed event sets reveal to match.
+    // True only when the animation-timed event says we're in victory; flips
+    // back to false on the next non-victory transition (e.g. restart) so a
+    // future victory waits on its own animation gate instead of snapping in.
     return subscribeGameEvents((event) => {
-      if (event.kind === 'phase-changed' && event.phase === 'victory') {
-        setReveal(true)
+      if (event.kind === 'phase-changed') {
+        setReveal(event.phase === 'victory')
       }
     })
   }, [])
-
-  useEffect(() => {
-    if (phase !== 'victory') setReveal(false)
-  }, [phase])
 
   if (!reveal || phase !== 'victory') return null
 
@@ -33,7 +33,7 @@ export function VictoryOverlay() {
   return (
     <div className="victory-overlay" role="dialog" aria-label="Victory">
       <div className="victory-card">
-        <h1 className="victory-title">You Win!</h1>
+        <h1 className="victory-title">Victory</h1>
         <p className="victory-sub">Enemy defeated.</p>
         <button
           type="button"

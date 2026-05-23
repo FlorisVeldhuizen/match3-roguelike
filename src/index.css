@@ -1,13 +1,75 @@
 :root {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Fantasy palette: ink-stained midnight, parchment, tarnished gold, ember red,
+     arcane blue, mossy green, royal purple. Tuned to read as "tome on a stone
+     altar" rather than the previous neutral indigo. */
+  --ink-0: #0b0805;
+  --ink-1: #15110b;
+  --ink-2: #1e1812;
+  --stone-1: #2a2118;
+  --stone-2: #3a2e22;
+  --gold-1: #c8a35a;
+  --gold-2: #f0d089;
+  --gold-3: #8b6a2c;
+  --parchment: #ede0c4;
+  --parchment-dim: #c9b896;
+  --ember-1: #c4423c;
+  --ember-2: #ee5e57;
+  --ember-glow: rgba(238, 94, 87, 0.55);
+  --arcane-1: #5b8fd1;
+  --arcane-2: #9ec5ff;
+  --arcane-glow: rgba(122, 184, 255, 0.45);
+  --moss-1: #2ea65c;
+  --moss-2: #4dd581;
+  --moss-glow: rgba(77, 213, 129, 0.55);
+  --royal-1: #6c4ab8;
+  --royal-2: #b89dff;
+
+  /* Body text is sans for legibility; Cinzel stays opted-in per element for
+     the short uppercase display labels (HUD title, banner text, etc.).
+     Italic-Cormorant body copy was hard to parse — replaced wholesale. */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
-  color: #e8e8ee;
-  background: #0e0e15;
+  color: var(--parchment);
+  background: var(--ink-0);
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  /* Transparent so the .arcane-bg WebGL canvas (z-index: -1) shows through;
+     the ink-0 backstop on :root prevents any flash during load. */
+  background: transparent;
+}
+
+/* Fullscreen WebGL shader behind everything. The canvas is rendered at half
+   res internally and upscaled — the soft noise hides the resample. */
+.arcane-bg {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+
+/* Grain + edge vignette overlay — sits above the shader (z-index: 0) but
+   below all UI (auto z-index inside #root, which is on top via document
+   order). Keeps the shader feeling painterly rather than too clean. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.55) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.014) 0 1px,
+      transparent 1px 3px
+    );
 }
 
 #root {
@@ -15,6 +77,9 @@ body {
   display: grid;
   place-items: start center;
   padding: 2rem 1rem;
+  /* Stacks above body::before (grain veil at z-index: 0). */
+  position: relative;
+  z-index: 1;
 }
 
 .game {
@@ -27,54 +92,115 @@ body {
   position: relative;
 }
 
+/* --- Header / title --- */
+
 .game-header {
   width: 100%;
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  background: #1a1a26;
-  border: 1px solid #2a2a3e;
-  font-size: 0.85rem;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 18px rgba(0, 0, 0, 0.5),
+    0 6px 18px rgba(0, 0, 0, 0.4);
+  font-size: 0.95rem;
 }
 
 .hud-title {
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  text-shadow:
+    0 0 12px rgba(200, 163, 90, 0.35),
+    0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.hud-title::before,
+.hud-title::after {
+  content: '✦';
+  display: inline-block;
+  margin: 0 0.5rem;
+  color: var(--gold-1);
+  opacity: 0.7;
+  font-size: 0.85em;
+  transform: translateY(-1px);
 }
 
 .hud-build {
   opacity: 0.55;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   flex: 1;
   text-align: right;
   margin-right: 0.75rem;
+  color: var(--parchment-dim);
 }
 
 .mute-toggle {
   background: transparent;
-  border: 1px solid #2a2a3e;
-  border-radius: 0.4rem;
-  color: inherit;
+  border: 1px solid var(--gold-3);
+  border-radius: 0.3rem;
+  color: var(--gold-2);
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
-  padding: 0.25rem 0.5rem;
-  transition: border-color 120ms ease, background 120ms ease;
+  padding: 0.3rem 0.55rem;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
 .mute-toggle:hover {
-  border-color: #4a4a6e;
-  background: #22223a;
+  border-color: var(--gold-2);
+  background: rgba(200, 163, 90, 0.12);
+  color: var(--gold-2);
 }
 
+/* --- Board --- */
+
 .board-shell {
-  padding: 6px;
-  border-radius: 0.75rem;
-  background: #1a1a26;
-  border: 1px solid #2a2a3e;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  padding: 8px;
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.1), transparent 40%),
+    linear-gradient(180deg, var(--stone-2), var(--stone-1) 40%, var(--ink-2));
+  border: 1px solid var(--gold-3);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.18),
+    inset 0 0 30px rgba(0, 0, 0, 0.55),
+    0 16px 50px rgba(0, 0, 0, 0.55),
+    0 0 60px rgba(200, 163, 90, 0.05);
+  position: relative;
+}
+
+/* corner flourishes for the board frame */
+.board-shell::before,
+.board-shell::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--gold-1);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.board-shell::before {
+  top: -4px;
+  left: -4px;
+  border-right: none;
+  border-bottom: none;
+}
+.board-shell::after {
+  bottom: -4px;
+  right: -4px;
+  border-left: none;
+  border-top: none;
 }
 
 .board-mount {
@@ -84,10 +210,10 @@ body {
 
 .board-mount canvas {
   display: block;
-  border-radius: 0.5rem;
+  border-radius: 0.3rem;
 }
 
-/* Enemies */
+/* --- Enemies --- */
 
 .enemy-row {
   width: 100%;
@@ -102,13 +228,19 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 0.6rem;
-  background: #1a1a26;
-  border: 1px solid #2a2a3e;
-  min-width: 140px;
-  transition: border-color 120ms ease, opacity 120ms ease;
+  gap: 0.4rem;
+  padding: 0.7rem 1rem 0.8rem;
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.06), transparent 40%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--stone-2);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.06),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+  min-width: 150px;
+  transition: border-color 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
 }
 
 @keyframes intent-pop-in {
@@ -128,32 +260,37 @@ body {
 
 .enemy-intent {
   position: absolute;
-  top: -0.85rem;
+  top: -0.95rem;
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  background: #2a2a3e;
-  border: 1px solid #3f3f5a;
-  font-size: 0.8rem;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--stone-2);
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
   font-weight: 700;
+  letter-spacing: 0.08em;
   line-height: 1;
   z-index: 2;
   animation: intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
   transform-origin: center bottom;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .enemy-intent.intent-attack {
-  border-color: #c4423c;
-  color: #ff9189;
+  border-color: var(--ember-1);
+  color: #ffb0ad;
+  box-shadow: 0 0 14px rgba(238, 94, 87, 0.25), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .enemy-intent.intent-block {
-  border-color: #5b8fd1;
-  color: #9ec5ff;
+  border-color: var(--arcane-1);
+  color: var(--arcane-2);
+  box-shadow: 0 0 14px rgba(122, 184, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .enemy-intent .intent-icon {
@@ -164,69 +301,57 @@ body {
   cursor: help;
 }
 
+/* Tooltip is portalled to <body> and positioned with JS so it can't clip the
+   viewport edges. Top/left are set as inline styles; CSS only handles look. */
 .intent-tooltip {
-  position: absolute;
-  bottom: calc(100% + 0.5rem);
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
+  position: fixed;
   width: max-content;
-  max-width: 200px;
-  padding: 0.45rem 0.6rem;
-  background: #14141e;
-  border: 1px solid #3f3f5a;
-  border-radius: 0.4rem;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  color: #e6e6f0;
-  font-size: 0.72rem;
+  max-width: 240px;
+  padding: 0.6rem 0.8rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.3rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.1),
+    0 6px 18px rgba(0, 0, 0, 0.55);
+  color: var(--parchment);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.82rem;
   font-weight: 500;
-  line-height: 1.3;
-  letter-spacing: 0.01em;
+  line-height: 1.45;
+  letter-spacing: 0;
   text-align: left;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 120ms ease, transform 120ms ease;
-  z-index: 10;
-}
-
-.intent-tooltip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #3f3f5a;
+  transition: opacity 120ms ease;
+  z-index: 100;
 }
 
 .intent-tooltip-title {
+  font-family: 'Cinzel', serif;
   font-weight: 700;
-  font-size: 0.75rem;
-  margin-bottom: 0.2rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
 }
 
-.enemy-intent.intent-attack .intent-tooltip-title {
-  color: #ff9189;
+.intent-tooltip.intent-attack .intent-tooltip-title {
+  color: var(--ember-2);
 }
 
-.enemy-intent.intent-block .intent-tooltip-title {
-  color: #9ec5ff;
+.intent-tooltip.intent-block .intent-tooltip-title {
+  color: var(--arcane-2);
 }
 
 .intent-tooltip-body {
-  opacity: 0.85;
-}
-
-.enemy-intent:hover .intent-tooltip,
-.enemy-intent:focus-visible .intent-tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  opacity: 0.95;
 }
 
 @keyframes enemy-firing-attack {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
     filter: brightness(1);
-    border-color: #2a2a3e;
+    border-color: var(--stone-2);
   }
   25% {
     transform: translate3d(0, -3px, 0) scale(1.06);
@@ -242,7 +367,7 @@ body {
   100% {
     transform: translate3d(0, 0, 0) scale(1);
     filter: brightness(1);
-    border-color: #2a2a3e;
+    border-color: var(--stone-2);
   }
 }
 
@@ -250,7 +375,7 @@ body {
   0% {
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
-    border-color: #2a2a3e;
+    border-color: var(--stone-2);
   }
   35% {
     transform: scale(1.04);
@@ -260,7 +385,7 @@ body {
   100% {
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
-    border-color: #2a2a3e;
+    border-color: var(--stone-2);
   }
 }
 
@@ -275,58 +400,102 @@ body {
 .enemy-block-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  font-size: 0.75rem;
+  gap: 0.25rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #9ec5ff;
+  letter-spacing: 0.05em;
+  color: var(--arcane-2);
   background: rgba(91, 143, 209, 0.18);
-  border: 1px solid rgba(91, 143, 209, 0.5);
-  border-radius: 999px;
-  padding: 0.1rem 0.45rem;
+  border: 1px solid rgba(91, 143, 209, 0.55);
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  box-shadow: 0 0 10px rgba(91, 143, 209, 0.18);
+}
+
+/* Reserves the badge's slot when the enemy has no block, so gaining block
+   doesn't push the HP bar down. visibility:hidden keeps layout intact. */
+.enemy-block-badge.empty {
+  visibility: hidden;
 }
 
 .enemy-frame.targeted {
-  border-color: #facc15;
-  box-shadow: 0 0 0 1px #facc15 inset;
+  border-color: var(--gold-1);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-1),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(200, 163, 90, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .enemy-frame.dead {
-  opacity: 0.45;
+  opacity: 0.4;
+  filter: grayscale(0.4);
 }
 
 .enemy-sprite {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #4b3a5e, #2a1f3a);
+  /* summoning-circle: ember core, ringed by gold and shadow */
+  background:
+    radial-gradient(circle at 50% 50%, rgba(238, 94, 87, 0.25), transparent 55%),
+    radial-gradient(circle at 30% 30%, #5a3a4e, #2a1a30 70%);
   display: grid;
   place-items: center;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.4),
+    inset 0 0 12px rgba(0, 0, 0, 0.6),
+    0 0 14px rgba(108, 74, 184, 0.25);
+  position: relative;
+}
+
+.enemy-sprite::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(200, 163, 90, 0.35);
+  pointer-events: none;
+  animation: sigil-spin 24s linear infinite;
+}
+
+@keyframes sigil-spin {
+  to { transform: rotate(360deg); }
 }
 
 .enemy-glyph {
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(238, 94, 87, 0.35));
 }
 
 .enemy-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--parchment);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .enemy-hp-bar {
   position: relative;
   width: 100%;
   height: 14px;
-  background: #2a2a3e;
-  border-radius: 7px;
+  background: var(--ink-0);
+  border: 1px solid var(--stone-2);
+  border-radius: 2px;
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
 .enemy-hp-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(90deg, #c4423c, #ee5e57);
+  background: linear-gradient(90deg, #7a1f1c, var(--ember-1), var(--ember-2));
+  box-shadow: 0 0 8px rgba(238, 94, 87, 0.35) inset;
   transition: width 200ms ease;
 }
 
@@ -334,23 +503,47 @@ body {
   position: relative;
   display: block;
   text-align: center;
+  font-family: 'Cinzel', serif;
   font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   line-height: 14px;
-  color: #fff;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  color: var(--parchment);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
 }
 
-/* HUD */
+/* --- HUD --- */
 
 .hud {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: #1a1a26;
-  border: 1px solid #2a2a3e;
-  border-radius: 0.6rem;
+  gap: 0.6rem;
+  padding: 0.9rem 1.1rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 50%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.4rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    inset 0 0 22px rgba(0, 0, 0, 0.5),
+    0 6px 18px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+/* Decorative HUD top divider — a thin gold rule with a centered diamond. */
+.hud::before {
+  content: '◆';
+  position: absolute;
+  top: -0.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-1);
+  padding: 0 0.5rem;
+  font-size: 0.6rem;
+  color: var(--gold-1);
+  letter-spacing: 0.3em;
 }
 
 .hud-row {
@@ -361,26 +554,36 @@ body {
 }
 
 .hud-phase {
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  opacity: 0.7;
+  color: var(--gold-2);
+  opacity: 0.9;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .hp-bar {
   position: relative;
   flex: 1;
   min-width: 200px;
-  height: 22px;
-  background: #2a2a3e;
-  border-radius: 11px;
+  height: 24px;
+  background: var(--ink-0);
+  border: 1px solid var(--gold-3);
+  border-radius: 3px;
   overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 2px 6px rgba(0, 0, 0, 0.75);
 }
 
 .hp-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(90deg, #2ea65c, #4dd581);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 50%),
+    linear-gradient(90deg, #1f6a3a, var(--moss-1), var(--moss-2));
   transition: width 200ms ease;
 }
 
@@ -388,27 +591,36 @@ body {
   position: relative;
   display: block;
   text-align: center;
-  font-size: 0.8rem;
-  line-height: 22px;
-  font-weight: 600;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+  color: var(--parchment);
 }
 
 .block-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  background: #2a2a3e;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.25rem;
+  background: rgba(40, 50, 80, 0.4);
+  border: 1px solid var(--stone-2);
+  font-family: 'Cinzel', serif;
   font-size: 0.85rem;
-  opacity: 0.4;
-  transition: opacity 120ms ease, background 120ms ease;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  opacity: 0.45;
+  transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .block-badge.active {
-  background: #2b3e62;
+  background: rgba(91, 143, 209, 0.22);
+  border-color: var(--arcane-1);
   opacity: 1;
+  box-shadow: 0 0 12px rgba(91, 143, 209, 0.25);
 }
 
 .block-icon {
@@ -416,40 +628,50 @@ body {
 }
 
 .block-value {
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .hud-resources {
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .resource {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  font-family: 'Cinzel', serif;
   font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
 }
 
 .resource-label {
-  opacity: 0.7;
+  opacity: 0.75;
+  color: var(--parchment-dim);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
 }
 
 .resource-value {
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   min-width: 1.5ch;
   text-align: right;
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .resource-dot {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: inline-block;
   background-position: center;
   background-size: contain;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 5px rgba(200, 163, 90, 0.25));
 }
 
 .resource-dot[data-color='yellow'] {
@@ -462,9 +684,10 @@ body {
 /* Pool is still up for grabs (Bulwark etc. can siphon before commit).
    Phase end → class drops, badge settles to .active. */
 .block-badge.pending {
-  background: #3a5a8a;
+  background: rgba(58, 90, 138, 0.5);
+  border-color: var(--arcane-2);
   opacity: 1;
-  box-shadow: 0 0 0 1px rgba(164, 202, 254, 0.55) inset;
+  box-shadow: 0 0 0 1px rgba(164, 202, 254, 0.55) inset, 0 0 14px rgba(122, 184, 255, 0.25);
 }
 
 /* Red gem trail just arrived on the targeted enemy: brief outline pulse. */
@@ -477,147 +700,241 @@ body {
     box-shadow: 0 0 0 0 rgba(238, 94, 87, 0);
   }
   40% {
-    box-shadow: 0 0 14px 3px rgba(238, 94, 87, 0.55);
+    box-shadow: 0 0 16px 4px rgba(238, 94, 87, 0.6);
   }
   100% {
     box-shadow: 0 0 0 0 rgba(238, 94, 87, 0);
   }
 }
 
-/* Victory overlay */
+/* Stagger recoil: tilt-and-settle wobble + an arcane glow that fades over
+   the stagger beat. Reads as "the enemy is reeling and exposed". */
+.enemy-frame.staggered {
+  animation: enemy-stagger 520ms cubic-bezier(0.22, 0.7, 0.3, 1);
+}
+
+@keyframes enemy-stagger {
+  0% {
+    transform: translateX(0) rotate(0);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+  }
+  18% {
+    transform: translateX(-5px) rotate(-2.2deg);
+    box-shadow: 0 0 20px 4px rgba(184, 157, 255, 0.55);
+  }
+  38% {
+    transform: translateX(4px) rotate(1.6deg);
+    box-shadow: 0 0 22px 5px rgba(184, 157, 255, 0.5);
+  }
+  58% {
+    transform: translateX(-2px) rotate(-0.8deg);
+    box-shadow: 0 0 16px 3px rgba(184, 157, 255, 0.4);
+  }
+  78% {
+    transform: translateX(1px) rotate(0.3deg);
+    box-shadow: 0 0 10px 2px rgba(184, 157, 255, 0.25);
+  }
+  100% {
+    transform: translateX(0) rotate(0);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+  }
+}
+
+/* --- Victory overlay --- */
 
 .victory-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(8, 8, 14, 0.78);
+  background: rgba(8, 6, 4, 0.82);
   display: grid;
   place-items: center;
   z-index: 10;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
 }
 
 .victory-card {
-  padding: 2rem 2.5rem;
-  background: #1a1a26;
-  border: 1px solid #2a2a3e;
-  border-radius: 0.75rem;
+  padding: 2.25rem 2.75rem;
+  background:
+    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.15), transparent 60%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-1);
+  border-radius: 0.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-width: 280px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  min-width: 320px;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 40px rgba(0, 0, 0, 0.6),
+    0 24px 80px rgba(0, 0, 0, 0.65),
+    0 0 60px rgba(200, 163, 90, 0.18);
+  position: relative;
+}
+
+.victory-card::before {
+  content: '✦ ✦ ✦';
+  position: absolute;
+  top: -0.65rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-1);
+  padding: 0 0.7rem;
+  color: var(--gold-1);
+  letter-spacing: 0.4em;
+  font-size: 0.7rem;
 }
 
 .victory-title {
   margin: 0;
-  font-size: 2rem;
-  letter-spacing: 0.04em;
-  color: #facc15;
+  font-family: 'Cinzel', serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  text-shadow:
+    0 0 18px rgba(200, 163, 90, 0.55),
+    0 2px 0 rgba(0, 0, 0, 0.6);
 }
 
 .victory-sub {
   margin: 0;
-  opacity: 0.65;
-  font-size: 0.9rem;
+  opacity: 0.78;
+  font-size: 1rem;
+  color: var(--parchment-dim);
 }
 
 .victory-restart {
   margin-top: 0.5rem;
-  padding: 0.6rem 1.2rem;
-  border: 1px solid #facc15;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--gold-1);
   background: transparent;
-  color: #facc15;
-  font: inherit;
-  font-weight: 600;
-  border-radius: 0.5rem;
+  color: var(--gold-2);
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  border-radius: 0.3rem;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
 .victory-restart:hover {
-  background: #facc15;
-  color: #0e0e15;
+  background: rgba(200, 163, 90, 0.15);
+  box-shadow: 0 0 18px rgba(200, 163, 90, 0.35);
+  color: var(--parchment);
 }
 
-/* Game-over overlay */
+/* --- Game-over overlay --- */
 
 .game-over-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(8, 8, 14, 0.82);
+  background: rgba(8, 4, 4, 0.85);
   display: grid;
   place-items: center;
   z-index: 10;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
 }
 
 .game-over-card {
-  padding: 2rem 2.5rem;
-  background: #1a1a26;
-  border: 1px solid #4a1f1f;
-  border-radius: 0.75rem;
+  padding: 2.25rem 2.75rem;
+  background:
+    radial-gradient(ellipse at top, rgba(238, 94, 87, 0.18), transparent 60%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--ember-1);
+  border-radius: 0.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-width: 280px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  min-width: 320px;
+  box-shadow:
+    inset 0 0 0 1px rgba(238, 94, 87, 0.15),
+    inset 0 0 40px rgba(0, 0, 0, 0.6),
+    0 24px 80px rgba(0, 0, 0, 0.7),
+    0 0 60px rgba(238, 94, 87, 0.18);
+  position: relative;
+}
+
+.game-over-card::before {
+  content: '☠';
+  position: absolute;
+  top: -0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-1);
+  padding: 0 0.5rem;
+  color: var(--ember-2);
+  font-size: 1.1rem;
 }
 
 .game-over-title {
   margin: 0;
-  font-size: 2rem;
-  letter-spacing: 0.04em;
-  color: #ee5e57;
+  font-family: 'Cinzel', serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ember-2);
+  text-shadow:
+    0 0 18px rgba(238, 94, 87, 0.55),
+    0 2px 0 rgba(0, 0, 0, 0.6);
 }
 
 .game-over-sub {
   margin: 0;
-  opacity: 0.65;
-  font-size: 0.9rem;
+  opacity: 0.78;
+  font-size: 1rem;
+  color: var(--parchment-dim);
 }
 
 .game-over-restart {
   margin-top: 0.5rem;
-  padding: 0.6rem 1.2rem;
-  border: 1px solid #ee5e57;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--ember-1);
   background: transparent;
-  color: #ee5e57;
-  font: inherit;
-  font-weight: 600;
-  border-radius: 0.5rem;
+  color: var(--ember-2);
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  border-radius: 0.3rem;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
 .game-over-restart:hover {
-  background: #ee5e57;
-  color: #0e0e15;
+  background: rgba(238, 94, 87, 0.18);
+  box-shadow: 0 0 18px rgba(238, 94, 87, 0.4);
+  color: var(--parchment);
 }
 
-/* Phase banner — announces "Your Turn" / "Enemy Turn" mid-board */
+/* --- Phase banner --- */
 
 @keyframes phase-banner-in {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.6);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
   }
   20% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.05);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.22em;
   }
   70% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
-    letter-spacing: 0.14em;
+    letter-spacing: 0.24em;
   }
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1);
-    letter-spacing: 0.16em;
+    letter-spacing: 0.28em;
   }
 }
 
@@ -634,16 +951,20 @@ body {
   transform: translate(-50%, -50%);
   z-index: 9;
   pointer-events: none;
-  padding: 0.85rem 2.4rem;
-  border-radius: 0.6rem;
+  padding: 1rem 2.8rem;
+  border-radius: 0.4rem;
+  font-family: 'Cinzel', serif;
   font-size: 2.4rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-weight: 900;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #fff;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45), 0 0 18px rgba(0, 0, 0, 0.6);
-  background: rgba(8, 8, 14, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--parchment);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 22px rgba(0, 0, 0, 0.7);
+  background: rgba(8, 6, 4, 0.6);
+  border: 1px solid rgba(200, 163, 90, 0.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    0 8px 30px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
   overflow: hidden;
   animation: phase-banner-in 1.05s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
@@ -665,34 +986,61 @@ body {
 }
 
 .phase-banner-player {
-  border-color: rgba(122, 184, 255, 0.55);
-  box-shadow: 0 0 36px rgba(122, 184, 255, 0.22), 0 8px 26px rgba(0, 0, 0, 0.45);
-  color: #d9ecff;
+  border-color: rgba(122, 184, 255, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(122, 184, 255, 0.18),
+    0 0 44px rgba(122, 184, 255, 0.28),
+    0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--arcane-2);
 }
 
 .phase-banner-enemy {
-  border-color: rgba(238, 94, 87, 0.55);
-  box-shadow: 0 0 36px rgba(238, 94, 87, 0.28), 0 8px 26px rgba(0, 0, 0, 0.45);
+  border-color: rgba(238, 94, 87, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(238, 94, 87, 0.18),
+    0 0 44px rgba(238, 94, 87, 0.32),
+    0 10px 30px rgba(0, 0, 0, 0.55);
   color: #ffd8d4;
 }
 
 .phase-banner-victory {
-  border-color: rgba(250, 204, 21, 0.6);
-  box-shadow: 0 0 36px rgba(250, 204, 21, 0.3), 0 8px 26px rgba(0, 0, 0, 0.45);
-  color: #fff2b8;
+  border-color: var(--gold-1);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
+    0 0 50px rgba(200, 163, 90, 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--gold-2);
 }
 
 .phase-banner-defeat {
-  border-color: rgba(238, 94, 87, 0.7);
-  box-shadow: 0 0 40px rgba(238, 94, 87, 0.35), 0 8px 26px rgba(0, 0, 0, 0.5);
+  border-color: rgba(238, 94, 87, 0.8);
+  box-shadow:
+    inset 0 0 0 1px rgba(238, 94, 87, 0.25),
+    0 0 50px rgba(238, 94, 87, 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.6);
   color: #ffd8d4;
 }
 
 .phase-banner-bonus {
-  border-color: rgba(250, 204, 21, 0.7);
-  box-shadow: 0 0 40px rgba(250, 204, 21, 0.32), 0 8px 26px rgba(0, 0, 0, 0.45);
-  color: #fff2b8;
+  border-color: var(--gold-1);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
+    0 0 50px rgba(200, 163, 90, 0.36),
+    0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--gold-2);
   font-size: 2.1rem;
+}
+
+/* Player broke the enemy's shield — the enemy's turn is spent recovering.
+   Arcane palette to differentiate from the gold (player reward) and red
+   (player damaged) banners; reads as "the enemy is in a vulnerable state". */
+.phase-banner-staggered {
+  border-color: rgba(184, 157, 255, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgba(184, 157, 255, 0.22),
+    0 0 50px rgba(108, 74, 184, 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--royal-2);
 }
 
 .phase-banner-text {
@@ -700,7 +1048,7 @@ body {
   z-index: 1;
 }
 
-/* Feedback animations */
+/* --- Feedback animations (unchanged tuning) --- */
 
 @keyframes shake {
   0%, 100% { transform: translate3d(0, 0, 0); }
@@ -885,6 +1233,9 @@ body.vignette-damage::before {
 @media (prefers-reduced-motion: reduce) {
   .value-pop-up,
   .value-pop-down {
+    animation: none;
+  }
+  .enemy-sprite::before {
     animation: none;
   }
 }

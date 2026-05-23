@@ -4,15 +4,17 @@ import { VictoryOverlay } from './components/VictoryOverlay'
 import { GameOverOverlay } from './components/GameOverOverlay'
 import { PhaseBanner } from './components/PhaseBanner'
 import { MuteToggle } from './components/MuteToggle'
+import { ArcaneBackground } from './components/ArcaneBackground'
 
 export const BOARD_MOUNT_ID = 'board-mount'
 
 export function App() {
   return (
     <>
+      <ArcaneBackground />
       <main className="game">
         <header className="game-header">
-          <span className="hud-title">Mokori</span>
+          <span className="hud-title">Renzadora</span>
           <span className="hud-build">Phase E · enemy intents</span>
           <MuteToggle />
         </header>

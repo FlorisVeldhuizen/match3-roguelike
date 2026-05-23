@@ -10,16 +10,16 @@ export function GameOverOverlay() {
   const [reveal, setReveal] = useState(phase === 'game-over')
 
   useEffect(() => {
+    // Single source of truth: any phase-changed event sets reveal to match.
+    // True only when the animation-timed event says we're in game-over;
+    // flips back to false on the next non-game-over transition (restart) so
+    // a future defeat waits on its own animation gate instead of snapping in.
     return subscribeGameEvents((event) => {
-      if (event.kind === 'phase-changed' && event.phase === 'game-over') {
-        setReveal(true)
+      if (event.kind === 'phase-changed') {
+        setReveal(event.phase === 'game-over')
       }
     })
   }, [])
-
-  useEffect(() => {
-    if (phase !== 'game-over') setReveal(false)
-  }, [phase])
 
   if (!reveal || phase !== 'game-over') return null
 

@@ -68,6 +68,11 @@ export type GameEvent =
   | { kind: 'block-broken'; targetId: 'player' | string }
   | { kind: 'healed'; amount: number }
   | { kind: 'enemy-killed'; enemyId: string }
+  // Emitted at the start of an enemy turn when the enemy's current intent
+  // was `block` and their block is now 0 — the player broke the shield, so
+  // the enemy "spent" their turn recovering instead of acting. Drives the
+  // "Staggered" banner + enemy-frame recoil.
+  | { kind: 'enemy-staggered'; enemyId: string }
   | { kind: 'intent-telegraphed'; enemyId: string; intent: Intent }
   | { kind: 'extra-turn-granted' }
   | { kind: 'turn-ended' }

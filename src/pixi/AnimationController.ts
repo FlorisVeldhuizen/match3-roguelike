@@ -26,6 +26,7 @@ const BEAT = {
   blockGained: 240,
   healed: 60,
   enemyKilled: 480,
+  enemyStaggered: 520,
   damageTaken: 440,
   enemyBlockGained: 320,
   intentTelegraphed: 180,
@@ -276,6 +277,9 @@ export class AnimationController {
         return
       case 'enemy-killed':
         await wait(BEAT.enemyKilled)
+        return
+      case 'enemy-staggered':
+        await wait(BEAT.enemyStaggered)
         return
       case 'intent-telegraphed':
         await wait(BEAT.intentTelegraphed)

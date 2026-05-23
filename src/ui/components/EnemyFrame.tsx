@@ -1,4 +1,12 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
@@ -19,8 +27,8 @@ function intentLabel(intent: Intent): string {
 
 function intentDescription(intent: Intent): string {
   return intent.kind === 'attack'
-    ? `On its turn, this enemy will attack you for ${intent.amount} damage.`
-    : `On its turn, this enemy will gain ${intent.amount} block, reducing incoming damage.`
+    ? `Deals ${intent.amount} damage next turn.`
+    : `Shield is up — absorbs ${intent.amount} damage from your attacks.`
 }
 
 export function EnemyFrame() {
@@ -55,6 +63,9 @@ export function EnemyFrame() {
   // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
   // Cleared by id so the pulse stops if the player switches targets mid-phase.
   const [trailPulse, setTrailPulse] = useState<Record<string, number>>({})
+  // Stagger pulse: the enemy's shield was broken and their turn is spent
+  // recovering. Drives the .staggered CSS recoil animation on the frame.
+  const [staggered, setStaggered] = useState<Record<string, number>>({})
   // "Intent firing" tracks which enemy is currently visibly resolving its
   // intent and whether that intent is attack or block (so the CSS can play
   // the right pulse — the intent badge is already hidden by this point).
@@ -110,6 +121,15 @@ export function EnemyFrame() {
         if (id) bumpIntentFiring(setIntentFiring, id, 'attack')
       } else if (event.kind === 'enemy-block-gained') {
         bumpIntentFiring(setIntentFiring, event.enemyId, 'block')
+      } else if (event.kind === 'enemy-staggered') {
+        const id = event.enemyId
+        setStaggered((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+        window.setTimeout(() => {
+          setStaggered((prev) => ({
+            ...prev,
+            [id]: Math.max(0, (prev[id] ?? 0) - 1),
+          }))
+        }, 520)
       } else if (event.kind === 'intent-telegraphed') {
         setDisplayedIntent((prev) => ({ ...prev, [event.enemyId]: event.intent }))
         setIntentTick((prev) => ({
@@ -146,6 +166,7 @@ export function EnemyFrame() {
         const isTarget = enemy.id === targetId
         const isHit = (flashing[enemy.id] ?? 0) > 0
         const isTrailHit = (trailPulse[enemy.id] ?? 0) > 0
+        const isStaggered = (staggered[enemy.id] ?? 0) > 0
         const firingState = intentFiring[enemy.id]
         const isFiring = (firingState?.count ?? 0) > 0
         const firingKind = firingState?.kind
@@ -165,45 +186,37 @@ export function EnemyFrame() {
               isHit ? 'hit' : '',
               isTrailHit ? 'trail-pulsing' : '',
               isFiring ? `firing-${firingKind}` : '',
+              isStaggered ? 'staggered' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             aria-label={`${enemy.name} ${shownHp}/${enemy.maxHp} HP${dead ? ' (defeated)' : ''}`}
           >
             {!dead && showIntent && (
-              <div
-                // key forces re-mount on intent change so the pop-in
-                // animation replays for the freshly telegraphed intent.
-                key={`${intent.kind}-${intent.amount}-${intentTick[enemy.id] ?? 0}`}
-                className={`enemy-intent intent-${intent.kind}`}
-                role="img"
-                aria-label={intentLabel(intent)}
-                tabIndex={0}
-              >
-                <span className="intent-icon" aria-hidden>
-                  {intentIcon(intent)}
-                </span>
-                <span className="intent-amount">{intent.amount}</span>
-                <div className="intent-tooltip" role="tooltip">
-                  <div className="intent-tooltip-title">{intentLabel(intent)}</div>
-                  <div className="intent-tooltip-body">{intentDescription(intent)}</div>
-                </div>
-              </div>
+              <IntentBadge
+                intent={intent}
+                tick={intentTick[enemy.id] ?? 0}
+              />
             )}
             <div className="enemy-sprite" aria-hidden>
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
             <div className="enemy-name">{enemy.name}</div>
-            {!dead && enemy.block > 0 && (
-              <div
-                className="enemy-block-badge"
-                title="Block"
-                aria-label={`Block ${enemy.block}`}
-              >
-                <span aria-hidden>🛡</span>
-                <span>{enemy.block}</span>
-              </div>
-            )}
+            {/* Always mounted so the slot reserves vertical space — toggling
+                mount on block gain shifted the HP bar down. */}
+            <div
+              className={`enemy-block-badge${
+                !dead && enemy.block > 0 ? '' : ' empty'
+              }`}
+              title="Block"
+              aria-label={
+                !dead && enemy.block > 0 ? `Block ${enemy.block}` : undefined
+              }
+              aria-hidden={dead || enemy.block <= 0}
+            >
+              <span aria-hidden>🛡</span>
+              <span>{enemy.block}</span>
+            </div>
             <div className="enemy-hp-bar" role="img">
               <div className="enemy-hp-fill" style={{ width: `${hpPct}%` }} />
               <span className="enemy-hp-text">
@@ -214,6 +227,83 @@ export function EnemyFrame() {
         )
       })}
     </section>
+  )
+}
+
+// Badge + viewport-aware tooltip. The tooltip is portalled to body and
+// position is computed in JS so it never clips the viewport edges.
+function IntentBadge({ intent, tick }: { intent: Intent; tick: number }) {
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const [hovered, setHovered] = useState(false)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  useLayoutEffect(() => {
+    // Tooltip is unmounted when !hovered, so we don't need to reset pos.
+    // On next hover useLayoutEffect re-runs and recomputes before paint.
+    if (!hovered) return
+    const compute = () => {
+      const a = anchorRef.current?.getBoundingClientRect()
+      const t = tipRef.current?.getBoundingClientRect()
+      if (!a || !t) return
+      const margin = 8
+      // Prefer above the badge; flip below if there isn't room.
+      const wantsBelow = a.top - margin - t.height < margin
+      const top = wantsBelow ? a.bottom + margin : a.top - margin - t.height
+      // Center on the anchor horizontally, then clamp inside the viewport.
+      let left = a.left + a.width / 2 - t.width / 2
+      left = Math.max(
+        margin,
+        Math.min(window.innerWidth - t.width - margin, left),
+      )
+      setPos({ left, top })
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
+  }, [hovered])
+
+  return (
+    <>
+      <div
+        ref={anchorRef}
+        // key on the wrapping element re-mounts on intent change so the
+        // pop-in animation replays for the freshly telegraphed intent.
+        key={`${intent.kind}-${intent.amount}-${tick}`}
+        className={`enemy-intent intent-${intent.kind}`}
+        role="img"
+        aria-label={intentLabel(intent)}
+        tabIndex={0}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
+      >
+        <span className="intent-icon" aria-hidden>
+          {intentIcon(intent)}
+        </span>
+        <span className="intent-amount">{intent.amount}</span>
+      </div>
+      {hovered &&
+        createPortal(
+          <div
+            ref={tipRef}
+            className={`intent-tooltip intent-${intent.kind}`}
+            role="tooltip"
+            style={{
+              left: pos?.left ?? 0,
+              top: pos?.top ?? 0,
+              opacity: pos ? 1 : 0,
+            }}
+          >
+            <div className="intent-tooltip-title">{intentLabel(intent)}</div>
+            <div className="intent-tooltip-body">
+              {intentDescription(intent)}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 

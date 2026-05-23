@@ -523,11 +523,33 @@ export class OverlayScene {
     const t = new Text({
       text,
       style: {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        // Russo One — geometric heavy display sans, single black weight by
+        // design. Sits between Anton (too condensed) and Archivo Black (too
+        // wide). Squared geometric forms read as powerful/poster-grade
+        // without the elegance of a serif or the comic-book look of bold
+        // system-ui.
+        fontFamily: '"Russo One", "Helvetica Neue", Arial, sans-serif',
         fontSize: opts.fontSize ?? 26,
-        fontWeight: '700',
+        fontWeight: '400',
+        letterSpacing: 1,
         fill: opts.color ?? 0xffffff,
-        stroke: { color: 0x000000, width: 4, join: 'round' },
+        // Thin dark edge for definition against bright gems + a soft
+        // diffuse halo (distance 0, no offset) for legibility. Avoids the
+        // tacky "drop shadow under the text" stamp effect — the Anton
+        // typeface itself is heavy enough to carry the impact.
+        stroke: {
+          color: 0x000000,
+          width: 2,
+          alpha: 0.85,
+          join: 'round',
+        },
+        dropShadow: {
+          color: 0x000000,
+          alpha: 0.6,
+          blur: 8,
+          distance: 0,
+          angle: 0,
+        },
       },
     })
     t.anchor.set(0.5)

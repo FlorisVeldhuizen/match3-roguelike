@@ -498,6 +498,7 @@ function synthCascadeCelebration(levels: number): void {
 
   for (let i = 0; i < noteCount; i++) {
     const pitchRatio = ARPEGGIO_RATIOS[i]
+    if (pitchRatio === undefined) continue
     const startT = now + stagger * i
     const isLast = i === noteCount - 1
     // Final note rings out progressively longer the longer the chain.
@@ -811,8 +812,22 @@ export function installSfxBindings(): void {
         return
       case 'gems-fell':
         // Once per cascade step, not per gem — otherwise a fully-cleared
-        // row plays a stack of overlapping thunks.
-        if (event.movements.length > 0) playDropSfx()
+        // row plays a stack of overlapping thunks. Delay matches the longest
+        // gem's fall duration (mirror of AnimationController's
+        // `max(DROP_MIN_MS, DROP_PER_CELL_MS * distance)`) so the thump
+        // lands when the gems visibly hit the board, not when the event
+        // fires at the start of the animation.
+        if (event.movements.length > 0) {
+          let maxDist = 0
+          for (const m of event.movements) {
+            const d = Math.abs(m.to.y - m.from.y)
+            if (d > maxDist) maxDist = d
+          }
+          const FALL_MIN_MS = 150
+          const FALL_PER_CELL_MS = 80
+          const fallMs = Math.max(FALL_MIN_MS, FALL_PER_CELL_MS * maxDist)
+          window.setTimeout(playDropSfx, fallMs)
+        }
         return
       case 'cascade-start':
         // Skip the first cascade-start (level 0) — the clear SFX already
@@ -872,6 +887,12 @@ export function installSfxBindings(): void {
         return
       case 'block-broken':
         playShieldCrackSfx()
+        return
+      case 'enemy-block-gained':
+        // Shield going up on the enemy. Reuses the impact thump for now —
+        // a dedicated "raise" cue would read more accurately, but the thump
+        // is close enough in palette to sell "shield" without a new synth.
+        playShieldThumpSfx()
         return
       case 'board-shuffled':
         playShuffleSfx()

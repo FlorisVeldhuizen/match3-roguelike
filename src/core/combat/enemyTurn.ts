@@ -60,6 +60,12 @@ export function executeEnemyTurn(
       } else if (blocked > 0 && hpDamage === 0) {
         events.push({ kind: 'block-absorbed', targetId: 'player' })
       }
+    } else if (intent.kind === 'block' && enemy.block === 0) {
+      // Block intent + broken shield = "Staggered". The block already went
+      // up at the previous telegraph; we don't take a second action here,
+      // but we surface the recovery so the empty turn reads as a reward
+      // for breaking the guard rather than a dead beat.
+      events.push({ kind: 'enemy-staggered', enemyId: enemy.id })
     }
 
     // Telegraph next intent for the *next* player phase. If it's a block
