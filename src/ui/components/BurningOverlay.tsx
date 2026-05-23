@@ -101,20 +101,27 @@ export function BurningOverlay() {
 
   return (
     <div className="burning-overlay" aria-hidden>
-      {Array.from(flames.values()).map((f) => (
-        <span
-          key={keyOf(f)}
-          className="burning-cell"
-          style={{ gridColumn: f.x + 1, gridRow: f.y + 1 }}
-          data-remaining={f.remaining}
-          title={`Burning — ${f.remaining} turn${f.remaining === 1 ? '' : 's'} left. Matching this tile gives you Burn.`}
-        >
-          <span className="burning-flame">🔥</span>
-          {f.remaining > 1 && (
-            <span className="burning-count">{f.remaining}</span>
-          )}
-        </span>
-      ))}
+      {Array.from(flames.values()).map((f) => {
+        // Flame shrinks toward 0.55× as duration approaches 0 — visual
+        // proxy for "how much longer this burns". Clamps so any
+        // remaining > 2 looks full-size.
+        const scale = Math.min(1, 0.55 + 0.225 * f.remaining)
+        return (
+          <span
+            key={keyOf(f)}
+            className="burning-cell"
+            style={{
+              gridColumn: f.x + 1,
+              gridRow: f.y + 1,
+              ['--flame-scale' as string]: scale.toFixed(3),
+            }}
+            data-remaining={f.remaining}
+            title={`Burning — ${f.remaining} turn${f.remaining === 1 ? '' : 's'} left. Matching this tile gives you Burn.`}
+          >
+            <span className="burning-flame">🔥</span>
+          </span>
+        )
+      })}
       {bursts.map((b) => (
         <span
           key={`burst-${b.id}`}
