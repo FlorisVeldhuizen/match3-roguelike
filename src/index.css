@@ -1671,6 +1671,7 @@ body.vignette-damage::before {
 }
 
 .status-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
@@ -1690,6 +1691,61 @@ body.vignette-damage::before {
   transform-origin: center;
 }
 
+/* Pulse on the new stack count when a tick lands. Re-mounted via React
+   key on every tick so the keyframe replays. Inline-block so transform
+   works without disturbing the chip's flex layout. */
+.status-stacks-pulse {
+  display: inline-block;
+  animation: status-stacks-pulse 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+  transform-origin: center;
+}
+
+@keyframes status-stacks-pulse {
+  0% {
+    transform: scale(1);
+    color: inherit;
+  }
+  35% {
+    transform: scale(1.35);
+    color: var(--parchment, #f4ead8);
+  }
+  100% {
+    transform: scale(1);
+    color: inherit;
+  }
+}
+
+/* "−1" floater that peels off the chip when it ticks down. Anchored to
+   the chip via position:absolute (chip is position:relative). */
+.status-chip-tick {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.3rem;
+  font-family: 'Paytone One', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #ffd9a8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  animation: status-chip-tick 640ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes status-chip-tick {
+  0% {
+    opacity: 0;
+    transform: translateY(2px) scale(0.85);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.95);
+  }
+}
+
 @keyframes status-chip-enter {
   0% {
     opacity: 0;
@@ -1706,8 +1762,15 @@ body.vignette-damage::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status-chip {
+  .status-chip,
+  .status-stacks-pulse,
+  .status-chip-tick {
     animation: none;
+  }
+  .status-chip-tick {
+    /* Without the float-up motion the popup would just sit on top of
+       the chip forever; keep it invisible to avoid a static "−1". */
+    display: none;
   }
 }
 

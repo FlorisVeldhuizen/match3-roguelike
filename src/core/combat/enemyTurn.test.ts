@@ -120,6 +120,17 @@ describe('executeEnemyTurn', () => {
     expect(result.phase).toBe('player-acting')
   })
 
+  // The phase-changed:player-acting transition is deferred to the
+  // caller (store.ts) so the HUD-side block-zero lands AFTER the
+  // player's burn-tick events. Only the terminal game-over case is
+  // emitted from here. If this regresses, block will visually drop to
+  // zero before the burn animation finishes hitting it.
+  it('does not emit phase-changed when transitioning to player-acting', () => {
+    const result = executeEnemyTurn(makePlayer(), [makeEnemy()], [], { seed: 1 })
+    expect(result.phase).toBe('player-acting')
+    expect(result.events.some((e) => e.kind === 'phase-changed')).toBe(false)
+  })
+
   it('skips dead enemies', () => {
     const dead = makeEnemy({ id: 'a', hp: 0 })
     const alive = makeEnemy({
@@ -155,5 +166,29 @@ describe('executeEnemyTurn', () => {
     const b = executeEnemyTurn(makePlayer(), [makeEnemy()], [], { seed: 99 })
     expect(a.enemies[0]?.currentIntent).toEqual(b.enemies[0]?.currentIntent)
     expect(a.rng).toEqual(b.rng)
+  })
+
+  // Burn ticks on enemies route through applyDamage so the enemy's own
+  // block eats the burn first — symmetric with the player side.
+  it('enemy burn tick is absorbed by enemy block before HP', () => {
+    const burningEnemy = makeEnemy({
+      hp: 20,
+      block: 4,
+      // Burn 3 → fully absorbed by 4 block; 1 block survives.
+      statuses: [{ kind: 'burn', stacks: 3 }],
+    })
+    const result = executeEnemyTurn(makePlayer(), [burningEnemy], [], { seed: 1 })
+    const e = result.enemies.find((x) => x.id === 'enemy-1')
+    expect(e?.hp).toBe(20)
+    expect(e?.block).toBe(1)
+    const dd = result.events.find(
+      (ev) => ev.kind === 'damage-dealt' && ev.source === 'burn',
+    )
+    expect(dd).toMatchObject({ amount: 0, blocked: 3 })
+    expect(
+      result.events.some(
+        (ev) => ev.kind === 'block-absorbed' && ev.targetId === 'enemy-1',
+      ),
+    ).toBe(true)
   })
 })

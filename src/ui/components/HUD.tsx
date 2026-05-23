@@ -6,7 +6,12 @@ import {
   statusKindFromDamageSource,
 } from '../../core/combat/statuses'
 import { TRAIL_ARRIVAL_MS } from '../../timing'
-import type { CombatPhase, GemColor, StatusInstance } from '../../types'
+import type {
+  CombatPhase,
+  GemColor,
+  StatusInstance,
+  StatusKind,
+} from '../../types'
 import { StatusBar } from './StatusBar'
 import { PendingStrip, SpellTray } from './SpellTray'
 
@@ -30,6 +35,12 @@ export function HUD() {
   const [displayedStatuses, setDisplayedStatuses] = useState<StatusInstance[]>(
     () => useGameStore.getState().fight.player.statuses,
   )
+  // Bumps per status kind on every tick — used as a React key so the
+  // chip's "-1" popup re-mounts and replays its keyframe animation.
+  // Status kinds with no entry have never ticked on this chip.
+  const [statusTickMarks, setStatusTickMarks] = useState<
+    Partial<Record<StatusKind, number>>
+  >({})
   const [pulse, setPulse] = useState<Record<GemColor, number>>({
     red: 0,
     blue: 0,
@@ -183,17 +194,31 @@ export function HUD() {
         }, delay)
       } else if (event.kind === 'status-ticked' && event.target === 'player') {
         // StS pattern: stacks is the chip number AND the turns counter,
-        // and the tick decrements it. `event.remaining` is the new
-        // stacks value after the tick.
-        setDisplayedStatuses((prev) =>
-          prev.map((s) =>
-            s.kind === event.statusKind ? { ...s, stacks: event.remaining } : s,
-          ),
-        )
+        // and the tick decrements it. Delay the chip update by
+        // TRAIL_ARRIVAL_MS so it lands AFTER the tick's particle-driven
+        // HP drain — otherwise the chip ticks 3→2 while the hit-for-3 is
+        // still in flight, inverting cause and effect.
+        const { statusKind, remaining } = event
+        window.setTimeout(() => {
+          setDisplayedStatuses((prev) =>
+            prev.map((s) =>
+              s.kind === statusKind ? { ...s, stacks: remaining } : s,
+            ),
+          )
+          setStatusTickMarks((prev) => ({
+            ...prev,
+            [statusKind]: (prev[statusKind] ?? 0) + 1,
+          }))
+        }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'status-expired' && event.target === 'player') {
-        setDisplayedStatuses((prev) =>
-          prev.filter((s) => s.kind !== event.statusKind),
-        )
+        // Same delay as status-ticked: the final tick's HP drain has to
+        // land before we yank the chip from the DOM.
+        const { statusKind } = event
+        window.setTimeout(() => {
+          setDisplayedStatuses((prev) =>
+            prev.filter((s) => s.kind !== statusKind),
+          )
+        }, TRAIL_ARRIVAL_MS)
       }
     })
     return unsub
@@ -215,6 +240,7 @@ export function HUD() {
       setStagedBlue(p.block)
       setBlockCommitted(p.block > 0)
       setDisplayedStatuses(p.statuses)
+      setStatusTickMarks({})
     })
     // rootSeed intentionally captured once for initial baseline; the
     // subscription itself tracks subsequent transitions.
@@ -254,7 +280,11 @@ export function HUD() {
       <div className="hud-row">
         <span className="hud-phase">{PHASE_LABEL[phase]}</span>
         <PendingStrip />
-        <StatusBar statuses={displayedStatuses} className="player-statuses" />
+        <StatusBar
+          statuses={displayedStatuses}
+          tickMarks={statusTickMarks}
+          className="player-statuses"
+        />
       </div>
       <div className="hud-row">
         <div

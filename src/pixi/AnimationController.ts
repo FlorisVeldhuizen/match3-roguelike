@@ -56,6 +56,13 @@ const BEAT = {
   // Stagger between back-to-back intent badges (multi-enemy). Pop-in CSS
   // anim runs autonomously, so this just serializes the queue.
   intentTelegraphed: 80,
+  // Spacing between status-chip state changes (tick/expire). The chip
+  // number update itself is delayed by TRAIL_ARRIVAL_MS in HUD.tsx /
+  // EnemyFrame.tsx so it lands with the tick's particle; this beat just
+  // serializes the AC queue so back-to-back chip changes (multi-burn
+  // enemies, chained Smolder ticks) don't fire on the same frame.
+  statusTicked: 180,
+  statusExpired: 180,
   phaseToEnemy: 600,
   phaseToPlayer: 380,
   phaseToVictory: 500,
@@ -499,6 +506,12 @@ export class AnimationController {
       }
       case 'status-applied':
         this.spawnStatusTrail(event)
+        return
+      case 'status-ticked':
+        await wait(BEAT.statusTicked)
+        return
+      case 'status-expired':
+        await wait(BEAT.statusExpired)
         return
       case 'tile-burn-placed':
         // Generic "enemy verb → board cells" trail. Fires one trail per

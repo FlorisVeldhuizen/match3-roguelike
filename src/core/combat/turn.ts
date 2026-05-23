@@ -143,44 +143,51 @@ export type PlayerPhaseBeginResult = {
   phase: CombatPhase
 }
 
-// Block from previous phase is zeroed — the wall either absorbed the enemy
-// hit or didn't, either way it's spent now. Statuses tick once here:
-// Burn deals current stacks as damage (bypasses block — block is zero at
-// this point anyway), then every status decrements stacks by 1. If Burn
-// kills the player, returns phase='game-over'.
+// Statuses tick once here: Burn routes through applyDamage so any block
+// that survived the enemy turn (carryBlockNextPhase, or just the wall
+// that absorbed the enemy hit and hasn't been zeroed yet) eats the burn
+// first — armor protects from fire too. After the tick, block is zeroed
+// (the wall is spent), unless Reinforce's carryBlockNextPhase flag is
+// set. If Burn kills the player, returns phase='game-over'.
 export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
   const events: GameEvent[] = []
   const ticked = tickStatuses('player', player.statuses)
 
-  // Event order matters for the FX layer: emit `damage-taken` BEFORE the
-  // status-ticked / status-expired events. That way the chip → HP
-  // particle trail spawns while the status chip is still mounted in the
-  // UI; any chip-removing expiry plays after the trail is already in
-  // flight (snapshotted source position).
+  // Event order matters for the FX layer: emit `damage-taken` (+ the
+  // block-broken/absorbed sub-events) BEFORE the status-ticked /
+  // status-expired events. That way the chip → HP particle trail spawns
+  // while the status chip is still mounted in the UI; any chip-removing
+  // expiry plays after the trail is already in flight.
   let hp = player.hp
+  let block = player.block
   if (ticked.burnDamage > 0 && hp > 0) {
-    const before = hp
-    hp = Math.max(0, hp - ticked.burnDamage)
-    const dealt = before - hp
+    const res = applyDamage(block, hp, ticked.burnDamage)
+    hp = res.hpAfter
+    block = res.blockAfter
     events.push({
       kind: 'damage-taken',
-      amount: dealt,
-      blocked: 0,
+      amount: res.hpDamage,
+      blocked: res.blocked,
       source: 'burn',
     })
+    if (res.blockBroken) {
+      events.push({ kind: 'block-broken', targetId: 'player' })
+    } else if (res.blockAbsorbed) {
+      events.push({ kind: 'block-absorbed', targetId: 'player' })
+    }
   }
   events.push(...ticked.events)
 
   const phase: CombatPhase = hp <= 0 ? 'game-over' : 'player-acting'
   // Reinforce's one-shot carry-over: keep whatever block survived the
-  // enemy turn (already doubled at EOP); clear the flag so the next
-  // phase end zeros block normally.
+  // enemy turn (already doubled at EOP) AND the burn tick above; clear
+  // the flag so the next phase end zeros block normally.
   const carrying = player.carryBlockNextPhase
   return {
     player: {
       ...player,
       hp,
-      block: carrying ? player.block : 0,
+      block: carrying ? block : 0,
       phasePools: { red: 0, blue: 0, green: 0 },
       statuses: ticked.statuses,
       carryBlockNextPhase: false,

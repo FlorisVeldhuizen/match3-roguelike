@@ -184,4 +184,58 @@ describe('beginPlayerPhase', () => {
     expect(expiredIdx).toBeGreaterThanOrEqual(0)
     expect(dtIdx).toBeLessThan(expiredIdx)
   })
+
+  // Burn routes through applyDamage so leftover block (carried over via
+  // Reinforce, or in any future relic that preserves block into the
+  // player phase) eats burn ticks first — armor protects from fire too.
+  it('routes burn through block: full absorb leaves HP untouched', () => {
+    const p = makePlayer({
+      hp: 40,
+      block: 5,
+      // Burn 3 → 3 dmg, all absorbed by 5 block (2 block survives).
+      statuses: [{ kind: 'burn', stacks: 3 }],
+      carryBlockNextPhase: true,
+    })
+    const result = beginPlayerPhase(p)
+    expect(result.player.hp).toBe(40)
+    expect(result.player.block).toBe(2)
+    const dt = result.events.find(
+      (e) => e.kind === 'damage-taken' && e.source === 'burn',
+    )
+    expect(dt).toMatchObject({ amount: 0, blocked: 3 })
+    expect(result.events.some((e) => e.kind === 'block-absorbed')).toBe(true)
+    expect(result.events.some((e) => e.kind === 'block-broken')).toBe(false)
+  })
+
+  it('routes burn through block: partial absorb splits across block + HP', () => {
+    const p = makePlayer({
+      hp: 40,
+      block: 2,
+      // Burn 5 → 2 absorbed, 3 to HP; block breaks.
+      statuses: [{ kind: 'burn', stacks: 5 }],
+      carryBlockNextPhase: true,
+    })
+    const result = beginPlayerPhase(p)
+    expect(result.player.hp).toBe(37)
+    expect(result.player.block).toBe(0)
+    const dt = result.events.find(
+      (e) => e.kind === 'damage-taken' && e.source === 'burn',
+    )
+    expect(dt).toMatchObject({ amount: 3, blocked: 2 })
+    expect(result.events.some((e) => e.kind === 'block-broken')).toBe(true)
+  })
+
+  it('zeros surviving-burn block when carryBlockNextPhase is false', () => {
+    // Block absorbs the burn, but the wall is still spent at phase
+    // start — the survivor goes to 0 just like an unburned wall would.
+    const p = makePlayer({
+      hp: 40,
+      block: 5,
+      statuses: [{ kind: 'burn', stacks: 3 }],
+      carryBlockNextPhase: false,
+    })
+    const result = beginPlayerPhase(p)
+    expect(result.player.hp).toBe(40)
+    expect(result.player.block).toBe(0)
+  })
 })

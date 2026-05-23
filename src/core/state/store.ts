@@ -346,9 +346,12 @@ export const useGameStore = create<GameStore>()(
             player = begin.player
             phase = begin.phase
             tailEvents.push(...begin.events)
-            if (phase === 'game-over') {
-              tailEvents.push({ kind: 'phase-changed', phase: 'game-over' })
-            }
+            // Emit phase-changed AFTER begin.events so the HUD's
+            // block-zero (and other phase-gated UI like the banner)
+            // lands once the burn tick and status decrements have
+            // resolved. Phase here may be 'player-acting' (normal) or
+            // 'game-over' (burn killed at phase start).
+            tailEvents.push({ kind: 'phase-changed', phase })
           }
         }
       }

@@ -11,7 +11,13 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
-import type { Enemy, Intent, Player, StatusInstance } from '../../types'
+import type {
+  Enemy,
+  Intent,
+  Player,
+  StatusInstance,
+  StatusKind,
+} from '../../types'
 import {
   applyStatusToList,
   composeDamage,
@@ -114,6 +120,11 @@ export function EnemyFrame() {
     for (const e of enemies) out[e.id] = e.statuses
     return out
   })
+  // Bumps per (enemyId, statusKind) on every tick — used as a React key
+  // so the chip's "-1" popup re-mounts and replays its keyframe.
+  const [statusTickMarks, setStatusTickMarks] = useState<
+    Record<string, Partial<Record<StatusKind, number>>>
+  >({})
 
   const [flashing, setFlashing] = useState<Record<string, number>>({})
   // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
@@ -235,24 +246,40 @@ export function EnemyFrame() {
           }))
         }, delay)
       } else if (event.kind === 'status-ticked' && event.target !== 'player') {
-        // event.remaining is the new stacks after the tick (StS pattern).
+        // Delay by TRAIL_ARRIVAL_MS so the chip number drops AFTER the
+        // tick's chip→target particle lands (otherwise the chip ticks
+        // 3→2 while the hit-for-3 is still in flight). Bump the tick
+        // marker so StatusBar replays the "-1" popup animation.
         const enemyId = event.target
-        setDisplayedStatuses((prev) => ({
-          ...prev,
-          [enemyId]: (prev[enemyId] ?? []).map((s) =>
-            s.kind === event.statusKind
-              ? { ...s, stacks: event.remaining }
-              : s,
-          ),
-        }))
+        const { statusKind, remaining } = event
+        window.setTimeout(() => {
+          setDisplayedStatuses((prev) => ({
+            ...prev,
+            [enemyId]: (prev[enemyId] ?? []).map((s) =>
+              s.kind === statusKind ? { ...s, stacks: remaining } : s,
+            ),
+          }))
+          setStatusTickMarks((prev) => ({
+            ...prev,
+            [enemyId]: {
+              ...(prev[enemyId] ?? {}),
+              [statusKind]: (prev[enemyId]?.[statusKind] ?? 0) + 1,
+            },
+          }))
+        }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'status-expired' && event.target !== 'player') {
+        // Same delay as status-ticked: the final tick's damage has to
+        // land before the chip leaves the DOM.
         const enemyId = event.target
-        setDisplayedStatuses((prev) => ({
-          ...prev,
-          [enemyId]: (prev[enemyId] ?? []).filter(
-            (s) => s.kind !== event.statusKind,
-          ),
-        }))
+        const { statusKind } = event
+        window.setTimeout(() => {
+          setDisplayedStatuses((prev) => ({
+            ...prev,
+            [enemyId]: (prev[enemyId] ?? []).filter(
+              (s) => s.kind !== statusKind,
+            ),
+          }))
+        }, TRAIL_ARRIVAL_MS)
       }
     })
     return unsub
@@ -277,6 +304,7 @@ export function EnemyFrame() {
       setDisplayedHp(freshHp)
       setDisplayedBlock(freshBlock)
       setDisplayedStatuses(freshStatuses)
+      setStatusTickMarks({})
     })
   }, [rootSeed])
 
@@ -342,6 +370,7 @@ export function EnemyFrame() {
             <div className="enemy-name">{enemy.name}</div>
             <StatusBar
               statuses={displayedStatuses[enemy.id] ?? enemy.statuses}
+              tickMarks={statusTickMarks[enemy.id]}
               className="enemy-statuses"
             />
             {/* Always mounted so the slot reserves vertical space — toggling

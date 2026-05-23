@@ -58,18 +58,33 @@ export function executeEnemyTurn(
     const ticked = tickStatuses(enemy.id, enemy.statuses)
     let workingEnemy: Enemy = { ...enemy, statuses: ticked.statuses }
     if (ticked.burnDamage > 0 && workingEnemy.hp > 0) {
-      const before = workingEnemy.hp
-      const hpAfter = Math.max(0, before - ticked.burnDamage)
-      const dealt = before - hpAfter
-      workingEnemy = { ...workingEnemy, hp: hpAfter }
+      // Burn ticks route through applyDamage so the enemy's own block
+      // eats the burn first — same rule as the player side. Block-tick
+      // sub-events fire between damage-dealt and the status-ticked
+      // /-expired events to preserve the chip→target FX ordering.
+      const res = applyDamage(
+        workingEnemy.block,
+        workingEnemy.hp,
+        ticked.burnDamage,
+      )
+      workingEnemy = {
+        ...workingEnemy,
+        hp: res.hpAfter,
+        block: res.blockAfter,
+      }
       events.push({
         kind: 'damage-dealt',
         targetId: workingEnemy.id,
-        amount: dealt,
-        blocked: 0,
+        amount: res.hpDamage,
+        blocked: res.blocked,
         source: 'burn',
       })
-      if (hpAfter === 0) {
+      if (res.blockBroken) {
+        events.push({ kind: 'block-broken', targetId: workingEnemy.id })
+      } else if (res.blockAbsorbed) {
+        events.push({ kind: 'block-absorbed', targetId: workingEnemy.id })
+      }
+      if (res.killed) {
         events.push({ kind: 'enemy-killed', enemyId: workingEnemy.id })
       }
     }
@@ -249,7 +264,14 @@ export function executeEnemyTurn(
   }
 
   const phase: CombatPhase = nextPlayer.hp <= 0 ? 'game-over' : 'player-acting'
-  events.push({ kind: 'phase-changed', phase })
+  // Only emit phase-changed for the terminal game-over case here.
+  // The player-acting transition is deferred to the caller (store.ts),
+  // which emits it AFTER beginPlayerPhase has run — so that the
+  // HUD-side block-zeroing (driven by phase-changed:player-acting)
+  // lands after the player's burn-tick events resolve, not before.
+  if (phase === 'game-over') {
+    events.push({ kind: 'phase-changed', phase })
+  }
 
   return {
     player: nextPlayer,
