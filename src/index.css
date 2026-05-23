@@ -1999,6 +1999,40 @@ body.vignette-damage::before {
   pointer-events: auto;
 }
 
+/* Red wash behind the flame so the *whole cell* reads as "hot", not
+   just the emoji. Inset 6% keeps the gradient from bleeding into the
+   neighbour cells. The pulse runs slightly slower than the flame's
+   own transform pulse so the two layers feel like a single heart-
+   beat instead of competing. screen blend lets the gem texture below
+   show through while still picking up red. */
+.burning-cell::before {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 14%;
+  background: radial-gradient(
+    circle at center,
+    rgba(238, 94, 87, 0.45) 0%,
+    rgba(238, 94, 87, 0.22) 50%,
+    rgba(238, 94, 87, 0) 80%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: -1;
+  animation: burning-cell-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes burning-cell-glow {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
 .burning-flame {
   display: inline-block;
   /* Per-instance scale set inline by BurningOverlay (--flame-scale).
@@ -2022,9 +2056,34 @@ body.vignette-damage::before {
 
 /* Final turn: faster, flickerier — opacity dips like a candle about to
    go out, with a tighter scale pulse. Players who only see the small
-   flame still get a strong "about to fizz out" read. */
+   flame still get a strong "about to fizz out" read. The cell wash
+   underneath gets the same flicker so the whole tile reads "guttering",
+   not just the emoji. */
 .burning-cell.is-fizzling {
   animation: burning-fizzle 620ms ease-in-out infinite;
+}
+
+.burning-cell.is-fizzling::before {
+  animation: burning-cell-glow-fizzle 620ms ease-in-out infinite;
+}
+
+@keyframes burning-cell-glow-fizzle {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 0.25;
+    transform: scale(0.88);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  78% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
 }
 
 @keyframes burning-fizzle {
@@ -2125,6 +2184,8 @@ body.vignette-damage::before {
 @media (prefers-reduced-motion: reduce) {
   .burning-cell,
   .burning-cell.is-fizzling,
+  .burning-cell::before,
+  .burning-cell.is-fizzling::before,
   .burst-core,
   .burst-spark {
     animation: none;
