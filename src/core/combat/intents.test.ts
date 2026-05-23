@@ -34,6 +34,10 @@ describe('rollIntent', () => {
     for (let i = 0; i < 100; i++) {
       const result = rollIntent('brute', i, rng)
       rng = result.rng
+      // Brute only rolls attack/block — no tile-burn in its pattern.
+      if (result.intent.kind === 'tile-burn') {
+        throw new Error('unexpected tile-burn from brute')
+      }
       const range =
         result.intent.kind === 'attack' ? def.attackRange : def.blockRange
       expect(result.intent.amount).toBeGreaterThanOrEqual(range.min)

@@ -24,6 +24,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   phasePools: { red: 0, blue: 0, green: 0 },
   statuses: [],
   pendingSpells: [],
+  carryBlockNextPhase: false,
   ...overrides,
 })
 
@@ -120,7 +121,7 @@ describe('damage pipeline composition (Vulnerable + Weak)', () => {
     // intent 5, player Vulnerable → floor(5 × 1.5) = 7 incoming
     const player = makePlayer({ statuses: [vuln] })
     const enemy = makeEnemy({ currentIntent: { kind: 'attack', amount: 5 } })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.player.hp).toBe(53)
   })
 
@@ -131,7 +132,7 @@ describe('damage pipeline composition (Vulnerable + Weak)', () => {
       currentIntent: { kind: 'attack', amount: 5 },
       statuses: [weak],
     })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.player.hp).toBe(58)
   })
 
@@ -142,7 +143,7 @@ describe('damage pipeline composition (Vulnerable + Weak)', () => {
       currentIntent: { kind: 'attack', amount: 8 },
       statuses: [weak],
     })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.player.hp).toBe(54)
   })
 })
@@ -151,7 +152,7 @@ describe('Riposte', () => {
   it('parries incoming attack to 0 and counters for the pre-block amount', () => {
     const player = makePlayer({ pendingSpells: ['riposte'] })
     const enemy = makeEnemy({ currentIntent: { kind: 'attack', amount: 6 } })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.player.hp).toBe(60)
     expect(res.enemies[0]?.hp).toBe(14)
     expect(res.player.pendingSpells).not.toContain('riposte')
@@ -166,7 +167,7 @@ describe('Riposte', () => {
       currentIntent: { kind: 'block', amount: 4 },
       block: 4,
     })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.player.pendingSpells).not.toContain('riposte')
     const resolved = res.events.filter(
       (e) => e.kind === 'pending-effect-resolved',
@@ -188,7 +189,7 @@ describe('Burn at turn start', () => {
       statuses: [{ kind: 'burn', stacks: 3, duration: 2 }],
       currentIntent: { kind: 'attack', amount: 4 },
     })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     // Burn deals 3 first, then attack still resolves.
     expect(res.enemies[0]?.hp).toBe(7)
     expect(res.player.hp).toBe(56)
@@ -202,7 +203,7 @@ describe('Burn at turn start', () => {
       statuses: [{ kind: 'burn', stacks: 5, duration: 1 }],
       currentIntent: { kind: 'attack', amount: 10 },
     })
-    const res = executeEnemyTurn(player, [enemy], { seed: 1 })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.enemies[0]?.hp).toBe(0)
     // Player took no damage — the enemy died before attacking.
     expect(res.player.hp).toBe(60)

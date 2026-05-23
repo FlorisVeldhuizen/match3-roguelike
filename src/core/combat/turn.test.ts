@@ -16,6 +16,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   phasePools: { red: 0, blue: 0, green: 0 },
   statuses: [],
   pendingSpells: [],
+  carryBlockNextPhase: false,
   ...overrides,
 })
 

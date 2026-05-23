@@ -23,20 +23,28 @@ const INTENT_FIRE_MS = 460
 // enough to settle into the static .dead state before the next event.
 const KILL_PULSE_MS = 720
 
+function intentNumber(intent: Intent): number {
+  return intent.kind === 'tile-burn' ? intent.count : intent.amount
+}
+
 function intentIcon(intent: Intent): string {
-  return intent.kind === 'attack' ? '⚔' : '🛡'
+  if (intent.kind === 'attack') return '⚔'
+  if (intent.kind === 'block') return '🛡'
+  return '🔥'
 }
 
 function intentLabel(intent: Intent): string {
-  return intent.kind === 'attack'
-    ? `Attacks for ${intent.amount}`
-    : `Blocks for ${intent.amount}`
+  if (intent.kind === 'attack') return `Attacks for ${intent.amount}`
+  if (intent.kind === 'block') return `Blocks for ${intent.amount}`
+  return `Sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire`
 }
 
 function intentDescription(intent: Intent): string {
-  return intent.kind === 'attack'
-    ? `Deals ${intent.amount} damage next turn.`
-    : `Shield is up — absorbs ${intent.amount} damage from your attacks.`
+  if (intent.kind === 'attack')
+    return `Will hit you for ${intent.amount} next turn.`
+  if (intent.kind === 'block')
+    return `Armored for ${intent.amount} — your attacks chip through this first.`
+  return `Next turn, sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire. Matching a burning tile gives you Burn — one stack per tile in the match.`
 }
 
 export function EnemyFrame() {
@@ -401,7 +409,7 @@ function IntentBadge({
         ref={anchorRef}
         // key on the wrapping element re-mounts on intent change so the
         // pop-in animation replays for the freshly telegraphed intent.
-        key={`${intent.kind}-${intent.amount}-${tick}`}
+        key={`${intent.kind}-${intentNumber(intent)}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         role="img"
         aria-label={`${intentLabel(intent)}${lethal ? ' — lethal!' : ''}`}
@@ -414,7 +422,7 @@ function IntentBadge({
         <span className="intent-icon" aria-hidden>
           {intentIcon(intent)}
         </span>
-        <span className="intent-amount">{intent.amount}</span>
+        <span className="intent-amount">{intentNumber(intent)}</span>
       </div>
       {hovered &&
         createPortal(

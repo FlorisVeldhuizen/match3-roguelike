@@ -16,8 +16,11 @@ export type SwapResolution = {
   events: GameEvent[]
 }
 
+// Shallow clone per row; cells themselves are not cloned because the
+// pure flag helpers always return a new Cell when they mutate. Preserves
+// `flags` so the burning/petrified/etc. state carries through a swap.
 const cloneBoard = (board: Cell[][]): Cell[][] =>
-  board.map((row) => row.map((c) => ({ gemColor: c.gemColor })))
+  board.map((row) => row.slice())
 
 const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
   const rowA = board[a.y]
@@ -148,16 +151,30 @@ export function resolveSwap(
 
     const clearSet = expandClears(board, matches)
     const clearedCells: Pos[] = []
+    // Burning cells cleared this step → each applies 1 stack of Burn to
+    // the player (02-scope §Bleeder verb). Sum during the same walk to
+    // avoid a second pass.
+    const burningCleared: Pos[] = []
     const cleared: (Cell | null)[][] = board.map((row, y) =>
       row.map((c, x) => {
         if (clearSet.has(keyOf({ x, y }))) {
           clearedCells.push({ x, y })
+          if (c?.flags?.burning && c.flags.burning > 0) {
+            burningCleared.push({ x, y })
+          }
           return null
         }
         return c
       }),
     )
     events.push({ kind: 'gems-cleared', cells: clearedCells })
+    if (burningCleared.length > 0) {
+      events.push({
+        kind: 'tile-burn-triggered',
+        cells: burningCleared,
+        stacks: burningCleared.length,
+      })
+    }
 
     const { board: fallen, movements } = applyGravity(cleared)
     if (movements.length > 0) events.push({ kind: 'gems-fell', movements })

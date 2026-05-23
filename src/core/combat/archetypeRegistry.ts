@@ -1,6 +1,12 @@
-import type { EnemyArchetype, IntentKind } from '../../types'
+import type { EnemyArchetype, IntentKind, StatusKind } from '../../types'
 
 export type IntentRange = { min: number; max: number }
+
+export type OnHitStatusDef = {
+  kind: StatusKind
+  stacks: number
+  duration: number
+}
 
 export type ArchetypeDef = {
   id: EnemyArchetype
@@ -9,6 +15,13 @@ export type ArchetypeDef = {
   pattern: IntentKind[]
   attackRange: IntentRange
   blockRange: IntentRange
+  // Bleeder: tile-burn intent flags N cells as burning. Required only
+  // for archetypes whose pattern includes 'tile-burn'.
+  tileBurnCount?: number
+  tileBurnDuration?: number
+  // Optional rider on attack intents: applies a status to the player
+  // when the attack lands (any hpDamage > 0). Bleeder applies Burn.
+  onHitStatus?: OnHitStatusDef
 }
 
 // Registry pattern (per 03-architecture §11): core can't import from content,

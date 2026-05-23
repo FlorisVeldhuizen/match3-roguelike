@@ -9,6 +9,7 @@ import { FXToggle } from './components/FXToggle'
 import { ArcaneBackground } from './components/ArcaneBackground'
 import { AriaLiveAnnouncer } from './components/AriaLiveAnnouncer'
 import { CRTOverlay } from './components/CRTOverlay'
+import { BurningOverlay } from './components/BurningOverlay'
 import { useGameStore } from '../core/state/store'
 
 export const BOARD_MOUNT_ID = 'board-mount'
@@ -32,6 +33,7 @@ export function App() {
         <EnemyFrame />
         <section className="board-shell" aria-label="Game board">
           <div id={BOARD_MOUNT_ID} className="board-mount" />
+          <BurningOverlay />
         </section>
         <HUD />
         <VictoryOverlay />

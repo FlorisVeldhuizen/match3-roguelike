@@ -1,12 +1,15 @@
 import type { RngState } from '../rng/mulberry32'
-import type { CombatPhase, Enemy, GameEvent, Player } from '../../types'
+import type { Cell, CombatPhase, Enemy, GameEvent, Player } from '../../types'
 import { rollIntent } from './intents'
 import { applyDamage } from './damage'
-import { composeDamage, tickStatuses } from './statuses'
+import { applyStatusToList, composeDamage, tickStatuses } from './statuses'
+import { getArchetype } from './archetypeRegistry'
+import { applyFlagToCells, pickRandomCellsWithoutFlag } from '../board/flags'
 
 export type EnemyTurnResult = {
   player: Player
   enemies: Enemy[]
+  board: Cell[][]
   rng: RngState
   phase: CombatPhase
   events: GameEvent[]
@@ -33,11 +36,13 @@ export type EnemyTurnResult = {
 export function executeEnemyTurn(
   player: Player,
   enemies: Enemy[],
+  board: Cell[][],
   rng: RngState,
 ): EnemyTurnResult {
   const events: GameEvent[] = []
   let nextPlayer: Player = player
   let nextEnemies: Enemy[] = enemies
+  let nextBoard: Cell[][] = board
   let nextRng = rng
 
   for (const enemy of enemies) {
@@ -139,6 +144,50 @@ export function executeEnemyTurn(
         } else if (res.blockAbsorbed) {
           events.push({ kind: 'block-absorbed', targetId: 'player' })
         }
+        // Bleeder's onHitStatus rider: if the attack landed (any HP
+        // damage), apply the configured status to the player. Status
+        // riders only fire on real hits — fully-blocked attacks don't
+        // tag the player (consistent with the "block matters" theme).
+        const onHit = getArchetype(updatedEnemy.archetype).onHitStatus
+        if (onHit && res.hpDamage > 0) {
+          const newStatus = {
+            kind: onHit.kind,
+            stacks: onHit.stacks,
+            duration: onHit.duration,
+          }
+          nextPlayer = {
+            ...nextPlayer,
+            statuses: applyStatusToList(nextPlayer.statuses, newStatus),
+          }
+          events.push({
+            kind: 'status-applied',
+            target: 'player',
+            status: newStatus,
+          })
+        }
+      }
+    } else if (intent.kind === 'tile-burn') {
+      // Pick `count` cells without an existing burning flag, mark them
+      // as burning for the archetype's tileBurnDuration (player phases).
+      // Player can match the burning cells next phase to apply Burn back
+      // *to themselves* — or eat the duration and re-burn risk by leaving
+      // them. Either way the verb generates board pressure.
+      const def = getArchetype(updatedEnemy.archetype)
+      const duration = def.tileBurnDuration ?? 2
+      const { cells, rng: pickRng } = pickRandomCellsWithoutFlag(
+        nextBoard,
+        'burning',
+        intent.count,
+        nextRng,
+      )
+      nextRng = pickRng
+      if (cells.length > 0) {
+        nextBoard = applyFlagToCells(nextBoard, cells, 'burning', duration)
+        events.push({
+          kind: 'tile-burn-placed',
+          cells,
+          enemyId: updatedEnemy.id,
+        })
       }
     } else if (intent.kind === 'block' && updatedEnemy.block === 0) {
       // Block intent + broken shield = "Staggered". The block already went
@@ -197,6 +246,7 @@ export function executeEnemyTurn(
   return {
     player: nextPlayer,
     enemies: nextEnemies,
+    board: nextBoard,
     rng: nextRng,
     phase,
     events,

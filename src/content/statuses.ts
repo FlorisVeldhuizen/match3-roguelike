@@ -20,21 +20,21 @@ const defs: Record<StatusKind, StatusDef> = {
     name: 'Burn',
     icon: '🔥',
     tooltip:
-      'Deals {stacks} damage at the start of your turn. {duration} turns left.',
+      'Takes {stacks} damage at the start of each turn. {duration} turns left.',
   },
   vulnerable: {
     id: 'vulnerable',
     name: 'Vulnerable',
     icon: '💢',
     tooltip:
-      'Takes 50% more damage from attacks. {duration} turns left.',
+      'Takes 50% extra damage from attacks. {duration} turns left.',
   },
   weak: {
     id: 'weak',
     name: 'Weak',
     icon: '🪶',
     tooltip:
-      'Deals 50% less damage with attacks. {duration} turns left.',
+      'Attacks deal 50% less damage. {duration} turns left.',
   },
 }
 

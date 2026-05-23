@@ -15,5 +15,22 @@ const brute: ArchetypeDef = {
   blockRange: { min: 3, max: 5 },
 }
 
+// Bleeder: low HP, alternates attack-with-Burn-on-hit and the tile-burn
+// board verb. Pattern from 04-roadmap (Phase F is its first instance);
+// numbers in the early-mid band (HP 15-20, damage 2-4 — softer than
+// Brute because the lasting Burn is the real threat).
+const bleeder: ArchetypeDef = {
+  id: 'bleeder',
+  name: 'Bleeder',
+  maxHp: 18,
+  pattern: ['attack', 'tile-burn', 'attack', 'attack'],
+  attackRange: { min: 2, max: 4 },
+  blockRange: { min: 0, max: 0 },
+  tileBurnCount: 2,
+  tileBurnDuration: 2,
+  onHitStatus: { kind: 'burn', stacks: 1, duration: 3 },
+}
+
 // Side-effect registration: bootstrap imports this file once from main.tsx.
 registerArchetype(brute)
+registerArchetype(bleeder)

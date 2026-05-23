@@ -116,6 +116,10 @@ export function resolveEndOfPhase(
     block: nextBlock,
     phasePools: { red: 0, blue: 0, green: 0 },
     pendingSpells: nextPending,
+    // Reinforce queues a one-shot block carry-over for the next phase
+    // (01-design §Reinforce): normal "block zeros at next phase start"
+    // is overridden once.
+    carryBlockNextPhase: hasReinforce ? true : player.carryBlockNextPhase,
   }
 
   const anyAlive = nextEnemies.some((e) => e.hp > 0)
@@ -162,13 +166,18 @@ export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
   }
 
   const phase: CombatPhase = hp <= 0 ? 'game-over' : 'player-acting'
+  // Reinforce's one-shot carry-over: keep whatever block survived the
+  // enemy turn (already doubled at EOP); clear the flag so the next
+  // phase end zeros block normally.
+  const carrying = player.carryBlockNextPhase
   return {
     player: {
       ...player,
       hp,
-      block: 0,
+      block: carrying ? player.block : 0,
       phasePools: { red: 0, blue: 0, green: 0 },
       statuses: ticked.statuses,
+      carryBlockNextPhase: false,
     },
     events,
     phase,

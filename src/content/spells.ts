@@ -16,7 +16,10 @@ const bulwark: SpellDef = {
   icon: '🗡',
   manaCost: 3,
   description:
-    'End of phase: consume blue pool, deal floor(blue / 2) to the targeted enemy. No block from blue this phase.',
+    "When your turn ends, your armor strikes the enemy for half its value. You'll have no armor this turn.",
+  pendingLabel: 'queued',
+  pendingDescription:
+    "When your turn ends, your armor strikes the enemy for half its value, then drops to zero.",
 }
 
 const reinforce: SpellDef = {
@@ -25,7 +28,10 @@ const reinforce: SpellDef = {
   icon: '🛡',
   manaCost: 4,
   description:
-    "End of phase: doubles this phase's block on carry-over (decays normally next phase).",
+    "Doubles your armor when your turn ends and carries it over into next turn instead of letting it evaporate.",
+  pendingLabel: 'queued',
+  pendingDescription:
+    'When your turn ends, your armor is doubled and survives into next turn.',
 }
 
 const riposte: UltimateDef = {
@@ -34,7 +40,10 @@ const riposte: UltimateDef = {
   icon: '⚡',
   chargeCost: 8,
   description:
-    "Next enemy turn: if they attack, take 0 damage and counter for the full pre-block amount. If they don't attack, Riposte expires unused.",
+    "Parry the next enemy attack. Take no damage and hit them back for the full amount. If they don't swing, the parry is wasted.",
+  pendingLabel: 'armed',
+  pendingDescription:
+    "Next enemy attack hits you for 0 and bounces back at full strength.",
 }
 
 registerSpell(bulwark)

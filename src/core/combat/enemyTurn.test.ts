@@ -25,6 +25,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   phasePools: { red: 0, blue: 0, green: 0 },
   statuses: [],
   pendingSpells: [],
+  carryBlockNextPhase: false,
   ...overrides,
 })
 
@@ -44,7 +45,7 @@ const makeEnemy = (overrides: Partial<Enemy> = {}): Enemy => ({
 describe('executeEnemyTurn', () => {
   it('drains player block before HP', () => {
     const p = makePlayer({ block: 3 })
-    const result = executeEnemyTurn(p, [makeEnemy()], { seed: 1 })
+    const result = executeEnemyTurn(p, [makeEnemy()], [], { seed: 1 })
     expect(result.player.block).toBe(0)
     expect(result.player.hp).toBe(58)
     const dmg = result.events.find((e) => e.kind === 'damage-taken')
@@ -53,7 +54,7 @@ describe('executeEnemyTurn', () => {
 
   it('fully absorbs damage when block covers attack', () => {
     const p = makePlayer({ block: 10 })
-    const result = executeEnemyTurn(p, [makeEnemy()], { seed: 1 })
+    const result = executeEnemyTurn(p, [makeEnemy()], [], { seed: 1 })
     expect(result.player.block).toBe(5)
     expect(result.player.hp).toBe(60)
     const dmg = result.events.find((e) => e.kind === 'damage-taken')
@@ -67,7 +68,7 @@ describe('executeEnemyTurn', () => {
       currentIntent: { kind: 'block', amount: 4 },
       block: 4,
     })
-    const result = executeEnemyTurn(makePlayer(), [e], { seed: 1 })
+    const result = executeEnemyTurn(makePlayer(), [e], [], { seed: 1 })
     const updated = result.enemies[0]
     // Block is unchanged by the currentIntent. (May still change if the
     // freshly-rolled next intent is also a block — separately tested.)
@@ -83,7 +84,7 @@ describe('executeEnemyTurn', () => {
       nextIntentIndex: 1,
       block: 0,
     })
-    const result = executeEnemyTurn(makePlayer(), [e], { seed: 1 })
+    const result = executeEnemyTurn(makePlayer(), [e], [], { seed: 1 })
     const updated = result.enemies[0]
     expect(updated?.currentIntent.kind).toBe('block')
     const blockAmount =
@@ -95,7 +96,7 @@ describe('executeEnemyTurn', () => {
 
   it('advances pattern index and rolls next intent', () => {
     const e = makeEnemy({ nextIntentIndex: 0 })
-    const result = executeEnemyTurn(makePlayer(), [e], { seed: 1 })
+    const result = executeEnemyTurn(makePlayer(), [e], [], { seed: 1 })
     const updated = result.enemies[0]
     expect(updated?.nextIntentIndex).toBe(1)
     expect(updated?.currentIntent).toBeDefined()
@@ -105,7 +106,7 @@ describe('executeEnemyTurn', () => {
   it('transitions to game-over when player HP hits 0', () => {
     const p = makePlayer({ hp: 3 })
     const e = makeEnemy({ currentIntent: { kind: 'attack', amount: 10 } })
-    const result = executeEnemyTurn(p, [e], { seed: 1 })
+    const result = executeEnemyTurn(p, [e], [], { seed: 1 })
     expect(result.player.hp).toBe(0)
     expect(result.phase).toBe('game-over')
     expect(result.events.at(-1)).toEqual({
@@ -115,7 +116,7 @@ describe('executeEnemyTurn', () => {
   })
 
   it('stays on player-acting when player survives', () => {
-    const result = executeEnemyTurn(makePlayer(), [makeEnemy()], { seed: 1 })
+    const result = executeEnemyTurn(makePlayer(), [makeEnemy()], [], { seed: 1 })
     expect(result.phase).toBe('player-acting')
   })
 
@@ -125,7 +126,7 @@ describe('executeEnemyTurn', () => {
       id: 'b',
       currentIntent: { kind: 'attack', amount: 4 },
     })
-    const result = executeEnemyTurn(makePlayer(), [dead, alive], { seed: 1 })
+    const result = executeEnemyTurn(makePlayer(), [dead, alive], [], { seed: 1 })
     expect(result.player.hp).toBe(56)
     // Dead enemy's intent index unchanged.
     expect(result.enemies.find((e) => e.id === 'a')?.nextIntentIndex).toBe(0)
@@ -142,7 +143,7 @@ describe('executeEnemyTurn', () => {
       id: 'b',
       currentIntent: { kind: 'attack', amount: 5 },
     })
-    const result = executeEnemyTurn(p, [first, second], { seed: 1 })
+    const result = executeEnemyTurn(p, [first, second], [], { seed: 1 })
     expect(result.player.hp).toBe(0)
     expect(result.phase).toBe('game-over')
     // Second enemy did not act — pattern index unchanged.
@@ -150,8 +151,8 @@ describe('executeEnemyTurn', () => {
   })
 
   it('is deterministic with the same seed', () => {
-    const a = executeEnemyTurn(makePlayer(), [makeEnemy()], { seed: 99 })
-    const b = executeEnemyTurn(makePlayer(), [makeEnemy()], { seed: 99 })
+    const a = executeEnemyTurn(makePlayer(), [makeEnemy()], [], { seed: 99 })
+    const b = executeEnemyTurn(makePlayer(), [makeEnemy()], [], { seed: 99 })
     expect(a.enemies[0]?.currentIntent).toEqual(b.enemies[0]?.currentIntent)
     expect(a.rng).toEqual(b.rng)
   })

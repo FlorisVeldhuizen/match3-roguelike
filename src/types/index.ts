@@ -8,8 +8,16 @@ export const GEM_COLORS: readonly GemColor[] = [
   'purple',
 ] as const
 
+// Phase F adds the first board-verb flag: `burning`. The flag carries the
+// remaining duration (in player phases). More flags land in H2/J1 — keep
+// the bag open-ended so each verb plugs in without re-shaping Cell.
+export type CellFlags = {
+  burning?: number
+}
+
 export type Cell = {
   gemColor: GemColor
+  flags?: CellFlags
 }
 
 export type Pos = { x: number; y: number }
@@ -94,6 +102,12 @@ export type GameEvent =
   | { kind: 'spell-cast'; spellId: PendingSpellId }
   | { kind: 'pending-effect-resolved'; spellId: PendingSpellId }
   | { kind: 'riposte-counter'; targetId: string; amount: number }
+  | { kind: 'tile-burn-placed'; cells: Pos[]; enemyId: string }
+  // Emitted when a match clears one or more cells whose `burning` flag was
+  // active. Total burn stacks = number of burning cells in the cleared set
+  // (one stack per cell per match, per 02-scope §Enemies/Bleeder).
+  | { kind: 'tile-burn-triggered'; cells: Pos[]; stacks: number }
+  | { kind: 'cell-flag-ticked'; positions: Pos[]; flag: keyof CellFlags }
   | { kind: 'block-gained'; amount: number }
   | { kind: 'enemy-block-gained'; enemyId: string; amount: number }
   | { kind: 'block-absorbed'; targetId: 'player' | string }
@@ -117,13 +131,14 @@ export type CombatPhase =
   | 'victory'
   | 'game-over'
 
-export type IntentKind = 'attack' | 'block'
+export type IntentKind = 'attack' | 'block' | 'tile-burn'
 
 export type Intent =
   | { kind: 'attack'; amount: number }
   | { kind: 'block'; amount: number }
+  | { kind: 'tile-burn'; count: number }
 
-export type EnemyArchetype = 'brute'
+export type EnemyArchetype = 'brute' | 'bleeder'
 
 export type PhasePools = {
   red: number
@@ -143,6 +158,10 @@ export type Player = {
   // are cleared at EOP; Riposte persists across the enemy turn until it
   // triggers on an incoming attack or expires at the end of that turn.
   pendingSpells: PendingSpellId[]
+  // Reinforce sets this at EOP. Next beginPlayerPhase preserves the
+  // remaining block (instead of zeroing it) and clears the flag — the
+  // phase *after* that zeros normally per 01-design §Reinforce.
+  carryBlockNextPhase: boolean
 }
 
 export type Enemy = {

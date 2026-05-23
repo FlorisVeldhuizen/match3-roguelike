@@ -18,8 +18,14 @@ export function rollIntent(
     const [amount, r2] = rollInRange(rng, def.attackRange)
     return { intent: { kind: 'attack', amount }, rng: r2 }
   }
-  const [amount, r2] = rollInRange(rng, def.blockRange)
-  return { intent: { kind: 'block', amount }, rng: r2 }
+  if (kind === 'block') {
+    const [amount, r2] = rollInRange(rng, def.blockRange)
+    return { intent: { kind: 'block', amount }, rng: r2 }
+  }
+  // tile-burn: no roll — count is fixed per archetype. Cell selection
+  // happens at fire time in executeEnemyTurn (it needs the live board).
+  const count = def.tileBurnCount ?? 1
+  return { intent: { kind: 'tile-burn', count }, rng }
 }
 
 function rollInRange(rng: RngState, range: IntentRange): [number, RngState] {

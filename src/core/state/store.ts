@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { RngState } from '../rng/mulberry32'
+import { nextInt, type RngState } from '../rng/mulberry32'
 import { generateBoard, hasValidSwap } from '../board/generation'
 import { resolveSwap, type SwapResolution } from '../board/cascade'
 import { forkStreams, type RngStreams } from '../rng/streams'
@@ -23,6 +23,7 @@ import {
   type Cell,
   type CombatPhase,
   type Enemy,
+  type EnemyArchetype,
   type FightState,
   type GameEvent,
   type Player,
@@ -31,8 +32,9 @@ import {
   type UltimateId,
 } from '../../types'
 import { getArchetype } from '../combat/archetypeRegistry'
-import { composeDamage } from '../combat/statuses'
+import { applyStatusToList, composeDamage } from '../combat/statuses'
 import { getSpell, getUltimate } from '../combat/spellRegistry'
+import { tickFlagDuration } from '../board/flags'
 
 export type BoardState = {
   width: number
@@ -65,13 +67,19 @@ function freshPlayer(): Player {
     phasePools: { red: 0, blue: 0, green: 0 },
     statuses: [],
     pendingSpells: [],
+    carryBlockNextPhase: false,
   }
 }
 
 function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
-  const archetype = 'brute'
+  // Phase F ships two archetypes (Brute, Bleeder). Pick from rng.enemy
+  // so a given seed reproduces the same opponent across restarts.
+  // H1's map will replace this with archetype assignment per node.
+  const candidates: EnemyArchetype[] = ['brute', 'bleeder']
+  const [archIdx, rngAfterPick] = nextInt(enemyRng, candidates.length)
+  const archetype = candidates[archIdx] ?? 'brute'
   const def = getArchetype(archetype)
-  const first = rollIntent(archetype, 0, enemyRng)
+  const first = rollIntent(archetype, 0, rngAfterPick)
   const enemy: Enemy = {
     id: 'enemy-1',
     name: def.name,
@@ -177,6 +185,27 @@ export const useGameStore = create<GameStore>()(
       const damageHealStream: GameEvent[] = []
       for (const ev of decoratedSwap) {
         damageHealStream.push(ev)
+        // Cascade cleared cells with the `burning` flag → apply Burn to
+        // the player. Each cleared burning cell is one Burn stack
+        // (02-scope §Bleeder verb). Re-application stacks damage +
+        // refreshes duration via applyStatusToList.
+        if (ev.kind === 'tile-burn-triggered') {
+          const incoming = {
+            kind: 'burn' as const,
+            stacks: ev.stacks,
+            duration: 3,
+          }
+          player = {
+            ...player,
+            statuses: applyStatusToList(player.statuses, incoming),
+          }
+          damageHealStream.push({
+            kind: 'status-applied',
+            target: 'player',
+            status: incoming,
+          })
+          continue
+        }
         if (ev.kind !== 'pool-gained') continue
         if (ev.color === 'red') {
           if (targetEnemyId == null) continue
@@ -276,12 +305,25 @@ export const useGameStore = create<GameStore>()(
         phase = resolved.phase
         tailEvents.push(...resolved.events)
 
-        // If enemies still alive, enemy turn fires now. Then begin next player
-        // phase so block zeroes and pools reset before the player swaps again.
+        // If enemies still alive, tick board-flag durations (Phase F:
+        // burning cells lose one charge per player phase that ends
+        // without them being matched), then the enemy turn fires. Then
+        // begin next player phase so block zeroes and pools reset
+        // before the player swaps again.
         if (phase === 'enemy-acting') {
-          const enemyResult = executeEnemyTurn(player, enemies, enemyRng)
+          const tickResult = tickFlagDuration(finalBoard, 'burning')
+          finalBoard = tickResult.board
+          tailEvents.push(...tickResult.events)
+
+          const enemyResult = executeEnemyTurn(
+            player,
+            enemies,
+            finalBoard,
+            enemyRng,
+          )
           player = enemyResult.player
           enemies = enemyResult.enemies
+          finalBoard = enemyResult.board
           enemyRng = enemyResult.rng
           phase = enemyResult.phase
           tailEvents.push(...enemyResult.events)

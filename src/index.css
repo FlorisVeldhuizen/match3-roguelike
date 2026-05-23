@@ -1608,7 +1608,8 @@ body.vignette-damage::before {
   filter: brightness(0.95);
 }
 
-.spell-btn:disabled {
+.spell-btn:disabled,
+.spell-btn.is-disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -1902,5 +1903,114 @@ body.vignette-damage::before {
   }
   .enemy-glyph {
     font-size: 1.25rem;
+  }
+}
+
+/* --- Hover tooltip (shared portal-rendered) --- */
+
+.tooltip-anchor {
+  display: inline-flex;
+  /* So the anchor's bounding rect tightly fits the button it wraps; no
+     extra whitespace around the trigger. */
+  align-items: stretch;
+}
+
+.hover-tooltip {
+  position: fixed;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 0.55rem 0.75rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.35rem;
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(200, 163, 90, 0.18);
+  color: var(--parchment);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  pointer-events: none;
+  transition: opacity 90ms ease;
+}
+
+.hover-tooltip-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  color: var(--gold-2);
+  margin-bottom: 0.25rem;
+}
+
+.hover-tooltip-body {
+  color: var(--parchment-dim);
+}
+
+.hover-tooltip-reason {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--stone-2);
+  color: var(--ember-2);
+  font-size: 0.72rem;
+}
+
+.hover-tooltip.tooltip-ultimate {
+  border-color: var(--royal-2);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(184, 157, 255, 0.25),
+    inset 0 0 0 1px rgba(184, 157, 255, 0.25);
+}
+
+.hover-tooltip.tooltip-ultimate .hover-tooltip-title {
+  color: var(--royal-2);
+}
+
+/* --- Burning tile overlay (Bleeder verb) ---
+   8×8 grid laid over the Pixi canvas. Aligns with the canvas because
+   .board-shell uses content-box sizing with 8px padding on each side
+   and the canvas fills the content area exactly. */
+.board-shell {
+  position: relative;
+}
+
+.burning-overlay {
+  position: absolute;
+  /* Match the board-shell's padding so the grid aligns to the canvas. */
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.burning-cell {
+  display: grid;
+  place-items: center;
+  font-size: clamp(1rem, 4.5vmin, 1.7rem);
+  filter: drop-shadow(0 0 6px var(--ember-glow));
+  animation: burning-pulse 1.3s ease-in-out infinite;
+  pointer-events: auto;
+}
+
+@keyframes burning-pulse {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 4px var(--ember-glow));
+  }
+  50% {
+    transform: translateY(-1.5px) scale(1.08);
+    filter: drop-shadow(0 0 9px rgba(238, 94, 87, 0.85));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .burning-cell {
+    animation: none;
   }
 }
