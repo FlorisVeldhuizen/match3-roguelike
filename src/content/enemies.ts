@@ -27,7 +27,11 @@ const bleeder: ArchetypeDef = {
   attackRange: { min: 2, max: 4 },
   blockRange: { min: 0, max: 0 },
   tileBurnCount: 2,
-  tileBurnDuration: 2,
+  // Linger 3 player phases. The original 2 made the verb feel like a
+  // chore — players had one phase to clear or eat the burn, no room
+  // for "decide later". 3 gives the player a real choice about whether
+  // to burn a turn routing around a flagged cell.
+  tileBurnDuration: 3,
   onHitStatus: { kind: 'burn', stacks: 1, duration: 3 },
 }
 

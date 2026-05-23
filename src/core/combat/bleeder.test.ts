@@ -14,7 +14,7 @@ beforeAll(() => {
     attackRange: { min: 2, max: 4 },
     blockRange: { min: 0, max: 0 },
     tileBurnCount: 2,
-    tileBurnDuration: 2,
+    tileBurnDuration: 3,
     onHitStatus: { kind: 'burn', stacks: 1, duration: 3 },
   })
 })
