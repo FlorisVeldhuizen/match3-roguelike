@@ -11,6 +11,7 @@ import { useGameStore } from '../core/state/store'
 import { type GemColor, GEM_COLORS, type Pos } from '../types'
 import { createBoardInteraction } from './input'
 import { AnimationController } from './AnimationController'
+import { BoardEffects } from './BoardEffects'
 
 const CELL_SIZE = 64
 const GEM_SIZE = 54
@@ -167,6 +168,12 @@ export class BoardScene {
   private animator: AnimationController | null = null
   private selectionRing: Graphics | null = null
   private ghostRing: Graphics | null = null
+  // Keyboard cursor: persists across uses so arrow keys resume from the
+  // last position instead of resetting to center. `cursorVisible` controls
+  // whether the ghost ring is rendered (hidden until first key press, and
+  // can be dismissed with Escape without forgetting the position).
+  private keyboardCursor: Pos | null = null
+  private cursorVisible = false
   private disposed = false
   private unsubscribeSelection: (() => void) | null = null
   private unsubscribeRestart: (() => void) | null = null
@@ -193,6 +200,7 @@ export class BoardScene {
   private lastHoverClientY = 0
   private hasHoverPosition = false
   private boardLayer: Container | null = null
+  private boardEffects: BoardEffects | null = null
   private activeShimmers: ShimmerInstance[] = []
   private shimmerCooldownMs = randomShimmerInterval()
   private floatElapsedMs = 0
@@ -213,6 +221,19 @@ export class BoardScene {
   setOverlay(overlay: import('./OverlayScene').OverlayScene): void {
     this.overlay = overlay
     if (this.animator) this.animator.setOverlay(overlay)
+  }
+
+  // Stage-local center of a cell — same coordinate space the sprites live
+  // in (BOARD_PADDING + cellCenter). Used by BoardEffects to anchor the
+  // shockwave filter on the same point as the gem cluster that triggered it.
+  // Supports fractional Pos for "board centre" lookups (e.g. {3.5, 3.5}).
+  private cellToStage(pos: Pos): { x: number; y: number } | null {
+    if (!this.boardLayer) return null
+    const center = cellCenter(pos.x, pos.y)
+    return {
+      x: BOARD_PADDING + center.x,
+      y: BOARD_PADDING + center.y,
+    }
   }
 
   // Screen-space center of cell (x,y), accounting for board padding and the
@@ -296,6 +317,13 @@ export class BoardScene {
     this.attachPointerEvents(app.canvas)
     this.attachKeyboardEvents()
     this.attachRectInvalidation()
+    // Post-FX (bloom / RGB split / shockwave / CRT noise) — applied to the
+    // stage so the board background, gems, shimmers, and halos all get the
+    // same treatment. Constructed last so the filter chain wraps the fully
+    // built display tree.
+    this.boardEffects = new BoardEffects(app.stage, (pos) =>
+      this.cellToStage(pos),
+    )
     this.startEffectsTicker()
   }
 
@@ -314,6 +342,8 @@ export class BoardScene {
     this.cachedCanvasRect = null
     if (this.effectsTickerCb) Ticker.shared.remove(this.effectsTickerCb)
     this.effectsTickerCb = null
+    this.boardEffects?.destroy()
+    this.boardEffects = null
     if (this.app) {
       this.app.destroy(true, { children: true, texture: false })
       this.app = null
@@ -463,6 +493,9 @@ export class BoardScene {
     this.unsubscribeSelection = useGameStore.subscribe((s) => {
       if (s.board.selected === prevSelected) return
       prevSelected = s.board.selected
+      // Keyboard cursor follows pointer-driven selection so a mid-game
+      // switch from mouse → keyboard resumes where the user last acted.
+      if (s.board.selected) this.keyboardCursor = s.board.selected
       this.updateSelectionRing()
     })
     this.updateSelectionRing()
@@ -491,9 +524,17 @@ export class BoardScene {
     } else {
       ring.visible = false
     }
-    const target = active ? this.computeDragTarget(active) : null
-    if (target) {
-      const { x, y } = cellCenter(target.x, target.y)
+    // Ghost ring shows either the drag-target preview (pointer) or the
+    // keyboard cursor (when no pointer drag is active and no cell is
+    // primed — the yellow selectionRing already covers the primed case).
+    let ghostPos: Pos | null = null
+    if (active) {
+      ghostPos = this.computeDragTarget(active)
+    } else if (this.cursorVisible && this.keyboardCursor && !stored) {
+      ghostPos = this.keyboardCursor
+    }
+    if (ghostPos) {
+      const { x, y } = cellCenter(ghostPos.x, ghostPos.y)
       ghost.x = x
       ghost.y = y
       ghost.visible = true
@@ -637,10 +678,16 @@ export class BoardScene {
     }
   }
 
-  // Keyboard alternative to pointer interaction:
-  //   Arrow:        move the selection cursor (selects center cell first)
-  //   Shift+Arrow:  swap selected gem with the adjacent in that direction
-  //   Escape:       clear selection
+  // Keyboard alternative to pointer interaction. Mirrors the click model:
+  //   Arrow / WASD:   move the keyboard cursor (first press just reveals it
+  //                   at the remembered position; subsequent presses move)
+  //   Space / Enter:  pick up the gem under the cursor (primes it for swap);
+  //                   pressing again drops without swapping
+  //   Arrow / WASD while primed: swap with the adjacent cell in that
+  //                              direction (no Shift needed)
+  //   Escape:         drop the pickup, or hide the cursor if not primed
+  // The cursor position persists across uses, so arrows resume from the
+  // last cell instead of resetting to center each turn.
   // Window-level so the canvas doesn't need focus; ignored when a form
   // control has focus.
   private attachKeyboardEvents(): void {
@@ -649,6 +696,20 @@ export class BoardScene {
       ArrowDown: { x: 0, y: 1 },
       ArrowLeft: { x: -1, y: 0 },
       ArrowRight: { x: 1, y: 0 },
+      w: { x: 0, y: -1 },
+      W: { x: 0, y: -1 },
+      s: { x: 0, y: 1 },
+      S: { x: 0, y: 1 },
+      a: { x: -1, y: 0 },
+      A: { x: -1, y: 0 },
+      d: { x: 1, y: 0 },
+      D: { x: 1, y: 0 },
+    }
+    const isCommit = (key: string) => key === ' ' || key === 'Enter'
+    const initCursor = (): Pos => {
+      if (this.keyboardCursor) return this.keyboardCursor
+      const mid = Math.floor(BOARD_DIM / 2)
+      return { x: mid, y: mid }
     }
     const onKeyDown = (ev: KeyboardEvent) => {
       const t = ev.target
@@ -665,30 +726,68 @@ export class BoardScene {
       if (store.fight.phase === 'victory' || store.fight.phase === 'game-over')
         return
       if (this.animator?.isAnimating) return
+      const primed = store.board.selected
+
       if (ev.key === 'Escape') {
-        if (store.board.selected) {
+        if (primed) {
           ev.preventDefault()
           store.selectCell(null)
+        } else if (this.cursorVisible) {
+          ev.preventDefault()
+          this.cursorVisible = false
+          this.updateSelectionRing()
         }
         return
       }
+
+      if (isCommit(ev.key)) {
+        ev.preventDefault()
+        if (primed) {
+          // Drop the pickup without swapping. Cursor stays put.
+          store.selectCell(null)
+          this.cursorVisible = true
+          this.updateSelectionRing()
+          return
+        }
+        const pos = initCursor()
+        this.keyboardCursor = pos
+        this.cursorVisible = true
+        store.selectCell(pos)
+        return
+      }
+
       const dir = DIRS[ev.key]
       if (!dir) return
+      // Don't hijack browser shortcuts like Cmd+W / Ctrl+S.
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return
       ev.preventDefault()
-      const selected = store.board.selected
-      if (!selected) {
-        const mid = Math.floor(BOARD_DIM / 2)
-        store.selectCell({ x: mid, y: mid })
-        return
-      }
-      const target: Pos = { x: selected.x + dir.x, y: selected.y + dir.y }
-      if (!inBounds(target)) return
-      if (ev.shiftKey) {
+
+      if (primed) {
+        const target: Pos = { x: primed.x + dir.x, y: primed.y + dir.y }
+        if (!inBounds(target)) return
         store.selectCell(null)
-        void this.performSwap(selected, target)
+        this.keyboardCursor = target
+        this.cursorVisible = true
+        this.updateSelectionRing()
+        void this.performSwap(primed, target)
         return
       }
-      store.selectCell(target)
+
+      if (!this.cursorVisible || !this.keyboardCursor) {
+        // First press just reveals the cursor; the next press moves it.
+        this.keyboardCursor = initCursor()
+        this.cursorVisible = true
+        this.updateSelectionRing()
+        return
+      }
+
+      const next: Pos = {
+        x: this.keyboardCursor.x + dir.x,
+        y: this.keyboardCursor.y + dir.y,
+      }
+      if (!inBounds(next)) return
+      this.keyboardCursor = next
+      this.updateSelectionRing()
     }
     window.addEventListener('keydown', onKeyDown)
     this.detachKeyboard = () => window.removeEventListener('keydown', onKeyDown)
@@ -934,6 +1033,7 @@ export class BoardScene {
     }
     this.tickFloat(dtMs, animating)
     this.tickShimmers(dtMs, animating)
+    this.boardEffects?.tick(dtMs)
   }
 
   // Slow Lissajous drift on every resting gem. Skipped during

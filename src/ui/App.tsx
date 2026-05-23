@@ -5,8 +5,10 @@ import { GameOverOverlay } from './components/GameOverOverlay'
 import { PhaseBanner } from './components/PhaseBanner'
 import { MuteToggle } from './components/MuteToggle'
 import { VolumeSlider } from './components/VolumeSlider'
+import { FXToggle } from './components/FXToggle'
 import { ArcaneBackground } from './components/ArcaneBackground'
 import { AriaLiveAnnouncer } from './components/AriaLiveAnnouncer'
+import { CRTOverlay } from './components/CRTOverlay'
 import { useGameStore } from '../core/state/store'
 
 export const BOARD_MOUNT_ID = 'board-mount'
@@ -25,6 +27,7 @@ export function App() {
           <span className="hud-build">Phase E · enemy intents</span>
           <VolumeSlider />
           <MuteToggle />
+          <FXToggle />
         </header>
         <EnemyFrame />
         <section className="board-shell" aria-label="Game board">
@@ -40,6 +43,7 @@ export function App() {
           the board's resting center — see PhaseBanner.tsx. */}
       <PhaseBanner />
       <AriaLiveAnnouncer />
+      <CRTOverlay />
     </>
   )
 }

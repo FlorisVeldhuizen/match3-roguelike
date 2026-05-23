@@ -34,6 +34,7 @@ export default defineConfig([
         { type: 'ui', pattern: 'src/ui/**/*', mode: 'file' },
         { type: 'pixi', pattern: 'src/pixi/**/*', mode: 'file' },
         { type: 'audio', pattern: 'src/audio/**/*', mode: 'file' },
+        { type: 'fx', pattern: 'src/fx/**/*', mode: 'file' },
         { type: 'types', pattern: 'src/types/**/*', mode: 'file' },
         { type: 'timing', pattern: 'src/timing.{ts,tsx}', mode: 'file' },
         { type: 'root', pattern: 'src/*.{ts,tsx}', mode: 'file' },
@@ -65,6 +66,7 @@ export default defineConfig([
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
                 { to: { type: 'audio' } },
+                { to: { type: 'fx' } },
                 { to: { type: 'timing' } },
               ],
             },
@@ -84,7 +86,16 @@ export default defineConfig([
                 { to: { type: 'core' } },
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
+                { to: { type: 'fx' } },
                 { to: { type: 'timing' } },
+              ],
+            },
+            {
+              from: { type: 'fx' },
+              allow: [
+                { to: { type: 'fx' } },
+                { to: { type: 'core' } },
+                { to: { type: 'types' } },
               ],
             },
             {

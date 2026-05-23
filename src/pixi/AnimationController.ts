@@ -136,9 +136,15 @@ function damagePopupFontSize(amount: number): number {
 
 // Shared shape for tilt-and-pop word callouts. Callers add color, fontSize,
 // lifeMs, driftY, and rotationFrom (from nextTiltRadians).
+//
+// `chromatic: true` routes these to the overlay's RGB-split text layer.
+// Every WORD_POP callout *except* DEFEATED is in-board (POW/BOOM/×N/+1
+// TURN/NO MOVES) so chromatic is the right default — DEFEATED overrides
+// to false at its callsite since it floats over the enemy frame.
 const WORD_POP = {
   scaleCurve: popScaleCurve,
   rotationEase: 0,
+  chromatic: true,
 } as const
 
 function centroidOf(cells: Pos[]): Pos | null {
@@ -582,6 +588,7 @@ export class AnimationController {
         lifeMs: 900,
         driftY: -10,
         growBy: 0.1,
+        chromatic: true,
       },
     )
   }
@@ -831,6 +838,10 @@ export class AnimationController {
         'DEFEATED',
         {
           ...WORD_POP,
+          // Override WORD_POP's chromatic default — DEFEATED floats over
+          // the enemy frame (outside the board) where chromatic split on
+          // numbers / labels hurts readability.
+          chromatic: false,
           color: VISUAL.cascadeGold,
           fontSize: 34,
           lifeMs: 1050,

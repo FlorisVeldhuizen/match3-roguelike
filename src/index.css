@@ -67,6 +67,20 @@ body {
   display: block;
 }
 
+/* Fullscreen CRT scanline + grain + vignette overlay. Sits above all UI
+   (including modals + tooltips) so the whole composition reads through
+   the same "old screen" lens. pointer-events:none keeps the canvas inert. */
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  pointer-events: none;
+  display: block;
+}
+
+
 /* Grain + edge vignette overlay — sits above the shader (z-index: 0) but
    below all UI (auto z-index inside #root, which is on top via document
    order). Keeps the shader feeling painterly rather than too clean. */
@@ -233,6 +247,84 @@ body::before {
   border-color: var(--gold-2);
   background: rgba(200, 163, 90, 0.12);
   color: var(--gold-2);
+}
+
+/* Visual FX toggle — small dropdown next to the mute button. Wraps the
+   button so the popover anchors to it without an extra positioning layer. */
+.fx-toggle {
+  position: relative;
+  display: inline-flex;
+  margin-left: 0.4rem;
+}
+
+.fx-toggle-button {
+  background: transparent;
+  border: 1px solid var(--gold-3);
+  border-radius: 0.3rem;
+  color: var(--gold-2);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.fx-toggle-button:hover,
+.fx-toggle-button[aria-expanded='true'] {
+  border-color: var(--gold-2);
+  background: rgba(200, 163, 90, 0.12);
+}
+
+.fx-toggle-popover {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  padding: 0.6rem 0.7rem 0.7rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.35rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+.fx-toggle-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  opacity: 0.85;
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(200, 163, 90, 0.18);
+}
+
+.fx-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--parchment);
+  user-select: none;
+}
+
+.fx-toggle-row:hover {
+  color: var(--gold-2);
+}
+
+.fx-toggle-row input[type='checkbox'] {
+  accent-color: var(--gold-1);
+  cursor: pointer;
+}
+
+.fx-toggle-label {
+  letter-spacing: 0.02em;
 }
 
 /* --- Board --- */

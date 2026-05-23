@@ -5,7 +5,9 @@ import {
   Text,
   type Ticker,
 } from 'pixi.js'
+import { RGBSplitFilter } from 'pixi-filters'
 import type { GemColor } from '../types'
+import { getFXSettings, subscribeFXSettings } from '../fx/settings'
 
 // Hex matching the CSS color palette in index.css so visuals stay coherent
 // across the React DOM and the Pixi overlay.
@@ -88,13 +90,29 @@ try {
   // matchMedia unavailable (SSR / older browsers).
 }
 
+// RGB-split offset applied to the chromatic text layer (in-board WORD_POP
+// callouts only). Kept under 2px so glyph interiors stay legible — the
+// priority on text is readability over chromatic punch.
+const OVERLAY_RGB_OFFSET = 1.5
+
 export class OverlayScene {
   private app: Application | null = null
   private layer: Container | null = null
+  // Two text sub-containers:
+  //  - chromatic: in-board callouts (POW!/BOOM!/×N/+1 TURN/NO MOVES) get
+  //    the RGB-split filter for accent.
+  //  - crisp: out-of-board callouts (damage numbers, pool arrivals, heals,
+  //    DEFEATED, enemy block) stay sharp — chromatic split on numbers
+  //    floating around the HUD made them harder to read.
+  // Callers pick by passing `chromatic: true` to spawnFloatingText.
+  private textLayerChromatic: Container | null = null
+  private textLayerCrisp: Container | null = null
   private effects: Effect[] = []
   private tickerCb: ((ticker: Ticker) => void) | null = null
   private resizeCb: (() => void) | null = null
   private disposed = false
+  private rgbFilter: RGBSplitFilter | null = null
+  private unsubscribeFX: (() => void) | null = null
 
   async init(): Promise<void> {
     const app = new Application()
@@ -125,6 +143,30 @@ export class OverlayScene {
     app.stage.addChild(layer)
     this.layer = layer
 
+    // Crisp text layer (no filter) — out-of-board popups land here.
+    const textLayerCrisp = new Container()
+    layer.addChild(textLayerCrisp)
+    this.textLayerCrisp = textLayerCrisp
+
+    // Chromatic text layer (RGB-split filter) — in-board callouts. Added
+    // last so it sits on top of both particles and the crisp text layer
+    // when popups happen to overlap.
+    const textLayerChromatic = new Container()
+    layer.addChild(textLayerChromatic)
+    this.textLayerChromatic = textLayerChromatic
+
+    const rgbFilter = new RGBSplitFilter({
+      red: { x: -OVERLAY_RGB_OFFSET, y: 0 },
+      green: { x: 0, y: 0 },
+      blue: { x: OVERLAY_RGB_OFFSET, y: 0 },
+    })
+    rgbFilter.enabled = getFXSettings().rgbSplit
+    textLayerChromatic.filters = [rgbFilter]
+    this.rgbFilter = rgbFilter
+    this.unsubscribeFX = subscribeFXSettings((s) => {
+      if (this.rgbFilter) this.rgbFilter.enabled = s.rgbSplit
+    })
+
     this.tickerCb = (ticker) => this.tick(ticker.deltaMS)
     app.ticker.add(this.tickerCb)
 
@@ -140,13 +182,18 @@ export class OverlayScene {
     this.resizeCb = null
     if (this.app && this.tickerCb) this.app.ticker.remove(this.tickerCb)
     this.tickerCb = null
+    this.unsubscribeFX?.()
+    this.unsubscribeFX = null
     if (this.app) {
       const canvas = this.app.canvas
       this.app.destroy(true, { children: true, texture: false })
       if (canvas.parentElement) canvas.parentElement.removeChild(canvas)
     }
+    this.rgbFilter = null
     this.app = null
     this.layer = null
+    this.textLayerChromatic = null
+    this.textLayerCrisp = null
     this.effects = []
   }
 
@@ -540,9 +587,16 @@ export class OverlayScene {
       rotationFrom?: number
       rotationTo?: number
       rotationEase?: number
+      // Route to the RGB-split chromatic layer (in-board WORD_POP
+      // callouts) vs the crisp non-filtered layer (damage numbers,
+      // pool arrivals, etc). Defaults to crisp — chromatic split on
+      // legible numbers around the HUD makes them harder to read.
+      chromatic?: boolean
     } = {},
   ): void {
-    const layer = this.layer
+    const layer = opts.chromatic
+      ? this.textLayerChromatic
+      : this.textLayerCrisp
     if (!layer) return
     const t = new Text({
       text,
