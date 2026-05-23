@@ -37,10 +37,13 @@ export function PhaseBanner() {
   const idRef = useRef(0)
   const lastStyleRef = useRef<BannerStyle | null>(null)
 
-  // Track the board's on-screen center so the banner can be visually anchored
-  // to it rather than to the viewport center (which felt off when the board
-  // sits below the header). ResizeObserver catches the canvas appearing
-  // post-mount; window resize covers layout shifts.
+  // Track the board's vertical on-screen center so the banner sits over the
+  // board, not over empty header space. Horizontal positioning is left to
+  // CSS (left: 50%): the board is already horizontally centered by the
+  // page layout, and overriding X here via getBoundingClientRect was
+  // causing a slight sub-pixel offset on mobile through the canvas-scaling
+  // chain. ResizeObserver catches the canvas appearing post-mount; window
+  // resize covers layout shifts.
   useEffect(() => {
     const el = document.getElementById(BOARD_MOUNT_ID)
     if (!el) return
@@ -103,19 +106,25 @@ export function PhaseBanner() {
 
   if (!active) return null
 
+  // Wrapper handles centering via flexbox (rock-solid across browsers),
+  // banner inside is just inline-block content. Previously used position:
+  // fixed + transform: translate(-50%) on the banner itself, but iOS
+  // Chrome/Safari rendered that with a fractional rightward offset that
+  // came from compositor-layer rounding interacting with the scale
+  // animation. Flexbox layout sidesteps that math entirely.
   return (
     <div
-      key={active.id}
-      className={`phase-banner phase-banner-${active.style}`}
-      role="status"
-      aria-live="polite"
-      style={
-        boardCenter
-          ? { left: `${boardCenter.x}px`, top: `${boardCenter.y}px` }
-          : undefined
-      }
+      className="phase-banner-anchor"
+      style={boardCenter ? { top: `${boardCenter.y}px` } : undefined}
     >
-      <span className="phase-banner-text">{active.label}</span>
+      <div
+        key={active.id}
+        className={`phase-banner phase-banner-${active.style}`}
+        role="status"
+        aria-live="polite"
+      >
+        <span className="phase-banner-text">{active.label}</span>
+      </div>
     </div>
   )
 }

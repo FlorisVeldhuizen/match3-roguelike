@@ -1225,22 +1225,22 @@ body::before {
 @keyframes phase-banner-in {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.6);
+    transform: scale(0.6);
     letter-spacing: 0.08em;
   }
   20% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.05);
+    transform: scale(1.05);
     letter-spacing: 0.22em;
   }
   70% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
     letter-spacing: 0.24em;
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
     letter-spacing: 0.28em;
   }
 }
@@ -1251,12 +1251,24 @@ body::before {
   100% { transform: translateX(110%); opacity: 0; }
 }
 
-.phase-banner {
+/* Anchor wraps the banner in a fixed-position flex container so the banner
+   itself can be a normal layout element. Flex-based centering avoids the
+   sub-pixel rounding that transform-based centering produced on iOS. The
+   anchor's `top` is set inline from boardCenter.y; translateY(-50%) on the
+   anchor places its center at that line. */
+.phase-banner-anchor {
   position: fixed;
   top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
   z-index: 9;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+}
+
+.phase-banner {
   pointer-events: none;
   padding: clamp(0.6rem, 2vw, 1rem) clamp(1.1rem, 4.5vw, 2.8rem);
   border-radius: 0.4rem;
@@ -2866,6 +2878,16 @@ body:has(.game-over-overlay) .intent-tooltip {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   animation: splash-prompt-pulse 2.2s ease-in-out infinite;
+}
+
+/* Touch-only hint. Subtle enough that desktop users wouldn't notice it
+   even if it weren't gated, but the JS only renders it on touch devices. */
+.splash-hint {
+  font-size: clamp(0.7rem, 1.7vw, 0.82rem);
+  margin: 1.2rem 0 0;
+  color: var(--parchment-dim);
+  opacity: 0.65;
+  letter-spacing: 0.04em;
 }
 
 @keyframes splash-in {
