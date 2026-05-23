@@ -119,8 +119,16 @@ function intensity(amount: number): number {
 }
 
 let ctx: AudioContext | null = null
+// Browsers (esp. on fresh domains without a Media Engagement Index) require a
+// user gesture before an AudioContext can leave the "suspended" state. The
+// board-intro animation fires drop SFX before the player has interacted, so
+// without this gate the context would be created suspended and every sound
+// scheduled into it — including the intro drops — would be silently dropped.
+// Defer context creation until the first gesture so it's born "running".
+let userInteracted = false
 function getCtx(): AudioContext | null {
   if (ctx) return ctx
+  if (!userInteracted) return null
   try {
     const Ctx =
       window.AudioContext ??
@@ -135,6 +143,21 @@ function getCtx(): AudioContext | null {
   } catch {
     return null
   }
+}
+
+if (typeof window !== 'undefined') {
+  const onFirstGesture = (): void => {
+    userInteracted = true
+    const c = getCtx()
+    // If the browser still created it suspended (some Safari paths), resume.
+    if (c && c.state === 'suspended') void c.resume()
+    window.removeEventListener('pointerdown', onFirstGesture)
+    window.removeEventListener('keydown', onFirstGesture)
+    window.removeEventListener('touchstart', onFirstGesture)
+  }
+  window.addEventListener('pointerdown', onFirstGesture)
+  window.addEventListener('keydown', onFirstGesture)
+  window.addEventListener('touchstart', onFirstGesture)
 }
 
 // Final output for all synths — routes through the master gain so volume
@@ -1070,26 +1093,26 @@ export function playCascadeCelebrationSfx(levels: number): void {
   synthCascadeCelebration(levels)
 }
 
-// Begin-of-turn chime — soft two-note "doorbell" (root → fifth). Sits a full
-// octave below the cascade chime (E4 base, 330 Hz) so it occupies its own
-// register and reads as "your turn" rather than "cascade resolved". Same
-// music-box harmonic palette (sine 1:2:4) as cascade chime so it feels like
-// the same instrument family, just lower and softer.
-function synthTurnStart(): void {
+// --- Turn-start variants ---
+// Begin-of-turn cue for "Your Turn". Originally a soft two-note doorbell
+// (E4→B4) but felt too quiet/unclear, so we expose a few alternatives via
+// the picker. All sit a full octave below the cascade chime so they occupy
+// their own register and read as "your turn" rather than "cascade resolved".
+// Same music-box sine palette as the cascade chime to keep the cue family
+// coherent.
+
+// Doorbell (original baseline): soft two-note ascending fifth (E4 → B4),
+// slow 25ms attack. Read as "calm pickup" rather than "alert".
+function synthTurnStartDoorbell(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
-  // Light per-call jitter on the gap so consecutive turns don't sample-loop.
   const gap = 0.085 + (Math.random() - 0.5) * 0.01
-  // Two notes: root then fifth above. Frequencies pinned (musical) but the
-  // partial mix and decay jitter so the timbre breathes between turns.
   const notes: [number, number][] = [
-    [330, 0], // E4, downbeat
-    [494, gap], // B4, upper fifth
+    [330, 0],
+    [494, gap],
   ]
   for (const [freq, offset] of notes) {
-    // Harmonic partials — same 1:2:4 ratio used by cascade chime, but quieter
-    // and with a slower attack so the cue reads as "soft" rather than "ping".
     const partials: [number, number, number][] = [
       [1.0, 0.06, 520],
       [2.0, 0.02, 280],
@@ -1114,9 +1137,363 @@ function synthTurnStart(): void {
   }
 }
 
+// Triad (LOCKED IN): three-note ascending major triad (A4 → C#5 → E5).
+// Brighter register than doorbell, faster (~12ms) attack so it reads as
+// "alert" instead of "lullaby". The unmistakable triadic ascent gives
+// clarity without volume. Picker UI removed; setTurnStartVariant() still
+// reaches the alternatives if we want to re-audition.
+function synthTurnStartTriad(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const baseFreq = 440 // A4
+  // Major triad: root → major third → perfect fifth.
+  const RATIOS = [1.0, 5 / 4, 3 / 2]
+  const stagger = 0.065 + (Math.random() - 0.5) * 0.01
+  for (let i = 0; i < RATIOS.length; i++) {
+    const ratio = RATIOS[i]
+    if (ratio === undefined) continue
+    const t = now + stagger * i
+    const isLast = i === RATIOS.length - 1
+    const decayMul = isLast ? 1.6 : 1.0
+    const partials: [number, number, number][] = [
+      [1.0, 0.07, 380 * decayMul],
+      [2.0, 0.025, 220 * decayMul],
+      [4.0, 0.008, 110 * decayMul],
+    ]
+    const attackTime = 0.012 * jitter(0.25)
+    for (const [pRatio, peak, decay] of partials) {
+      const osc = c.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = baseFreq * ratio * pRatio
+      const peakJ = peak * jitter(0.18)
+      const decayS = (decay / 1000) * jitter(0.15)
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(peakJ, t + attackTime)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decayS)
+      osc.connect(g).connect(out(c))
+      osc.start(t)
+      osc.stop(t + decayS + 0.02)
+    }
+  }
+}
+
+// Bell: single struck note (A4) with classic bell partials. Decays long
+// enough to feel like a "bell rang" rather than a tap. Strikes once,
+// rings out — clearest possible "turn started" signal because there's
+// nothing else competing.
+function synthTurnStartBell(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const baseFreq = 440 * jitter(0.02)
+  // Inharmonic bell partials — ratios drawn from a struck-metal model.
+  // 2.756 and 5.404 give the "ringing bell" character without committing
+  // to a full church-bell decay.
+  const partials: [number, number, number][] = [
+    [1.0, 0.1, 700],
+    [2.0, 0.04, 400],
+    [2.756, 0.025, 320],
+    [5.404, 0.012, 180],
+  ]
+  const attackTime = 0.004
+  for (const [ratio, peak, decay] of partials) {
+    const osc = c.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = baseFreq * ratio
+    const peakJ = peak * jitter(0.15)
+    const decayS = (decay / 1000) * jitter(0.12)
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, now)
+    g.gain.exponentialRampToValueAtTime(peakJ, now + attackTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + decayS)
+    osc.connect(g).connect(out(c))
+    osc.start(now)
+    osc.stop(now + decayS + 0.02)
+  }
+}
+
+export const TURN_START_VARIANTS = ['doorbell', 'triad', 'bell'] as const
+export type TurnStartVariant = (typeof TURN_START_VARIANTS)[number]
+const TURN_START_VARIANT_KEY = 'turn-start-variant'
+const DEFAULT_TURN_START_VARIANT: TurnStartVariant = 'triad'
+
+function readTurnStartVariant(): TurnStartVariant {
+  try {
+    const v = localStorage.getItem(TURN_START_VARIANT_KEY) as TurnStartVariant | null
+    if (v && (TURN_START_VARIANTS as readonly string[]).includes(v)) return v
+  } catch {
+    // localStorage unavailable
+  }
+  return DEFAULT_TURN_START_VARIANT
+}
+
+let turnStartVariant: TurnStartVariant = readTurnStartVariant()
+const turnStartVariantListeners = new Set<(v: TurnStartVariant) => void>()
+
+export function getTurnStartVariant(): TurnStartVariant {
+  return turnStartVariant
+}
+
+export function setTurnStartVariant(v: TurnStartVariant): void {
+  turnStartVariant = v
+  try {
+    localStorage.setItem(TURN_START_VARIANT_KEY, v)
+  } catch {
+    // no-op
+  }
+  for (const l of turnStartVariantListeners) l(v)
+}
+
+export function subscribeTurnStartVariant(
+  listener: (v: TurnStartVariant) => void,
+): () => void {
+  turnStartVariantListeners.add(listener)
+  return () => {
+    turnStartVariantListeners.delete(listener)
+  }
+}
+
+function synthTurnStartForVariant(v: TurnStartVariant): void {
+  switch (v) {
+    case 'doorbell':
+      return synthTurnStartDoorbell()
+    case 'triad':
+      return synthTurnStartTriad()
+    case 'bell':
+      return synthTurnStartBell()
+  }
+}
+
 export function playTurnStartSfx(): void {
   if (muted) return
-  synthTurnStart()
+  synthTurnStartForVariant(turnStartVariant)
+}
+
+// Audition — bypasses mute so the picker isn't silent on mute.
+export function previewTurnStartVariant(v: TurnStartVariant): void {
+  synthTurnStartForVariant(v)
+}
+
+// --- Enemy-turn variants ---
+// New cue announcing the "Enemy Turn" banner. Inverted palette versus the
+// turn-start cue: down + dark + weighted, instead of up + bright + airy.
+// Same sine partial family as the rest of the audio so it sits in the same
+// "instrument world" — just darker.
+
+// Descend (LOCKED IN): minor third descending in the low register
+// (A3 → F3) on sine partials, with a sub-thud (~80 Hz) anchor at the
+// downbeat. The slight detune on the upper partial gives a barely-audible
+// beat — dread without horror-movie cheese. Picker UI removed;
+// setEnemyTurnVariant() still reaches the alternatives.
+function synthEnemyTurnDescend(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const gap = 0.1 + (Math.random() - 0.5) * 0.012
+  // A3 → F3 (descending minor third). Pinned musically; per-call pitch
+  // wobble lives in the detuned partial below.
+  const notes: [number, number][] = [
+    [220, 0],
+    [174.6, gap],
+  ]
+  for (const [freq, offset] of notes) {
+    // Two sine partials: fundamental and octave, plus a slightly detuned
+    // octave (+6 cents) to give a soft beat.
+    const partials: [number, number, number][] = [
+      [1.0, 0.09, 340],
+      [2.0, 0.025, 200],
+    ]
+    const attackTime = 0.018 * jitter(0.2)
+    const t = now + offset
+    for (const [ratio, peak, decay] of partials) {
+      const osc = c.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = freq * ratio
+      const peakJ = peak * jitter(0.15)
+      const decayS = (decay / 1000) * jitter(0.12)
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(peakJ, t + attackTime)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decayS)
+      osc.connect(g).connect(out(c))
+      osc.start(t)
+      osc.stop(t + decayS + 0.02)
+    }
+    // Detuned octave — slightly sharp (~+6 cents = factor 1.00347) so it
+    // beats against the clean octave at ~1 Hz, giving a soft pulse.
+    const detune = c.createOscillator()
+    detune.type = 'sine'
+    detune.frequency.value = freq * 2.0 * 1.00347
+    const dg = c.createGain()
+    dg.gain.setValueAtTime(0.0001, t)
+    dg.gain.exponentialRampToValueAtTime(0.015, t + 0.02)
+    dg.gain.exponentialRampToValueAtTime(0.0001, t + 0.22)
+    detune.connect(dg).connect(out(c))
+    detune.start(t)
+    detune.stop(t + 0.24)
+  }
+  // Sub-thud anchor: brief ~80 Hz sine pulse at the downbeat for weight.
+  const sub = c.createOscillator()
+  sub.type = 'sine'
+  sub.frequency.setValueAtTime(95 * jitter(0.08), now)
+  sub.frequency.exponentialRampToValueAtTime(60, now + 0.14)
+  const sg = c.createGain()
+  sg.gain.setValueAtTime(0.0001, now)
+  sg.gain.exponentialRampToValueAtTime(0.12 * jitter(0.18), now + 0.005)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
+  sub.connect(sg).connect(out(c))
+  sub.start(now)
+  sub.stop(now + 0.18)
+}
+
+// Stab: sharp downward saw stab from F3 → C3, lowpassed to keep it from
+// being harsh. Most "incoming threat" of the variants — single gesture, no
+// ringing tail. Reads as a brass stab without the brass timbre.
+function synthEnemyTurnStab(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const dur = 0.32 * jitter(0.1)
+  const startFreq = 175 * jitter(0.06) // ~F3
+  const endFreq = 130 * jitter(0.06) // ~C3
+  const osc = c.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(startFreq, now)
+  osc.frequency.exponentialRampToValueAtTime(endFreq, now + dur * 0.6)
+  // Lowpass with descending cutoff — opens, then closes, so the timbre
+  // darkens as the pitch falls. Q kept low so it doesn't whistle.
+  const lp = c.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.Q.value = 1.4
+  lp.frequency.setValueAtTime(1400 * jitter(0.1), now)
+  lp.frequency.exponentialRampToValueAtTime(500, now + dur)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, now)
+  g.gain.exponentialRampToValueAtTime(0.18 * jitter(0.15), now + 0.012)
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+  osc.connect(lp).connect(g).connect(out(c))
+  osc.start(now)
+  osc.stop(now + dur + 0.02)
+  // Sub-thud — same anchor as descend, gives the stab weight.
+  const sub = c.createOscillator()
+  sub.type = 'sine'
+  sub.frequency.setValueAtTime(85 * jitter(0.08), now)
+  sub.frequency.exponentialRampToValueAtTime(55, now + 0.12)
+  const sg = c.createGain()
+  sg.gain.setValueAtTime(0.0001, now)
+  sg.gain.exponentialRampToValueAtTime(0.1, now + 0.005)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+  sub.connect(sg).connect(out(c))
+  sub.start(now)
+  sub.stop(now + 0.16)
+}
+
+// Dread: tritone (A3 + Eb4) struck together on sine partials, no descent,
+// no movement — just an unresolved interval ringing. Most "ominous" of the
+// variants, but stays musical because the partials are pure sines, not
+// detuned/distorted.
+function synthEnemyTurnDread(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  // A3 + Eb4 — augmented fourth / tritone, the classic unresolved interval.
+  const freqs = [220 * jitter(0.02), 311.1 * jitter(0.02)]
+  for (const freq of freqs) {
+    const partials: [number, number, number][] = [
+      [1.0, 0.08, 420],
+      [2.0, 0.022, 240],
+    ]
+    const attackTime = 0.022
+    for (const [ratio, peak, decay] of partials) {
+      const osc = c.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = freq * ratio
+      const peakJ = peak * jitter(0.15)
+      const decayS = (decay / 1000) * jitter(0.12)
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, now)
+      g.gain.exponentialRampToValueAtTime(peakJ, now + attackTime)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + decayS)
+      osc.connect(g).connect(out(c))
+      osc.start(now)
+      osc.stop(now + decayS + 0.02)
+    }
+  }
+  // Sub-anchor — same weight as descend/stab, ties the family together.
+  const sub = c.createOscillator()
+  sub.type = 'sine'
+  sub.frequency.setValueAtTime(73.4 * jitter(0.06), now) // D2-ish
+  sub.frequency.exponentialRampToValueAtTime(55, now + 0.18)
+  const sg = c.createGain()
+  sg.gain.setValueAtTime(0.0001, now)
+  sg.gain.exponentialRampToValueAtTime(0.1, now + 0.006)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.2)
+  sub.connect(sg).connect(out(c))
+  sub.start(now)
+  sub.stop(now + 0.22)
+}
+
+export const ENEMY_TURN_VARIANTS = ['descend', 'stab', 'dread'] as const
+export type EnemyTurnVariant = (typeof ENEMY_TURN_VARIANTS)[number]
+const ENEMY_TURN_VARIANT_KEY = 'enemy-turn-variant'
+const DEFAULT_ENEMY_TURN_VARIANT: EnemyTurnVariant = 'descend'
+
+function readEnemyTurnVariant(): EnemyTurnVariant {
+  try {
+    const v = localStorage.getItem(ENEMY_TURN_VARIANT_KEY) as EnemyTurnVariant | null
+    if (v && (ENEMY_TURN_VARIANTS as readonly string[]).includes(v)) return v
+  } catch {
+    // localStorage unavailable
+  }
+  return DEFAULT_ENEMY_TURN_VARIANT
+}
+
+let enemyTurnVariant: EnemyTurnVariant = readEnemyTurnVariant()
+const enemyTurnVariantListeners = new Set<(v: EnemyTurnVariant) => void>()
+
+export function getEnemyTurnVariant(): EnemyTurnVariant {
+  return enemyTurnVariant
+}
+
+export function setEnemyTurnVariant(v: EnemyTurnVariant): void {
+  enemyTurnVariant = v
+  try {
+    localStorage.setItem(ENEMY_TURN_VARIANT_KEY, v)
+  } catch {
+    // no-op
+  }
+  for (const l of enemyTurnVariantListeners) l(v)
+}
+
+export function subscribeEnemyTurnVariant(
+  listener: (v: EnemyTurnVariant) => void,
+): () => void {
+  enemyTurnVariantListeners.add(listener)
+  return () => {
+    enemyTurnVariantListeners.delete(listener)
+  }
+}
+
+function synthEnemyTurnForVariant(v: EnemyTurnVariant): void {
+  switch (v) {
+    case 'descend':
+      return synthEnemyTurnDescend()
+    case 'stab':
+      return synthEnemyTurnStab()
+    case 'dread':
+      return synthEnemyTurnDread()
+  }
+}
+
+export function playEnemyTurnSfx(): void {
+  if (muted) return
+  synthEnemyTurnForVariant(enemyTurnVariant)
+}
+
+export function previewEnemyTurnVariant(v: EnemyTurnVariant): void {
+  synthEnemyTurnForVariant(v)
 }
 
 // Extra-turn chime — a 4-note ascending major arpeggio (root → 3rd → 5th →
@@ -2176,6 +2553,11 @@ export function installSfxBindings(): void {
   let lastPlayerUnblocked = 1
   let lastEnemyBlocked = 1
   let lastEnemyUnblocked = 1
+  // Tracks when the enemy-turn cue last fired so we can suppress the
+  // immediately-following player-turn cue when the enemy gets staggered
+  // (or otherwise skips). performance.now() is monotonic; -Infinity means
+  // "never fired", so the first player-turn cue is never suppressed.
+  let lastEnemyTurnCueAt = -Infinity
   const FALL_MIN_MS = 150
   const FALL_PER_CELL_MS = 80
   const scheduleDrop = (maxDist: number) => {
@@ -2399,12 +2781,24 @@ export function installSfxBindings(): void {
         return
       case 'phase-changed':
         if (event.phase === 'victory') playVictorySfx()
-        // Begin-of-turn doorbell on every transition back to player-acting.
-        // Note: the very first turn of a fight is set up without emitting a
-        // phase-changed event (initial state is constructed directly), so
-        // the chime first fires from turn 2 onward — fine, since the player
-        // already has visual context that the fight started.
-        else if (event.phase === 'player-acting') playTurnStartSfx()
+        else if (event.phase === 'enemy-acting') {
+          playEnemyTurnSfx()
+          lastEnemyTurnCueAt = performance.now()
+        }
+        // Begin-of-turn cue on every transition back to player-acting. The
+        // very first turn of a fight is set up without emitting a phase-
+        // changed event (initial state is constructed directly), so the cue
+        // first fires from turn 2 onward — fine, since the player already
+        // has visual context that the fight started.
+        //
+        // Suppress when the enemy cue just fired (stagger / instant-skip
+        // turns): playing two opposite cues in <600ms is audibly awkward,
+        // and the "Staggered" banner already tells the story. Player gets
+        // their turn back silently in that case.
+        else if (event.phase === 'player-acting') {
+          const sinceEnemy = performance.now() - lastEnemyTurnCueAt
+          if (sinceEnemy > 700) playTurnStartSfx()
+        }
         return
       default:
         return

@@ -2804,3 +2804,113 @@ body:has(.game-over-overlay) .intent-tooltip {
   color: var(--parchment);
 }
 
+/* Splash overlay — sits above everything except global toast/aria-live, so
+   it covers HUD, board, banners. Behind it, ArcaneBackground keeps running
+   so the smoke is already animated when the splash dismisses. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Semi-opaque ink veil so the running background reads as "atmospheric"
+     rather than visible game-state behind a transparent overlay. */
+  background: radial-gradient(
+      ellipse at center,
+      rgba(11, 8, 5, 0.55) 0%,
+      rgba(11, 8, 5, 0.88) 70%
+    ),
+    rgba(11, 8, 5, 0.5);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  animation: splash-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.splash.is-leaving {
+  animation: splash-out 260ms ease-in forwards;
+  pointer-events: none;
+}
+
+.splash-inner {
+  text-align: center;
+  padding: 1.5rem;
+  /* Bouncy entry (ζ≈0.42 feel) on the inner block — title and tagline
+     ride along with one transform so the cluster moves together. */
+  animation: splash-title-in 700ms cubic-bezier(0.18, 1.4, 0.4, 1) both;
+}
+
+.splash-title {
+  font-family: 'Paytone One', system-ui, sans-serif;
+  font-size: clamp(2.6rem, 8vw, 5.5rem);
+  letter-spacing: 0.04em;
+  margin: 0 0 0.4rem;
+  color: var(--gold-2);
+  text-shadow: 0 0 24px rgba(200, 163, 90, 0.35),
+    0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.splash-tagline {
+  font-size: clamp(0.85rem, 2.2vw, 1.05rem);
+  margin: 0 0 2rem;
+  color: var(--parchment-dim);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.splash-prompt {
+  font-size: clamp(0.9rem, 2.4vw, 1.1rem);
+  margin: 0;
+  color: var(--gold-1);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  animation: splash-prompt-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes splash-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes splash-title-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-prompt-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .splash-inner,
+  .splash-prompt {
+    animation-duration: 0ms;
+  }
+}

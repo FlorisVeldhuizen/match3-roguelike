@@ -12,6 +12,7 @@ import { CRTOverlay } from './components/CRTOverlay'
 import { BurningOverlay } from './components/BurningOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
+import { Splash } from './components/Splash'
 import { useGameStore } from '../core/state/store'
 
 export const BOARD_MOUNT_ID = 'board-mount'
@@ -57,6 +58,7 @@ export function App() {
       <PhaseBanner />
       <AriaLiveAnnouncer />
       <CRTOverlay />
+      <Splash />
     </>
   )
 }
