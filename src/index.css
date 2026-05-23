@@ -101,22 +101,38 @@ body::before {
 
 #root {
   min-height: 100vh;
+  /* dvh handles the shrinking address bar on iOS Safari — fallback above. */
+  min-height: 100dvh;
   display: grid;
   place-items: start center;
-  padding: 2rem 1rem;
+  padding:
+    max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
   /* Stacks above body::before (grain veil at z-index: 0). */
   position: relative;
   z-index: 1;
+}
+
+@media (min-width: 760px) {
+  #root {
+    padding: 1rem 1rem 1.25rem;
+  }
 }
 
 .game {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  max-width: 720px;
+  gap: 0.7rem;
+  max-width: 760px;
   width: 100%;
   position: relative;
+  /* No iOS tap-zoom delay on UI controls; no accidental text selection
+     while dragging gems on touch. (.hud-seed re-enables user-select.) */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* --- Header / title --- */
@@ -126,7 +142,7 @@ body::before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.25rem;
+  padding: 0.55rem 1.1rem;
   border-radius: 0.4rem;
   background:
     linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 60%),
@@ -393,8 +409,8 @@ body::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.7rem 1rem 0.8rem;
+  gap: 0.3rem;
+  padding: 0.5rem 0.85rem 0.55rem;
   border-radius: 0.4rem;
   background:
     linear-gradient(180deg, rgba(200, 163, 90, 0.06), transparent 40%),
@@ -687,8 +703,8 @@ body::before {
 }
 
 .enemy-sprite {
-  width: 64px;
-  height: 64px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   /* summoning-circle: ember core, ringed by gold and shadow */
   background:
@@ -718,7 +734,7 @@ body::before {
 }
 
 .enemy-glyph {
-  font-size: 1.9rem;
+  font-size: 1.55rem;
   line-height: 1;
   filter: drop-shadow(0 0 6px rgba(238, 94, 87, 0.35));
 }
@@ -771,8 +787,8 @@ body::before {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.9rem 1.1rem;
+  gap: 0.45rem;
+  padding: 0.6rem 0.9rem 0.7rem;
   background:
     linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 50%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
@@ -821,7 +837,7 @@ body::before {
   position: relative;
   flex: 1;
   min-width: 200px;
-  height: 24px;
+  height: 20px;
   background: var(--ink-0);
   border: 1px solid var(--gold-3);
   border-radius: 3px;
@@ -845,8 +861,8 @@ body::before {
   display: block;
   text-align: center;
   font-family: 'Cinzel', serif;
-  font-size: 0.82rem;
-  line-height: 24px;
+  font-size: 0.78rem;
+  line-height: 20px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
@@ -1567,7 +1583,7 @@ body.vignette-damage::before {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.4rem 0.7rem;
+  padding: 0.32rem 0.7rem;
   background: linear-gradient(180deg, var(--stone-2), var(--ink-2));
   color: var(--parchment);
   border: 1px solid var(--gold-3);
@@ -1713,33 +1729,53 @@ body.vignette-damage::before {
    - Let the spell tray and HUD rows wrap. Keep touch targets ≥ 40px high.
 */
 
+/* Board sizing: the Pixi canvas is 528 logical px square, but we let CSS
+   scale it down when the viewport is short. --board-chrome is everything
+   above + below the board (header, enemy frame, HUD) that we need to leave
+   room for. The min() picks the limiting axis. aspect-ratio + content-box
+   keep the square shape regardless of which axis won. */
 .board-shell {
-  /* Was implicit content-width; now lets the parent constrain it. */
-  max-width: 100%;
+  --board-chrome: 440px;
+  /* Cap a hair above the Pixi logical size (528). CSS upscales the canvas
+     when the viewport allows; the gems still antialias cleanly because
+     autoDensity bakes the canvas at devicePixelRatio.
+     dvh covers iOS's shrinking address bar; vh remains as fallback. */
+  /* max() guards against negative min() results on very short landscape
+     phones — the page can scroll instead of the board collapsing. */
+  width: max(280px, min(640px, calc(100dvh - var(--board-chrome)), 100%));
+  aspect-ratio: 1 / 1;
+  box-sizing: content-box;
+}
+
+/* Mobile portrait: the spell tray + status + HP rows take less stacked
+   space than on desktop, so the board can claim more vertical room. */
+@media (max-width: 760px) {
+  .board-shell {
+    --board-chrome: 360px;
+  }
 }
 
 .board-mount {
   width: 100%;
-  display: flex;
-  justify-content: center;
+  height: 100%;
+  display: block;
 }
 
 .board-mount canvas {
-  max-width: 100% !important;
-  height: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 @media (max-width: 760px) {
-  #root {
-    padding: 0.75rem 0.5rem 1.25rem;
-  }
   .game {
-    gap: 0.6rem;
+    gap: 0.55rem;
   }
   .game-header {
-    padding: 0.5rem 0.7rem;
+    padding: 0.45rem 0.7rem;
     font-size: 0.82rem;
-    gap: 0.5rem;
+    gap: 0.4rem;
     flex-wrap: wrap;
   }
   .hud-build {
@@ -1761,8 +1797,8 @@ body.vignette-damage::before {
   }
 
   .hud {
-    padding: 0.6rem 0.75rem;
-    gap: 0.45rem;
+    padding: 0.55rem 0.7rem 0.65rem;
+    gap: 0.4rem;
   }
   .hud-row {
     gap: 0.5rem;
@@ -1780,23 +1816,29 @@ body.vignette-damage::before {
   }
   .enemy-frame {
     min-width: 130px;
-    padding: 0.5rem 0.7rem 0.6rem;
+    padding: 0.4rem 0.7rem 0.5rem;
   }
 
   .spell-tray {
     gap: 0.4rem;
   }
   .spell-btn {
-    padding: 0.45rem 0.55rem;
+    /* WCAG touch-target floor on phone: 44px. */
+    padding: 0.5rem 0.55rem;
     font-size: 0.72rem;
-    min-height: 40px;
-    flex: 1 1 auto;
+    min-height: 44px;
+    flex: 1 1 0;
     justify-content: center;
   }
   .spell-label {
-    /* Keep labels visible but allow the cost chip to pin to the right. */
     flex: 1 1 auto;
     text-align: left;
+  }
+  /* Keep statuses + pending pips on their own row so the phase label
+     doesn't get shoved off-screen at narrow widths. */
+  .status-chip,
+  .pending-pip {
+    font-size: 0.7rem;
   }
 }
 
@@ -1808,12 +1850,17 @@ body.vignette-damage::before {
   .hud-seed {
     display: none;
   }
+  /* Volume slider eats horizontal room and most phones use system audio
+     anyway — keep the mute toggle as the bare-minimum sound control. */
+  .volume-slider {
+    display: none;
+  }
   .game-header {
-    padding: 0.45rem 0.6rem;
+    padding: 0.4rem 0.55rem;
   }
   .spell-btn {
     font-size: 0.68rem;
-    padding: 0.4rem 0.45rem;
+    padding: 0.45rem 0.4rem;
   }
   .spell-label {
     display: none;
@@ -1826,5 +1873,34 @@ body.vignette-damage::before {
   }
   .resource-label {
     font-size: 0.66rem;
+  }
+  .enemy-sprite {
+    width: 44px;
+    height: 44px;
+  }
+  .enemy-glyph {
+    font-size: 1.3rem;
+  }
+}
+
+/* Landscape phones / short laptops: the board chrome dominates vertical
+   space; tighten everything and let the page scroll when needed. */
+@media (max-height: 520px) {
+  .board-shell {
+    --board-chrome: 320px;
+  }
+  .enemy-row {
+    gap: 0.4rem;
+  }
+  .enemy-frame {
+    min-width: 110px;
+    padding: 0.35rem 0.6rem 0.4rem;
+  }
+  .enemy-sprite {
+    width: 42px;
+    height: 42px;
+  }
+  .enemy-glyph {
+    font-size: 1.25rem;
   }
 }
