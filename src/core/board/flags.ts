@@ -73,6 +73,7 @@ export function tickFlagDuration(
   flag: FlagKey,
 ): TickFlagResult {
   const touched: Pos[] = []
+  const expired: Pos[] = []
   let anyChange = false
   const out: Cell[][] = board.map((row, y) =>
     row.map((cell, x) => {
@@ -81,13 +82,21 @@ export function tickFlagDuration(
       anyChange = true
       touched.push({ x, y })
       const next = (current as number) - 1
-      if (next <= 0) return clearFlag(cell, flag)
+      if (next <= 0) {
+        expired.push({ x, y })
+        return clearFlag(cell, flag)
+      }
       return setFlag(cell, flag, next as NonNullable<CellFlags[FlagKey]>)
     }),
   )
   const events: GameEvent[] = []
   if (anyChange && touched.length > 0) {
-    events.push({ kind: 'cell-flag-ticked', positions: touched, flag })
+    events.push({
+      kind: 'cell-flag-ticked',
+      positions: touched,
+      expired,
+      flag,
+    })
   }
   return { board: anyChange ? out : (board as Cell[][]), events }
 }

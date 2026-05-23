@@ -366,25 +366,29 @@ export function EnemyFrame() {
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
             <div className="enemy-name">{enemy.name}</div>
-            <StatusBar
-              statuses={displayedStatuses[enemy.id] ?? enemy.statuses}
-              tickMarks={statusTickMarks[enemy.id]}
-              className="enemy-statuses"
-            />
-            {/* Always mounted so the slot reserves vertical space — toggling
-                mount on block gain shifted the HP bar down. */}
-            <div
-              className={`enemy-block-badge${
-                !dead && shownBlock > 0 ? '' : ' empty'
-              }`}
-              title="Block"
-              aria-label={
-                !dead && shownBlock > 0 ? `Block ${shownBlock}` : undefined
-              }
-              aria-hidden={dead || shownBlock <= 0}
-            >
-              <span aria-hidden>🛡</span>
-              <span>{shownBlock}</span>
+            {/* Effects row: block badge + status chips share one slot.
+                The block badge is always mounted (.empty when no block) so
+                this row's height is reserved regardless of statuses — adding
+                Burn etc. expands inline without shifting the HP bar down. */}
+            <div className="enemy-effects-row">
+              <div
+                className={`enemy-block-badge${
+                  !dead && shownBlock > 0 ? '' : ' empty'
+                }`}
+                title="Block"
+                aria-label={
+                  !dead && shownBlock > 0 ? `Block ${shownBlock}` : undefined
+                }
+                aria-hidden={dead || shownBlock <= 0}
+              >
+                <span aria-hidden>🛡</span>
+                <span>{shownBlock}</span>
+              </div>
+              <StatusBar
+                statuses={displayedStatuses[enemy.id] ?? enemy.statuses}
+                tickMarks={statusTickMarks[enemy.id]}
+                className="enemy-statuses"
+              />
             </div>
             <div className="enemy-hp-bar" role="img">
               <div className="enemy-hp-fill" style={{ width: `${hpPct}%` }} />

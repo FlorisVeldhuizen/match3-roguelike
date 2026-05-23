@@ -133,7 +133,15 @@ export type GameEvent =
   // active. Total burn stacks = number of burning cells in the cleared set
   // (one stack per cell per match, per 02-scope §Enemies/Smolder).
   | { kind: 'tile-burn-triggered'; cells: Pos[]; stacks: number }
-  | { kind: 'cell-flag-ticked'; positions: Pos[]; flag: keyof CellFlags }
+  // `expired` is the subset of `positions` whose remaining duration just
+  // reached 0 (flag cleared this tick). Lets UI/SFX react to the "burn
+  // fizzled out unmatched" beat without re-deriving it from the board.
+  | {
+      kind: 'cell-flag-ticked'
+      positions: Pos[]
+      expired: Pos[]
+      flag: keyof CellFlags
+    }
   | { kind: 'block-gained'; amount: number }
   | { kind: 'enemy-block-gained'; enemyId: string; amount: number }
   | { kind: 'block-absorbed'; targetId: 'player' | string }

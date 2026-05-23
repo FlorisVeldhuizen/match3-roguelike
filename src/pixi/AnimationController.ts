@@ -5,22 +5,23 @@ import { tweenClear } from './animations/clear'
 import { tweenDrop } from './animations/drop'
 import { emitGameEvent } from '../core/events/emitter'
 import { statusKindFromDamageSource } from '../core/combat/statuses'
-import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../timing'
+import {
+  TRAIL_ARRIVAL_MS,
+  scheduleAtTrailArrival,
+  SWAP_MS,
+  DROP_PER_CELL_MS,
+  DROP_MIN_FALL_MS,
+} from '../timing'
 import {
   elementCenter,
   type Attractor,
   type OverlayScene,
 } from './OverlayScene'
 
-// Per-cell visual timings.
-const SWAP_MS = 200
+// Per-cell visual timings. SWAP_MS, DROP_PER_CELL_MS, and DROP_MIN_FALL_MS
+// live in ../timing so HTML cell-anchored overlays can mirror the same
+// motion windows as the gem sprites.
 const CLEAR_MS = 280
-const DROP_PER_CELL_MS = 45
-// Minimum fall portion (gem in flight) before the bounce window. We let
-// fall time scale with distance so a column of gems lands in cascade —
-// short drops finish and start bouncing before longer drops touch down.
-// This floor only prevents pathologically fast 1-frame falls.
-const DROP_MIN_FALL_MS = 65
 // Position-derived per-gem start delay (0–24ms). Same-distance falls
 // would otherwise land in synchronized batches; this small offset
 // desynchronizes them so each gem reads as its own landing instead of

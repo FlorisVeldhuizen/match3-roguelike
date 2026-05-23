@@ -141,6 +141,24 @@ export function executeEnemyTurn(
             events.push({ kind: 'enemy-killed', enemyId: updatedEnemy.id })
           }
         }
+        // Reflect the attack's onHit rider back at the attacker — Smolder's
+        // burn-on-hit becomes burn-on-counter. Same gate as the player-hit
+        // path: rider only fires when the counter actually lands HP damage,
+        // and not on an already-dead enemy.
+        const onHit = intent.onHit
+        if (onHit && res.hpDamage > 0 && updatedEnemy.hp > 0) {
+          const newStatus = { kind: onHit.status, stacks: onHit.stacks }
+          updatedEnemy = {
+            ...updatedEnemy,
+            statuses: applyStatusToList(updatedEnemy.statuses, newStatus),
+          }
+          events.push({
+            kind: 'status-applied',
+            target: updatedEnemy.id,
+            status: newStatus,
+            source: { kind: 'player' },
+          })
+        }
         nextPlayer = {
           ...nextPlayer,
           pendingSpells: nextPlayer.pendingSpells.filter((id) => id !== 'riposte'),

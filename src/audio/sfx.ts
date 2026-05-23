@@ -2025,6 +2025,55 @@ function synthBurnApply(): void {
   }
 }
 
+// Burn fizzle: a burning tile's countdown ran out without being matched.
+// Sibilant "ssss." — noise focused in the /s/ phoneme band (~6–7 kHz)
+// so the cue reads as a vocal "hiss-stop" rather than a generic wash.
+// Quiet by design: this is a non-event from the player's perspective
+// (threat passed, no damage), so it sits well below the per-match cues
+// that run on the same beat.
+function synthBurnFizzle(count: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(count)
+
+  // Highpass with a slight downward sweep on the cutoff (6.5 → 3.5 kHz
+  // over 800ms). Starts brightly sibilant, dims into a softer hiss as
+  // it dies — the audio analogue of the smoke wisp losing energy.
+  const noise = makeNoiseBurst(c)
+  const hp = c.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.setValueAtTime(6500 * jitter(0.06), now)
+  hp.frequency.exponentialRampToValueAtTime(3500 * jitter(0.06), now + 0.8)
+  hp.Q.value = 0.9
+
+  // Peaking boost at ~6.8 kHz adds the focused resonance that makes
+  // noise read as a spoken /s/ rather than wash. +6 dB with moderate Q
+  // is enough character without becoming a whistle.
+  const peak = c.createBiquadFilter()
+  peak.type = 'peaking'
+  peak.frequency.value = 6800 * jitter(0.05)
+  peak.gain.value = 6
+  peak.Q.value = 1.8
+
+  // Multi-stage envelope: attack → gentle initial decay → sustained
+  // body → soft mid-tail → final fade. Splitting into smaller per-
+  // stage ratios (~2× each) keeps the perceived fade linear; a single
+  // long exponentialRamp from peak to silence would dump most of the
+  // audible energy in the first 100ms and read as "cut off" no matter
+  // how long the stop time is.
+  const ng = c.createGain()
+  ng.gain.setValueAtTime(0.0001, now)
+  ng.gain.exponentialRampToValueAtTime(0.07 * jitter(0.15) * I, now + 0.025)
+  ng.gain.exponentialRampToValueAtTime(0.05 * I, now + 0.2)
+  ng.gain.exponentialRampToValueAtTime(0.025 * I, now + 0.45)
+  ng.gain.exponentialRampToValueAtTime(0.008 * I, now + 0.72)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.95)
+  noise.connect(hp).connect(peak).connect(ng).connect(out(c))
+  noise.start(now)
+  noise.stop(now + 0.97)
+}
+
 export function playBurnIgniteSfx(count = 1): void {
   if (muted) return
   synthBurnIgnite(count)
@@ -2038,6 +2087,11 @@ export function playBurnBurstSfx(): void {
 export function playBurnApplySfx(): void {
   if (muted) return
   synthBurnApply()
+}
+
+export function playBurnFizzleSfx(count = 1): void {
+  if (muted) return
+  synthBurnFizzle(count)
 }
 
 // Burn DoT impact — the "hit" beat when a burn-tick damage event lands
@@ -2310,6 +2364,15 @@ export function installSfxBindings(): void {
         // unsatisfying thwack.
         for (let i = 0; i < event.cells.length; i++) {
           window.setTimeout(playBurnBurstSfx, i * 35)
+        }
+        return
+      case 'cell-flag-ticked':
+        // Soft "fizzle out" cue when a burning tile's countdown reached
+        // 0 unmatched. One cue per tick regardless of how many cells
+        // expired (the visual already shows N puffs); a single hiss
+        // scaled by count keeps the audio bed clean at end-of-turn.
+        if (event.flag === 'burning' && event.expired.length > 0) {
+          playBurnFizzleSfx(event.expired.length)
         }
         return
       case 'status-applied':

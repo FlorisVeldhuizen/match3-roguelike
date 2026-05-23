@@ -60,6 +60,32 @@ describe('tickFlagDuration', () => {
     expect(hasFlag(ticked[0]?.[0], 'burning')).toBe(false)
   })
 
+  it('reports expired positions on the tick event', () => {
+    // (0,0) and (1,1) expire this tick (duration 1 → 0); (1,0) survives
+    // with duration 2 remaining, so `expired` is a strict subset of
+    // `positions`.
+    let board = mkBoard()
+    board = applyFlagToCells(
+      board,
+      [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      'burning',
+      1,
+    )
+    board = applyFlagToCells(board, [{ x: 1, y: 0 }], 'burning', 3)
+    const { events } = tickFlagDuration(board, 'burning')
+    const event = events[0]
+    expect(event?.kind).toBe('cell-flag-ticked')
+    if (event?.kind !== 'cell-flag-ticked') throw new Error('unreachable')
+    expect(event.positions).toHaveLength(3)
+    expect(event.expired).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ])
+  })
+
   it('is a no-op when nothing is flagged', () => {
     const board = mkBoard()
     const { board: ticked, events } = tickFlagDuration(board, 'burning')

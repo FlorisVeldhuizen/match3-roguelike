@@ -1,3 +1,17 @@
+/* font-display: block (not swap) — Pixi.Text bakes a fallback into the
+   texture on construction and never re-renders, so swap is worse than
+   block for popup glyphs. */
+@font-face {
+  font-family: 'Paytone One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/paytone-one-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* Visually-hidden — used for aria-live regions. */
 .sr-only {
   position: absolute;
@@ -144,10 +158,6 @@ body::before {
   align-items: center;
   padding: 0.55rem 1.1rem;
   border-radius: 0.4rem;
-  /* Stacking context so the relic-tray tooltip can rise above EnemyFrame
-     and the Pixi board canvas sitting in later siblings. */
-  position: relative;
-  z-index: 8;
   background:
     linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 60%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
@@ -642,10 +652,11 @@ body::before {
   box-shadow: 0 0 10px rgba(91, 143, 209, 0.18);
 }
 
-/* Reserves the badge's slot when the enemy has no block, so gaining block
-   doesn't push the HP bar down. visibility:hidden keeps layout intact. */
+/* The row itself reserves vertical space via .enemy-effects-row min-height,
+   so we can collapse the empty badge out of horizontal flow — otherwise a
+   lone status chip (e.g. Burn applied by Riposte) sits off-center. */
 .enemy-block-badge.empty {
-  visibility: hidden;
+  display: none;
 }
 
 .enemy-frame.targeted {
@@ -1798,7 +1809,21 @@ body.vignette-damage::before {
 }
 
 .enemy-statuses {
-  margin-top: 0.2rem;
+  /* No margin/min-height: the chips ride in the always-reserved
+     .enemy-effects-row alongside the block badge, so the slot height
+     already exists whether or not any status is active. */
+}
+
+.enemy-effects-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  /* Reserve one badge's worth of height even when row is empty, so the
+     HP bar doesn't shift up/down based on whether block or statuses exist.
+     Matches the rendered block-badge height (~0.78rem font + padding + border). */
+  min-height: 1.4rem;
 }
 
 .intent-tooltip-preview {
@@ -2088,12 +2113,9 @@ body.vignette-damage::before {
   font-size: clamp(1rem, 4.5vmin, 1.7rem);
   filter: drop-shadow(0 0 6px var(--ember-glow));
   animation: burning-pulse 1.3s ease-in-out infinite;
-  /* Slide with the gem during swap/gravity. 220ms ≈ the SWAP_MS
-     constant in BoardScene (200ms) plus a smidge to feel rooted to
-     the gem rather than racing it. */
-  transition:
-    left 220ms cubic-bezier(0.4, 0.0, 0.2, 1),
-    top 220ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  /* `transition` is set inline per-instance by BurningOverlay so the
+     flame slides on the same window as the gem sprite (swap = SWAP_MS,
+     fall = fallDurationMs(distance) — see useAnimatedCellPositions). */
   /* Click-through: the overlay must not block pointer events to the
      Pixi canvas underneath, or burning tiles become unselectable.
      The persistent Burn chip on the HUD owns the "what does this do"
@@ -2309,13 +2331,62 @@ body.vignette-damage::before {
   100% { transform: translate(-100%, 32%) scale(1.15) rotate(-52deg); opacity: 0; }
 }
 
+/* Smoke-puff "fizzle" overlay — plays when a burning tile's countdown
+   reaches 0 without being matched into. Distinct from the .is-fizzling
+   modifier on the *flame* (which flickers the still-present flame on
+   its final turn). This is the post-expiry beat: tiny grey wisp drifts
+   up-and-out so the player notices the threat passed. */
+.burning-fizzle {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.fizzle-smoke {
+  position: absolute;
+  font-size: clamp(0.95rem, 4.2vmin, 1.55rem);
+  /* Desaturate + lift the grey so the smoke reads cooler than the
+     flame's warm palette — sells "fire is out". */
+  filter: grayscale(0.7) brightness(1.05) drop-shadow(0 0 4px rgba(200, 200, 200, 0.35));
+  opacity: 0;
+  animation: fizzle-smoke-anim 650ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes fizzle-smoke-anim {
+  /* The 💨 glyph is drawn horizontally (tail on the right, head on the
+     left). Rotating -90° throughout points the head UPWARD so it reads
+     as a wisp drifting up rather than a side gust. The small delta
+     around -90° across keyframes layers a gentle wobble without
+     disturbing the upward orientation. */
+  0% {
+    transform: translate(0, 0) scale(0.55) rotate(-96deg);
+    opacity: 0;
+  }
+  22% {
+    transform: translate(2%, -18%) scale(0.9) rotate(-92deg);
+    opacity: 0.85;
+  }
+  60% {
+    transform: translate(7%, -42%) scale(1.05) rotate(-86deg);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(11%, -68%) scale(1.15) rotate(-81deg);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .burning-cell,
   .burning-cell.is-fizzling,
   .burning-cell::before,
   .burning-cell.is-fizzling::before,
   .burst-core,
-  .burst-spark {
+  .burst-spark,
+  .fizzle-smoke {
     animation: none;
   }
 }

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { TRAIL_ARRIVAL_MS } from '../../timing'
+import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
 import type { Pos } from '../../types'
 
 // Animation-timed overlay. We deliberately do NOT mirror s.board.cells:
@@ -15,31 +16,55 @@ import type { Pos } from '../../types'
 //     the number on each flame matches the game state.
 // We also resync the full set from the store on fight reset (fightCounter bump).
 //
+// Position tracking + per-event transition timing live in
+// useAnimatedCellPositions so swap/gravity slide the flame in lockstep
+// with the gem sprite underneath. This component only manages
+// burn-specific metadata (remaining duration, bursts, hover).
+//
 // The overlay sits INSIDE .board-mount with a small percentage inset
 // (BOARD_PADDING / LOGICAL_SIZE = 8/528 ≈ 1.515%) so the 8×8 grid lines
 // up with the gem grid inside the Pixi canvas — not with the canvas
 // edge.
 
-type Flame = { x: number; y: number; remaining: number }
+type FlameMeta = { remaining: number }
 type Burst = { id: number; x: number; y: number }
+type Fizzle = { id: number; x: number; y: number }
 
 const BURST_MS = 720
+// Soft smoke puff for the "burn expired" beat (countdown ran out without
+// being triggered). Shorter and softer than BURST_MS so it reads as
+// "passed without firing" rather than "exploded".
+const FIZZLE_MS = 650
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
 export function BurningOverlay() {
-  // Lazy initializer reads the store once at mount; matches the store
-  // state for that first frame without firing a setState in an effect.
-  const [flames, setFlames] = useState<Map<string, Flame>>(() =>
-    initialFlamesFromStore(),
-  )
+  const positions = useAnimatedCellPositions()
+  const [meta, setMeta] = useState<Map<string, FlameMeta>>(new Map())
+  // Mirror of meta for read-only access inside event handlers without
+  // forcing a resubscribe when meta changes. The cell-flag-ticked
+  // handler needs the live remaining count to decide whether a flame
+  // expires this tick. Synced via effect (writing the ref during
+  // render is disallowed by the project's lint rules).
+  const metaRef = useRef(meta)
+  useEffect(() => {
+    metaRef.current = meta
+  }, [meta])
   const [bursts, setBursts] = useState<Burst[]>([])
-  // Track the current board-hover cell so flames can react like gems
-  // do under the cursor. BoardScene emits board-hover on cell-cross
-  // transitions so this state only churns when the player crosses a
-  // cell boundary, not on every mousemove pixel.
+  const [fizzles, setFizzles] = useState<Fizzle[]>([])
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const burstIdRef = useRef(0)
+  const fizzleIdRef = useRef(0)
+  const flameIdRef = useRef(0)
+
+  // Initial seed from store on mount. useLayoutEffect so positions +
+  // meta land before the first paint (no empty-flame flash if a fight
+  // begins with already-burning tiles, e.g. on a save reload).
+  useLayoutEffect(() => {
+    setMeta(seedMetaFromStore(positions.set, flameIdRef))
+    // Intentionally one-shot; fight resets handle their own reseed below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Resync on fight reset (new fight via reward, skip, or restart).
   useEffect(() => {
@@ -47,10 +72,12 @@ export function BurningOverlay() {
     return useGameStore.subscribe((s) => {
       if (s.fightCounter === prevFightCounter) return
       prevFightCounter = s.fightCounter
-      setFlames(initialFlamesFromStore())
+      positions.clear()
+      setMeta(seedMetaFromStore(positions.set, flameIdRef))
       setBursts([])
+      setFizzles([])
     })
-  }, [])
+  }, [positions])
 
   useEffect(() => {
     return subscribeGameEvents((event) => {
@@ -61,126 +88,146 @@ export function BurningOverlay() {
         // AnimationController spawns ember particles from the enemy
         // to each cell, and the flame should "ignite" when those
         // particles land, not the instant the event fires.
+        //
+        // Note: positions.set / flameIdRef mutations happen OUTSIDE the
+        // setMeta updater. React Strict Mode invokes state updaters
+        // twice in dev; if we did the registry work inside the updater,
+        // we'd allocate two ids and leak a ghost into the positions map.
+        //
+        // The fightCounter guard prevents a stale timeout from leaking
+        // flames into a fresh fight if the fight ends within 700ms of
+        // the placement (e.g. killing-blow swap while ember trails are
+        // still in flight).
+        const scheduledFight = useGameStore.getState().fightCounter
         window.setTimeout(() => {
-          setFlames((prev) => {
+          if (useGameStore.getState().fightCounter !== scheduledFight) return
+          const placed: { id: string; remaining: number }[] = []
+          for (const c of cells) {
+            const id = `flame-${++flameIdRef.current}`
+            positions.set(id, c.x, c.y)
+            placed.push({ id, remaining: duration })
+          }
+          if (placed.length === 0) return
+          setMeta((prev) => {
             const next = new Map(prev)
-            for (const c of cells) {
-              next.set(keyOf(c), { x: c.x, y: c.y, remaining: duration })
-            }
+            for (const p of placed) next.set(p.id, { remaining: p.remaining })
             return next
           })
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'tile-burn-triggered') {
         // Spawn a burst at each cell, then strip those flames so they
         // resolve visually rather than vanishing on store commit.
+        // tile-burn-triggered fires before gems-fell within the cascade
+        // step, so the cells here match the flames' current logical
+        // positions.
         const newBursts: Burst[] = event.cells.map((c) => ({
           id: ++burstIdRef.current,
           x: c.x,
           y: c.y,
         }))
         setBursts((prev) => [...prev, ...newBursts])
-        setFlames((prev) => {
-          const next = new Map(prev)
-          for (const c of event.cells) next.delete(keyOf(c))
-          return next
-        })
+        const removedIds: string[] = []
+        for (const c of event.cells) {
+          const id = positions.findIdAt(c.x, c.y)
+          if (!id) continue
+          positions.remove(id)
+          removedIds.push(id)
+        }
+        if (removedIds.length > 0) {
+          setMeta((prev) => {
+            const next = new Map(prev)
+            for (const id of removedIds) next.delete(id)
+            return next
+          })
+        }
         const ids = new Set(newBursts.map((b) => b.id))
         window.setTimeout(() => {
           setBursts((prev) => prev.filter((b) => !ids.has(b.id)))
         }, BURST_MS)
       } else if (event.kind === 'cell-flag-ticked' && event.flag === 'burning') {
         // End-of-player-phase tick reduces remaining duration by 1.
-        setFlames((prev) => {
+        // Resolve ids and decide expirations up-front so the setMeta
+        // updater stays pure (Strict Mode double-invokes updaters).
+        type Tick = { id: string; pos: Pos; remaining: number | 'expire' }
+        const ticks: Tick[] = []
+        const m = metaRef.current
+        for (const p of event.positions) {
+          const id = positions.findIdAt(p.x, p.y)
+          if (!id) continue
+          const cur = m.get(id)
+          if (!cur) continue
+          const r = cur.remaining - 1
+          ticks.push({ id, pos: p, remaining: r <= 0 ? 'expire' : r })
+        }
+        if (ticks.length === 0) return
+        const expired: Pos[] = []
+        for (const t of ticks) {
+          if (t.remaining === 'expire') {
+            positions.remove(t.id)
+            expired.push(t.pos)
+          }
+        }
+        if (expired.length > 0) {
+          // Smoke puff at the cell the flame just vacated. Position is
+          // captured from the event (pre-expiry logical cell), which is
+          // where the player last saw the flame.
+          const newFizzles: Fizzle[] = expired.map((p) => ({
+            id: ++fizzleIdRef.current,
+            x: p.x,
+            y: p.y,
+          }))
+          setFizzles((prev) => [...prev, ...newFizzles])
+          const ids = new Set(newFizzles.map((f) => f.id))
+          window.setTimeout(() => {
+            setFizzles((prev) => prev.filter((f) => !ids.has(f.id)))
+          }, FIZZLE_MS)
+        }
+        setMeta((prev) => {
           const next = new Map(prev)
-          for (const p of event.positions) {
-            const k = keyOf(p)
-            const cur = next.get(k)
-            if (!cur) continue
-            const r = cur.remaining - 1
-            if (r <= 0) next.delete(k)
-            else next.set(k, { ...cur, remaining: r })
+          for (const t of ticks) {
+            if (t.remaining === 'expire') next.delete(t.id)
+            else next.set(t.id, { remaining: t.remaining })
           }
           return next
         })
-      } else if (event.kind === 'swap') {
-        // Engine swaps cell references on a swap; the burning flag
-        // travels with the cell. Mirror that in the overlay so the
-        // flame slides with the gem (rather than staying glued to the
-        // original cell). Invalid swaps emit `swap-reverted` after,
-        // which we undo below.
-        setFlames((prev) => swapFlames(prev, event.from, event.to))
-      } else if (event.kind === 'swap-reverted') {
-        // The swap didn't form a match — engine reverted. Swap the
-        // overlay state back so the flame returns to its source.
-        setFlames((prev) => swapFlames(prev, event.from, event.to))
-      } else if (event.kind === 'gems-fell') {
-        // Gravity preserves Cell identity (gemColor + flags fall
-        // together — see core/board/gravity.ts). The overlay tracks
-        // flames by position, so without this they'd stay glued to the
-        // original cell while the burning gem slid down out from under
-        // them. Re-key each affected flame to its new position.
-        setFlames((prev) => {
-          let changed = false
-          const next = new Map(prev)
-          // Two-step: collect destinations first so a chain of moves
-          // (a → b, b → c) doesn't overwrite intermediate flames. The
-          // cascade emits a single gems-fell per step with disjoint
-          // sources/destinations, so simple key-swap is enough here.
-          const pending: { from: string; to: string; flame: Flame }[] = []
-          for (const m of event.movements) {
-            const fromK = keyOf(m.from)
-            const flame = prev.get(fromK)
-            if (!flame) continue
-            pending.push({
-              from: fromK,
-              to: keyOf(m.to),
-              flame: { ...flame, x: m.to.x, y: m.to.y },
-            })
-          }
-          for (const p of pending) {
-            next.delete(p.from)
-            changed = true
-          }
-          for (const p of pending) {
-            next.set(p.to, p.flame)
-            changed = true
-          }
-          return changed ? next : prev
-        })
       } else if (event.kind === 'board-shuffled') {
-        // Reshuffle wipes all flags.
-        setFlames(new Map())
+        // Reshuffle wipes all flags. Don't fizzle — the flames don't
+        // "expire", they're erased along with the board state.
+        positions.clear()
+        setMeta(new Map())
       } else if (event.kind === 'board-hover') {
         setHoveredKey(event.cell ? keyOf(event.cell) : null)
       }
     })
-  }, [])
+  }, [positions])
 
   return (
     <div className="burning-overlay" aria-hidden>
-      {Array.from(flames.values()).map((f) => {
+      {Array.from(positions.positions.entries()).map(([id, p]) => {
+        const m = meta.get(id)
+        if (!m) return null
         // Flame shrinks as duration approaches 0 — visual proxy for
         // "how much longer this burns". On the final turn we hold the
         // size at 0.85 (well above the small-end of 0.55) and the
         // .is-fizzling class layers an urgent opacity flicker on top
         // so the player gets a clear "about to wink out" tell.
-        const fizzling = f.remaining <= 1
-        const scale = fizzling ? 0.85 : Math.min(1, 0.55 + 0.225 * f.remaining)
-        const k = keyOf(f)
-        const hovered = hoveredKey === k
+        const fizzling = m.remaining <= 1
+        const scale = fizzling ? 0.85 : Math.min(1, 0.55 + 0.225 * m.remaining)
+        const hovered = hoveredKey === keyOf({ x: p.x, y: p.y })
+        const transitionStyle = p.transition
+          ? `left ${p.transition.durationMs}ms ${p.transition.bezier}, top ${p.transition.durationMs}ms ${p.transition.bezier}`
+          : 'none'
         return (
           <span
-            key={k}
+            key={id}
             className={`burning-cell${fizzling ? ' is-fizzling' : ''}${hovered ? ' is-hovered' : ''}`}
             style={{
-              // Absolute %-positioning lets the flame tween smoothly
-              // when its (x, y) changes (swap, gravity). Grid
-              // positions can't transition.
-              left: `${f.x * 12.5}%`,
-              top: `${f.y * 12.5}%`,
+              left: `${p.x * 12.5}%`,
+              top: `${p.y * 12.5}%`,
+              transition: transitionStyle,
               ['--flame-scale' as string]: scale.toFixed(3),
             }}
-            data-remaining={f.remaining}
+            data-remaining={m.remaining}
           >
             <span className="burning-flame">🔥</span>
           </span>
@@ -202,40 +249,38 @@ export function BurningOverlay() {
           <span className="burst-spark spark-4">✦</span>
         </span>
       ))}
+      {fizzles.map((f) => (
+        <span
+          key={`fizzle-${f.id}`}
+          className="burning-fizzle"
+          style={{
+            left: `${f.x * 12.5}%`,
+            top: `${f.y * 12.5}%`,
+          }}
+        >
+          <span className="fizzle-smoke">💨</span>
+        </span>
+      ))}
     </div>
   )
 }
 
-// Swap the flames sitting at two positions (either may be empty — in
-// which case the present flame just relocates). Pure: returns a new
-// Map if anything changed, otherwise the original ref.
-function swapFlames(
-  prev: Map<string, Flame>,
-  from: Pos,
-  to: Pos,
-): Map<string, Flame> {
-  const fromK = `${from.x},${from.y}`
-  const toK = `${to.x},${to.y}`
-  const fFlame = prev.get(fromK)
-  const tFlame = prev.get(toK)
-  if (!fFlame && !tFlame) return prev
-  const next = new Map(prev)
-  next.delete(fromK)
-  next.delete(toK)
-  if (fFlame) next.set(toK, { ...fFlame, x: to.x, y: to.y })
-  if (tFlame) next.set(fromK, { ...tFlame, x: from.x, y: from.y })
-  return next
-}
-
-function initialFlamesFromStore(): Map<string, Flame> {
+function seedMetaFromStore(
+  setPosition: (id: string, x: number, y: number) => void,
+  flameIdRef: { current: number },
+): Map<string, FlameMeta> {
   const s = useGameStore.getState()
-  const out = new Map<string, Flame>()
+  const out = new Map<string, FlameMeta>()
   for (let y = 0; y < s.board.cells.length; y++) {
     const row = s.board.cells[y]
     if (!row) continue
     for (let x = 0; x < row.length; x++) {
       const b = row[x]?.flags?.burning
-      if (b && b > 0) out.set(`${x},${y}`, { x, y, remaining: b })
+      if (b && b > 0) {
+        const id = `flame-${++flameIdRef.current}`
+        setPosition(id, x, y)
+        out.set(id, { remaining: b })
+      }
     }
   }
   return out

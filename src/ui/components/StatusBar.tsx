@@ -21,7 +21,9 @@ export function StatusBar({
   tickMarks?: Partial<Record<StatusKind, number>>
   className?: string
 }) {
-  if (statuses.length === 0) return null
+  // Always render the container so callers can reserve vertical space via
+  // the passed className (see .enemy-statuses min-height) — toggling mount
+  // when the first status lands would shift sibling elements down.
   return (
     <div className={`status-bar${className ? ` ${className}` : ''}`} aria-label="Statuses">
       {statuses.map((s) => {

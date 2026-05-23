@@ -14,6 +14,10 @@ import { installSfxBindings } from './audio/sfx'
 
 installSfxBindings()
 
+// Pixi.Text bakes glyphs to a GPU texture at construction, so a late
+// font load leaves the fallback baked in for the popup's whole life.
+void document.fonts.load('1em "Paytone One"')
+
 const rootEl = document.getElementById('root')
 if (!rootEl) throw new Error('#root not found')
 
