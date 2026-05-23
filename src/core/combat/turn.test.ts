@@ -14,6 +14,8 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   mana: 0,
   skillCharge: 0,
   phasePools: { red: 0, blue: 0, green: 0 },
+  statuses: [],
+  pendingSpells: [],
   ...overrides,
 })
 
@@ -26,6 +28,7 @@ const makeEnemy = (overrides: Partial<Enemy> = {}): Enemy => ({
   block: 0,
   currentIntent: { kind: 'attack', amount: 4 },
   nextIntentIndex: 0,
+  statuses: [],
   ...overrides,
 })
 
@@ -96,7 +99,7 @@ describe('resolveEndOfPhase', () => {
     const resolved = resolveEndOfPhase(p, [makeEnemy()], 'enemy-1')
     expect(resolved.player.block).toBe(5)
     const next = beginPlayerPhase(resolved.player)
-    expect(next.block).toBe(0)
+    expect(next.player.block).toBe(0)
   })
 
   it('transitions to victory when entering EOP with all enemies dead', () => {
@@ -136,10 +139,11 @@ describe('beginPlayerPhase', () => {
       phasePools: { red: 1, blue: 1, green: 1 },
     })
     const next = beginPlayerPhase(p)
-    expect(next).toEqual({
+    expect(next.player).toEqual({
       ...p,
       block: 0,
       phasePools: { red: 0, blue: 0, green: 0 },
     })
+    expect(next.phase).toBe('player-acting')
   })
 })

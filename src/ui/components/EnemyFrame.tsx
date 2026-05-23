@@ -11,7 +11,9 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
-import type { Intent } from '../../types'
+import type { Enemy, Intent, Player } from '../../types'
+import { composeDamage } from '../../core/combat/statuses'
+import { StatusBar } from './StatusBar'
 
 const HIT_FLASH_MS = 280
 // Must match (or slightly outlast) the longest .firing-* animation in
@@ -45,6 +47,8 @@ export function EnemyFrame() {
   // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
   const playerBlock = useGameStore((s) => s.fight.player.block)
+  const playerStatuses = useGameStore((s) => s.fight.player.statuses)
+  const playerPending = useGameStore((s) => s.fight.player.pendingSpells)
   const animatedPhase = useAnimatedPhase()
 
   // Displayed HP per enemy, mirrored event-driven so the bar drains on
@@ -255,12 +259,22 @@ export function EnemyFrame() {
                 intent={intent}
                 tick={intentTick[enemy.id] ?? 0}
                 lethal={lethalIntent}
+                preview={previewIncomingDamage(
+                  intent,
+                  enemy,
+                  { hp: playerHp, block: playerBlock, statuses: playerStatuses },
+                  playerPending.includes('riposte'),
+                )}
               />
             )}
             <div className="enemy-sprite" aria-hidden>
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
             <div className="enemy-name">{enemy.name}</div>
+            <StatusBar
+              statuses={enemy.statuses}
+              className="enemy-statuses"
+            />
             {/* Always mounted so the slot reserves vertical space — toggling
                 mount on block gain shifted the HP bar down. */}
             <div
@@ -289,16 +303,67 @@ export function EnemyFrame() {
   )
 }
 
+type DamagePreview =
+  | { kind: 'attack'; raw: number; afterMultipliers: number; blocked: number; toHp: number; riposte: boolean }
+  | null
+
+// Compute the player-side damage preview for a telegraphed attack:
+// final amount after Weak (source) and Vulnerable (player) multipliers,
+// split by player block. Riposte parries to 0. Non-attack intents return null.
+function previewIncomingDamage(
+  intent: Intent,
+  enemy: Enemy,
+  player: Pick<Player, 'hp' | 'block' | 'statuses'>,
+  riposteArmed: boolean,
+): DamagePreview {
+  if (intent.kind !== 'attack') return null
+  if (riposteArmed) {
+    return {
+      kind: 'attack',
+      raw: intent.amount,
+      afterMultipliers: 0,
+      blocked: 0,
+      toHp: 0,
+      riposte: true,
+    }
+  }
+  const final = composeDamage(intent.amount, enemy.statuses, player.statuses)
+  const blocked = Math.min(player.block, final)
+  const toHp = Math.min(player.hp, final - blocked)
+  return {
+    kind: 'attack',
+    raw: intent.amount,
+    afterMultipliers: final,
+    blocked,
+    toHp,
+    riposte: false,
+  }
+}
+
+function formatPreview(preview: DamagePreview): string | null {
+  if (!preview) return null
+  if (preview.riposte) {
+    return 'Riposte armed — parried, 0 damage. Counter for the full amount.'
+  }
+  const multNote =
+    preview.afterMultipliers !== preview.raw
+      ? ` (after multipliers: ${preview.afterMultipliers})`
+      : ''
+  return `${preview.afterMultipliers}${multNote} − ${preview.blocked} block = ${preview.toHp} to HP`
+}
+
 // Badge + viewport-aware tooltip. The tooltip is portalled to body and
 // position is computed in JS so it never clips the viewport edges.
 function IntentBadge({
   intent,
   tick,
   lethal,
+  preview,
 }: {
   intent: Intent
   tick: number
   lethal: boolean
+  preview: DamagePreview
 }) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -367,6 +432,9 @@ function IntentBadge({
             <div className="intent-tooltip-body">
               {intentDescription(intent)}
             </div>
+            {preview && (
+              <div className="intent-tooltip-preview">{formatPreview(preview)}</div>
+            )}
           </div>,
           document.body,
         )}

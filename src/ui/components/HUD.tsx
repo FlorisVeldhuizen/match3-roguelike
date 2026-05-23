@@ -3,6 +3,8 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { TRAIL_ARRIVAL_MS } from '../../timing'
 import type { CombatPhase, GemColor } from '../../types'
+import { StatusBar } from './StatusBar'
+import { PendingStrip, SpellTray } from './SpellTray'
 
 const PHASE_LABEL: Record<CombatPhase, string> = {
   'player-acting': 'Your turn',
@@ -17,6 +19,7 @@ export function HUD() {
   const player = useGameStore((s) => s.fight.player)
   const phase = useGameStore((s) => s.fight.phase)
   const rootSeed = useGameStore((s) => s.rootSeed)
+  const statuses = useGameStore((s) => s.fight.player.statuses)
   const [pulse, setPulse] = useState<Record<GemColor, number>>({
     red: 0,
     blue: 0,
@@ -202,6 +205,8 @@ export function HUD() {
     <section className="hud" aria-label="Player status" data-player-hud="true">
       <div className="hud-row">
         <span className="hud-phase">{PHASE_LABEL[phase]}</span>
+        <PendingStrip />
+        <StatusBar statuses={statuses} className="player-statuses" />
       </div>
       <div className="hud-row">
         <div
@@ -235,6 +240,7 @@ export function HUD() {
           </span>
         </div>
       </div>
+      <SpellTray />
       <div className="hud-row hud-resources">
         <div
           className={cls('yellow', 'resource')}

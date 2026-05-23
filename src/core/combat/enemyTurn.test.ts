@@ -23,6 +23,8 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   mana: 0,
   skillCharge: 0,
   phasePools: { red: 0, blue: 0, green: 0 },
+  statuses: [],
+  pendingSpells: [],
   ...overrides,
 })
 
@@ -35,6 +37,7 @@ const makeEnemy = (overrides: Partial<Enemy> = {}): Enemy => ({
   block: 0,
   currentIntent: { kind: 'attack', amount: 5 },
   nextIntentIndex: 0,
+  statuses: [],
   ...overrides,
 })
 

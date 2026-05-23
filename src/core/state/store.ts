@@ -27,8 +27,12 @@ import {
   type GameEvent,
   type Player,
   type Pos,
+  type SpellId,
+  type UltimateId,
 } from '../../types'
 import { getArchetype } from '../combat/archetypeRegistry'
+import { composeDamage } from '../combat/statuses'
+import { getSpell, getUltimate } from '../combat/spellRegistry'
 
 export type BoardState = {
   width: number
@@ -44,6 +48,8 @@ export type GameStore = {
   fight: FightState
   selectCell: (pos: Pos | null) => void
   attemptSwap: (a: Pos, b: Pos) => { valid: boolean; events: GameEvent[] }
+  castSpell: (id: SpellId) => { ok: boolean; events: GameEvent[] }
+  castUltimate: (id: UltimateId) => { ok: boolean; events: GameEvent[] }
   restart: () => void
 }
 
@@ -57,6 +63,8 @@ function freshPlayer(): Player {
     mana: 0,
     skillCharge: 0,
     phasePools: { red: 0, blue: 0, green: 0 },
+    statuses: [],
+    pendingSpells: [],
   }
 }
 
@@ -76,6 +84,7 @@ function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
     block: first.intent.kind === 'block' ? first.intent.amount : 0,
     currentIntent: first.intent,
     nextIntentIndex: 0,
+    statuses: [],
   }
   return {
     fight: {
@@ -173,7 +182,8 @@ export const useGameStore = create<GameStore>()(
           if (targetEnemyId == null) continue
           const target = enemies.find((e) => e.id === targetEnemyId)
           if (!target || target.hp <= 0) continue
-          const res = applyDamage(target.block, target.hp, ev.amount)
+          const finalDmg = composeDamage(ev.amount, player.statuses, target.statuses)
+          const res = applyDamage(target.block, target.hp, finalDmg)
           if (res.blocked + res.hpDamage <= 0) continue
           enemies = enemies.map((e) =>
             e.id === target.id
@@ -277,7 +287,13 @@ export const useGameStore = create<GameStore>()(
           tailEvents.push(...enemyResult.events)
 
           if (phase === 'player-acting') {
-            player = beginPlayerPhase(player)
+            const begin = beginPlayerPhase(player)
+            player = begin.player
+            phase = begin.phase
+            tailEvents.push(...begin.events)
+            if (phase === 'game-over') {
+              tailEvents.push({ kind: 'phase-changed', phase: 'game-over' })
+            }
           }
         }
       }
@@ -297,6 +313,50 @@ export const useGameStore = create<GameStore>()(
         valid: true,
         events: [...damageHealStream, ...shuffleEvents, ...tailEvents],
       }
+    },
+    // Free-action spell cast. Cost paid on cast; effect resolves at EOP
+     // (Bulwark/Reinforce) or on the next enemy attack (Riposte).
+    // 01-design rules: cast window = player phase + board settled + can
+    // pay cost. "Board settled" check belongs in UI (button disabled
+    // while AnimationController is draining) — engine just gates on
+    // phase and cost.
+    castSpell: (id: SpellId) => {
+      const current = get()
+      if (current.fight.phase !== 'player-acting') {
+        return { ok: false, events: [] }
+      }
+      if (current.fight.player.pendingSpells.includes(id)) {
+        return { ok: false, events: [] }
+      }
+      const def = getSpell(id)
+      if (current.fight.player.mana < def.manaCost) {
+        return { ok: false, events: [] }
+      }
+      const event: GameEvent = { kind: 'spell-cast', spellId: id }
+      set((s) => {
+        s.fight.player.mana -= def.manaCost
+        s.fight.player.pendingSpells.push(id)
+      })
+      return { ok: true, events: [event] }
+    },
+    castUltimate: (id: UltimateId) => {
+      const current = get()
+      if (current.fight.phase !== 'player-acting') {
+        return { ok: false, events: [] }
+      }
+      if (current.fight.player.pendingSpells.includes(id)) {
+        return { ok: false, events: [] }
+      }
+      const def = getUltimate(id)
+      if (current.fight.player.skillCharge < def.chargeCost) {
+        return { ok: false, events: [] }
+      }
+      const event: GameEvent = { kind: 'spell-cast', spellId: id }
+      set((s) => {
+        s.fight.player.skillCharge -= def.chargeCost
+        s.fight.player.pendingSpells.push(id)
+      })
+      return { ok: true, events: [event] }
     },
     restart: () => {
       const fresh = initialState(newSliceSeed())

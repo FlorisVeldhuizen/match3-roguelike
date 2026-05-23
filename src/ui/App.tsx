@@ -24,7 +24,7 @@ export function App() {
           <span className="hud-seed" title="Run seed (select to copy)">
             {seed}
           </span>
-          <span className="hud-build">Phase E · enemy intents</span>
+          <span className="hud-build">Phase F · spells & statuses</span>
           <VolumeSlider />
           <MuteToggle />
           <FXToggle />

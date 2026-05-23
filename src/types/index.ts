@@ -26,7 +26,25 @@ export type Match = {
   shape: MatchShape
 }
 
-export type DamageSource = 'enemy-attack' | 'player-attack'
+export type DamageSource =
+  | 'enemy-attack'
+  | 'player-attack'
+  | 'burn'
+  | 'riposte'
+
+export type StatusKind = 'burn' | 'vulnerable' | 'weak'
+
+// Every status shares the same shape (02-scope §Status effects). Burn uses
+// `stacks` as per-tick damage; Vulnerable/Weak are binary (stacks always 1).
+export type StatusInstance = {
+  kind: StatusKind
+  stacks: number
+  duration: number
+}
+
+export type SpellId = 'bulwark' | 'reinforce'
+export type UltimateId = 'riposte'
+export type PendingSpellId = SpellId | UltimateId
 
 export type GameEvent =
   | { kind: 'swap'; from: Pos; to: Pos }
@@ -61,6 +79,21 @@ export type GameEvent =
       source: DamageSource
     }
   | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }
+  | {
+      kind: 'status-applied'
+      target: 'player' | string
+      status: StatusInstance
+    }
+  | {
+      kind: 'status-ticked'
+      target: 'player' | string
+      statusKind: StatusKind
+      remaining: number
+    }
+  | { kind: 'status-expired'; target: 'player' | string; statusKind: StatusKind }
+  | { kind: 'spell-cast'; spellId: PendingSpellId }
+  | { kind: 'pending-effect-resolved'; spellId: PendingSpellId }
+  | { kind: 'riposte-counter'; targetId: string; amount: number }
   | { kind: 'block-gained'; amount: number }
   | { kind: 'enemy-block-gained'; enemyId: string; amount: number }
   | { kind: 'block-absorbed'; targetId: 'player' | string }
@@ -105,6 +138,11 @@ export type Player = {
   mana: number
   skillCharge: number
   phasePools: PhasePools
+  statuses: StatusInstance[]
+  // EOP/ultimate effects queued this phase. Bulwark/Reinforce fire and
+  // are cleared at EOP; Riposte persists across the enemy turn until it
+  // triggers on an incoming attack or expires at the end of that turn.
+  pendingSpells: PendingSpellId[]
 }
 
 export type Enemy = {
@@ -116,6 +154,7 @@ export type Enemy = {
   block: number
   currentIntent: Intent
   nextIntentIndex: number
+  statuses: StatusInstance[]
 }
 
 export type FightState = {
