@@ -16,6 +16,11 @@ export type EnemyTurnResult = {
 // Caller is responsible for beginPlayerPhase before the next player swap —
 // block zeroing happens at the start of the next player phase, AFTER any
 // damage absorption that occurred during this enemy turn.
+//
+// Block intent is pre-applied at telegraph time (here for subsequent turns,
+// in freshFight for the initial intent) so the enemy is already guarded
+// when the player swaps. Processing a `block` currentIntent below is a
+// no-op — the block already went up at the end of the previous turn.
 export function executeEnemyTurn(
   player: Player,
   enemies: Enemy[],
@@ -55,21 +60,26 @@ export function executeEnemyTurn(
       } else if (blocked > 0 && hpDamage === 0) {
         events.push({ kind: 'block-absorbed', targetId: 'player' })
       }
-    } else {
-      updatedEnemy = { ...updatedEnemy, block: updatedEnemy.block + intent.amount }
-      events.push({
-        kind: 'enemy-block-gained',
-        enemyId: enemy.id,
-        amount: intent.amount,
-      })
     }
 
-    // Telegraph next intent for the *next* player phase.
+    // Telegraph next intent for the *next* player phase. If it's a block
+    // intent, apply the block now so it's already in place when the player
+    // attacks during their next phase.
     const nextIndex = enemy.nextIntentIndex + 1
     const rolled = rollIntent(enemy.archetype, nextIndex, nextRng)
     nextRng = rolled.rng
+    let updatedBlock = updatedEnemy.block
+    if (rolled.intent.kind === 'block') {
+      updatedBlock = updatedBlock + rolled.intent.amount
+      events.push({
+        kind: 'enemy-block-gained',
+        enemyId: enemy.id,
+        amount: rolled.intent.amount,
+      })
+    }
     updatedEnemy = {
       ...updatedEnemy,
+      block: updatedBlock,
       currentIntent: rolled.intent,
       nextIntentIndex: nextIndex,
     }

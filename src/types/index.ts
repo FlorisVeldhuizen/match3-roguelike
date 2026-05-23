@@ -27,13 +27,7 @@ export type Match = {
   shape: MatchShape
 }
 
-export type DamageSource =
-  | 'enemy-attack'
-  | 'status-dot'
-  | 'self-curse'
-  | 'spell-cost'
-  | 'environment'
-  | 'player-attack'
+export type DamageSource = 'enemy-attack' | 'player-attack'
 
 export type GameEvent =
   | { kind: 'swap'; from: Pos; to: Pos }
@@ -44,14 +38,29 @@ export type GameEvent =
       color: GemColor
       size: number
       shape: MatchShape
+      // Set by the store on the first 4+ match of a swap when the bonus turn
+      // will actually be granted. Drives the in-cascade "+1 TURN" feedback.
+      grantsExtraTurn?: boolean
     }
   | { kind: 'cascade-start'; level: number }
+  // Emitted once after a swap's cascade loop fully resolves. `levels` is the
+  // total number of chain links (1 = just the initial match, 2+ = at least
+  // one chain). Used by the SFX layer to play a celebration on good chains.
+  | { kind: 'cascade-complete'; levels: number }
   | { kind: 'gems-cleared'; cells: Pos[] }
   | { kind: 'gems-fell'; movements: { from: Pos; to: Pos }[] }
   | { kind: 'gems-spawned'; spawns: { at: Pos; color: GemColor }[] }
   | { kind: 'board-shuffled'; cells: { at: Pos; color: GemColor }[] }
   | { kind: 'pool-gained'; color: GemColor; amount: number }
-  | { kind: 'damage-dealt'; targetId: string; amount: number; source: DamageSource }
+  | {
+      kind: 'damage-dealt'
+      targetId: string
+      // amount = HP damage to the target. blocked = portion absorbed by
+      // target.block. Total incoming = amount + blocked. Mirrors damage-taken.
+      amount: number
+      blocked: number
+      source: DamageSource
+    }
   | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }
   | { kind: 'block-gained'; amount: number }
   | { kind: 'enemy-block-gained'; enemyId: string; amount: number }

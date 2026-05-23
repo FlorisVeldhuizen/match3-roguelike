@@ -1,13 +1,30 @@
+import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
+import { subscribeGameEvents } from '../../core/events/emitter'
 
 export function GameOverOverlay() {
   const phase = useGameStore((s) => s.fight.phase)
+  // Gate on the animation-timed `phase-changed`, not the store's phase. The
+  // store flips to 'game-over' synchronously when the lethal hit resolves,
+  // but the damage-taken beat still needs to play first.
+  const [reveal, setReveal] = useState(phase === 'game-over')
 
-  if (phase !== 'game-over') return null
+  useEffect(() => {
+    return subscribeGameEvents((event) => {
+      if (event.kind === 'phase-changed' && event.phase === 'game-over') {
+        setReveal(true)
+      }
+    })
+  }, [])
 
-  // Reload restarts board + fight + Pixi cleanly. Same shortcut as victory —
-  // an in-place rebuild of the Pixi sprite grid against a new board is on
-  // the Phase H1 to-do list (run-flow scaffold).
+  useEffect(() => {
+    if (phase !== 'game-over') setReveal(false)
+  }, [phase])
+
+  if (!reveal || phase !== 'game-over') return null
+
+  // Reload restarts board + fight + Pixi cleanly. Same shortcut as victory;
+  // an in-place Pixi sprite-grid rebuild lands with the run-flow scaffold.
   const handleRestart = () => {
     useGameStore.getState().restart()
     window.location.reload()

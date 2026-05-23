@@ -17,6 +17,12 @@ function intentLabel(intent: Intent): string {
     : `Blocks for ${intent.amount}`
 }
 
+function intentDescription(intent: Intent): string {
+  return intent.kind === 'attack'
+    ? `On its turn, this enemy will attack you for ${intent.amount} damage.`
+    : `On its turn, this enemy will gain ${intent.amount} block, reducing incoming damage.`
+}
+
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
@@ -83,10 +89,8 @@ export function EnemyFrame() {
           }, HIT_FLASH_MS)
         }, delay)
       } else if (event.kind === 'pool-gained' && event.color === 'red') {
-        // Red gem trail just spawned — schedule a brief outline pulse
-        // on the targeted enemy when it lands. The actual damage popup
-        // comes from the per-match damage-dealt event the store walker
-        // emits right after this; no longer accumulates into a pip.
+        // Brief outline pulse when the trail lands. Damage popup itself
+        // comes from the per-match damage-dealt event.
         const id = useGameStore.getState().fight.targetEnemyId
         if (!id) return
         window.setTimeout(() => {
@@ -99,9 +103,9 @@ export function EnemyFrame() {
           }, 380)
         }, 700)
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
-        // Enemy's attack just landed — pulse the *currently-acting* enemy.
-        // Phase E only has one enemy; in H2 we'll route by enemy id once the
-        // damage-taken payload carries it.
+        // Enemy's attack landed — pulse the currently-acting enemy. Single-
+        // enemy fight today; multi-enemy routing waits on a damage-taken
+        // payload that carries the source enemy id.
         const id = useGameStore.getState().fight.targetEnemyId
         if (id) bumpIntentFiring(setIntentFiring, id, 'attack')
       } else if (event.kind === 'enemy-block-gained') {
@@ -149,10 +153,6 @@ export function EnemyFrame() {
         const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
         // Targeted, living enemy is the attractor for red gem trails.
         const poolTargetAttr = isTarget && !dead ? 'red' : undefined
-        // Plan B: red gem damage commits per-match (no pending pip).
-        // The previous "loaded damage" indicator is gone; damage is
-        // shown by the bar draining when each damage-dealt event
-        // plays.
         return (
           <div
             key={enemy.id}
@@ -164,7 +164,7 @@ export function EnemyFrame() {
               isTarget ? 'targeted' : '',
               isHit ? 'hit' : '',
               isTrailHit ? 'trail-pulsing' : '',
-              isFiring ? `firing firing-${firingKind}` : '',
+              isFiring ? `firing-${firingKind}` : '',
             ]
               .filter(Boolean)
               .join(' ')}
@@ -178,12 +178,16 @@ export function EnemyFrame() {
                 className={`enemy-intent intent-${intent.kind}`}
                 role="img"
                 aria-label={intentLabel(intent)}
-                title={intentLabel(intent)}
+                tabIndex={0}
               >
                 <span className="intent-icon" aria-hidden>
                   {intentIcon(intent)}
                 </span>
                 <span className="intent-amount">{intent.amount}</span>
+                <div className="intent-tooltip" role="tooltip">
+                  <div className="intent-tooltip-title">{intentLabel(intent)}</div>
+                  <div className="intent-tooltip-body">{intentDescription(intent)}</div>
+                </div>
               </div>
             )}
             <div className="enemy-sprite" aria-hidden>

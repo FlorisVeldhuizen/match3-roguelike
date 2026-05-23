@@ -6,8 +6,7 @@ import type {
 } from '../../types'
 import type { PoolDeltas } from './pools'
 
-// Apply per-swap pool deltas to the player.
-// Yellow → mana, purple → skill charge: both credit IMMEDIATELY (architecture §1).
+// Yellow → mana, purple → skill charge credit immediately.
 // Red/blue/green accumulate in phasePools and resolve at end of player phase.
 export function applyPoolDeltas(player: Player, deltas: PoolDeltas): Player {
   return {
@@ -30,28 +29,23 @@ export type EndOfPhaseResult = {
   events: GameEvent[]
 }
 
-// Resolve end-of-player-phase: red → damage to target, blue → block, green → heal.
-// Fires once per phase regardless of how many swaps/extra-turns rolled into it.
-// Phase D scope only — no enemy intent or status processing.
+// End of player phase. Damage (red) and heal (green) are already committed
+// per-match by the store walker; this resolves the still-pooled blue → block.
 export function resolveEndOfPhase(
   player: Player,
   enemies: Enemy[],
   targetEnemyId: string | null,
 ): EndOfPhaseResult {
   const events: GameEvent[] = []
+  // Red/green pools tracked here serve as running meters for relics that
+  // want to read "how much you dealt/healed this phase". They've already
+  // been committed per-match.
   const pools = player.phasePools
-
-  // Red (damage) and green (heal) are committed per-match by the store
-  // walker — the pools tracked here are running meters for relics that
-  // want to read "how much you dealt/healed this phase". By the time we
-  // get to EOP, the damage/heal have already landed; we only resolve
-  // block, which still needs to snap into place *before* the enemy
-  // attacks.
 
   const nextEnemies = enemies
   const nextTargetId = targetEnemyId
 
-  // Block: set to blue pool (any prior block from this phase is overwritten).
+  // Block overwrites any prior block from this phase.
   const nextBlock = pools.blue
   if (nextBlock > 0) {
     events.push({ kind: 'block-gained', amount: nextBlock })
@@ -78,10 +72,8 @@ export function resolveEndOfPhase(
   }
 }
 
-// Start of a new player phase: block from previous phase is zeroed (the wall
-// either absorbed the enemy hit or didn't — either way it's spent now), and
-// phasePools start clean. Resolute and other phase-start hooks land here in
-// Phase F.
+// Block from previous phase is zeroed — the wall either absorbed the enemy
+// hit or didn't, either way it's spent now.
 export function beginPlayerPhase(player: Player): Player {
   return {
     ...player,

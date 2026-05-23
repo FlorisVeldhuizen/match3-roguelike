@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import type { CombatPhase, GemColor } from '../../types'
@@ -28,28 +28,43 @@ export function HUD() {
     yellow: 0,
     purple: 0,
   })
-  const [shake, setShake] = useState(false)
+  const shakeTimerRef = useRef<number | null>(null)
+  const triggerShake = (magnitude: number, durationMs: number) => {
+    const el = document.querySelector('.game') as HTMLElement | null
+    if (!el) return
+    if (shakeTimerRef.current !== null) {
+      window.clearTimeout(shakeTimerRef.current)
+    }
+    el.style.setProperty('--shake-mag', String(magnitude))
+    el.style.setProperty('--shake-dur', `${durationMs}ms`)
+    // Toggling the class via remove → reflow → add restarts the keyframe
+    // animation even when shakes fire faster than they finish (streaks).
+    el.classList.remove('shake')
+    void el.offsetWidth
+    el.classList.add('shake')
+    shakeTimerRef.current = window.setTimeout(() => {
+      el.classList.remove('shake')
+      shakeTimerRef.current = null
+    }, durationMs)
+  }
   const [hpGlow, setHpGlow] = useState(false)
   const [blockPulse, setBlockPulse] = useState(false)
   const [hpHit, setHpHit] = useState(false)
 
-  // ---- Event-driven displayed values --------------------------------
-  // Canonical state finalises the whole turn (EOP → enemy attack →
-  // beginPlayerPhase) inside `attemptSwap` before React ever sees it, so
-  // intermediate values like committed block are invisible if we read
-  // them straight from the store. These mirrors are driven by the same
-  // animation event stream the canvas listens to, so the HUD ticks in
-  // lockstep with the visible action: gain on trail-arrival, drain on
-  // damage-taken, reset on the next player phase.
+  // Displayed values mirror the canonical store but tick to animation time
+  // (gem trail arrival), not store-commit time. Every channel that writes
+  // to these is delta-based off `event.amount` / `event.blocked` so the
+  // delayed pool-gained timeouts commute with the immediate damage/heal
+  // events — no snap-from-store, no race.
   const [displayedHp, setDisplayedHp] = useState(player.hp)
   const [displayedMana, setDisplayedMana] = useState(player.mana)
   const [displayedCharge, setDisplayedCharge] = useState(player.skillCharge)
-  const [displayedBlock, setDisplayedBlock] = useState(player.block)
-  // Block is the one remaining pooled resource — it has to snap into
-  // place before the enemy attacks, so blue gems still accumulate
-  // through the cascade and commit on `block-gained` at EOP. Red/green
-  // commit per-match (plan B), so no pendingRed/pendingGreen here.
-  const [pendingBlue, setPendingBlue] = useState(0)
+  // Single source of truth for the block badge. Climbs as blue trails
+  // land; `block-gained` doesn't snap it — engine guarantees the trail
+  // sum equals the committed amount, so late trails land into a now-
+  // committed badge and naturally complete the climb.
+  const [stagedBlue, setStagedBlue] = useState(player.block)
+  const [blockCommitted, setBlockCommitted] = useState(player.block > 0)
 
   useEffect(() => {
     const unsub = subscribeGameEvents((event) => {
@@ -66,20 +81,19 @@ export function HUD() {
           }, PULSE_MS)
           if (color === 'yellow') setDisplayedMana((m) => m + amount)
           else if (color === 'purple') setDisplayedCharge((c) => c + amount)
-          else if (color === 'blue') setPendingBlue((p) => p + amount)
+          else if (color === 'blue') setStagedBlue((s) => s + amount)
           // Red and green commit per-match via damage-dealt/healed
           // events; nothing accumulates on the HUD for those.
         }, TRAIL_TRAVEL_MS)
       } else if (event.kind === 'block-gained') {
-        // EOP committed the blue pool to the block stat. Move pending
-        // into displayed — the badge stays the same number, just visually
-        // shifts from "pending" styling to "active".
-        setDisplayedBlock(event.amount)
-        setPendingBlue(0)
+        // Just flip styling to "committed". The number itself keeps
+        // climbing via late pool-gained timeouts; engine guarantees
+        // their sum equals event.amount.
+        setBlockCommitted(true)
       } else if (event.kind === 'healed') {
-        // Per-match heal commit. Delay the bar fill to sync with the
-        // green trail's arrival at the HP bar (matches the popup
-        // timing in AnimationController.scheduleDelayedHealPopup).
+        // Delay the bar fill to sync with the green trail's arrival at
+        // the HP bar (matches the popup timing in
+        // AnimationController.scheduleDelayedHealPopup).
         const amount = event.amount
         window.setTimeout(() => {
           setDisplayedHp((h) =>
@@ -90,16 +104,15 @@ export function HUD() {
           )
         }, TRAIL_TRAVEL_MS)
       } else if (event.kind === 'damage-taken') {
-        // Snap to post-absorption state so the bar drain matches what
-        // the engine actually computed (block may have absorbed part).
-        const s = useGameStore.getState().fight.player
-        setDisplayedHp(s.hp)
-        setDisplayedBlock(s.block)
+        // Delta-based so this commutes with any still-in-flight heal /
+        // block trails. Engine has already absorbed `blocked` from the
+        // block stat; mirror that locally without reading the store.
+        setDisplayedHp((h) => Math.max(0, h - event.amount))
+        setStagedBlue((s) => Math.max(0, s - event.blocked))
         if (event.amount > 0) {
           setHpHit(true)
           window.setTimeout(() => setHpHit(false), 420)
-          setShake(true)
-          window.setTimeout(() => setShake(false), event.amount >= 5 ? 420 : 280)
+          triggerShake(event.amount >= 5 ? 1.3 : 1.0, event.amount >= 5 ? 420 : 280)
           document.body.classList.add('vignette-damage')
           window.setTimeout(
             () => document.body.classList.remove('vignette-damage'),
@@ -112,15 +125,19 @@ export function HUD() {
         // store side; we mirror that here so the badge zeroes in
         // animation-time, not before the enemy hit is even shown.
         if (event.phase === 'player-acting') {
-          setDisplayedBlock(0)
-          setPendingBlue(0)
+          setStagedBlue(0)
+          setBlockCommitted(false)
         }
-      } else if (event.kind === 'damage-dealt' && event.amount >= 5) {
-        setShake(true)
-        window.setTimeout(() => setShake(false), 320)
+      } else if (
+        event.kind === 'damage-dealt' &&
+        event.amount + event.blocked >= 5
+      ) {
+        triggerShake(1.0, 320)
       } else if (event.kind === 'screen-shake') {
-        setShake(true)
-        window.setTimeout(() => setShake(false), 320)
+        // Longer ride for bigger streak shakes so the heavy ones don't
+        // feel as snappy as the small ones.
+        const dur = 280 + Math.round(Math.min(event.magnitude, 2) * 140)
+        triggerShake(event.magnitude, dur)
       }
       // Decorative pulses on commit events — these run independently of
       // the displayed-value updates above (which already handle the
@@ -149,30 +166,39 @@ export function HUD() {
       setDisplayedHp(p.hp)
       setDisplayedMana(p.mana)
       setDisplayedCharge(p.skillCharge)
-      setDisplayedBlock(p.block)
-      setPendingBlue(0)
+      setStagedBlue(p.block)
+      setBlockCommitted(p.block > 0)
     })
     // rootSeed intentionally captured once for initial baseline; the
     // subscription itself tracks subsequent transitions.
   }, [rootSeed])
 
-  // Apply screenshake to .game (the wrapper around HUD + Pixi canvas) rather
-  // than body. position:fixed elements outside .game (the phase banner) stay
-  // pinned to the viewport because their tree has no transformed ancestor.
+  // Clean up the shake timer on unmount so a late timeout doesn't poke
+  // the DOM. The .game element is the wrapper around HUD + Pixi canvas;
+  // position:fixed elements outside it (the phase banner) stay pinned
+  // to the viewport because their tree has no transformed ancestor.
   useEffect(() => {
-    const el = document.querySelector('.game')
-    if (!el) return
-    el.classList.toggle('shake', shake)
-    return () => el.classList.remove('shake')
-  }, [shake])
+    return () => {
+      if (shakeTimerRef.current !== null) {
+        window.clearTimeout(shakeTimerRef.current)
+      }
+      const el = document.querySelector('.game')
+      el?.classList.remove('shake')
+    }
+  }, [])
 
   const cls = (color: GemColor, base: string) =>
     pulse[color] > 0 ? `${base} pulsing` : base
 
+  const hpPop = usePopOnChange(displayedHp)
+  const blockPop = usePopOnChange(stagedBlue)
+  const manaPop = usePopOnChange(displayedMana)
+  const chargePop = usePopOnChange(displayedCharge)
+
   const hpPct = Math.max(0, (displayedHp / player.maxHp) * 100)
-  const badgeBlock = displayedBlock + pendingBlue
-  const blockHasPending = pendingBlue > 0
-  const blockActive = badgeBlock > 0
+  const badgeBlock = stagedBlue
+  const blockHasPending = badgeBlock > 0 && !blockCommitted
+  const blockActive = badgeBlock > 0 && blockCommitted
 
   return (
     <section className="hud" aria-label="Player status" data-player-hud="true">
@@ -188,42 +214,76 @@ export function HUD() {
         >
           <div className="hp-fill" style={{ width: `${hpPct}%` }} />
           <span className="hp-text">
-            {displayedHp} / {player.maxHp}
+            <span key={hpPop.key} className={popClass(hpPop)}>
+              {displayedHp}
+            </span>{' '}
+            / {player.maxHp}
           </span>
         </div>
         <div
           className={`block-badge ${blockActive ? 'active' : ''} ${blockHasPending ? 'pending' : ''} ${blockPulse ? 'pulsing' : ''} ${cls('blue', '')}`}
           title={
             blockHasPending
-              ? `Block ${displayedBlock} (+${pendingBlue} pending at phase end)`
+              ? `Block ${badgeBlock} (pending — commits at phase end)`
               : 'Block'
           }
           data-pool-target="blue"
         >
           <span className="block-icon" aria-hidden>🛡</span>
-          <span className="block-value">{badgeBlock}</span>
+          <span className="block-value">
+            <span key={blockPop.key} className={popClass(blockPop)}>
+              {badgeBlock}
+            </span>
+          </span>
         </div>
       </div>
       <div className="hud-row hud-resources">
         <div
-          className={cls('yellow', 'resource resource-mana')}
+          className={cls('yellow', 'resource')}
           data-pool-target="yellow"
           title="Mana — earned from yellow stars; spent on spells. Persists across phases."
         >
           <span className="resource-dot" data-color="yellow" aria-hidden />
           <span className="resource-label">Mana</span>
-          <span className="resource-value">{displayedMana}</span>
+          <span className="resource-value">
+            <span key={manaPop.key} className={popClass(manaPop)}>
+              {displayedMana}
+            </span>
+          </span>
         </div>
         <div
-          className={cls('purple', 'resource resource-charge')}
+          className={cls('purple', 'resource')}
           data-pool-target="purple"
           title="Skill charge — earned from purple gems; full bar unlocks your ultimate."
         >
           <span className="resource-dot" data-color="purple" aria-hidden />
           <span className="resource-label">Charge</span>
-          <span className="resource-value">{displayedCharge}</span>
+          <span className="resource-value">
+            <span key={chargePop.key} className={popClass(chargePop)}>
+              {displayedCharge}
+            </span>
+          </span>
         </div>
       </div>
     </section>
   )
+}
+
+type PopState = { key: number; dir: -1 | 0 | 1 }
+
+function usePopOnChange(value: number): PopState {
+  const [state, setState] = useState<PopState>({ key: 0, dir: 0 })
+  const prev = useRef(value)
+  useEffect(() => {
+    if (prev.current === value) return
+    const dir: -1 | 1 = value > prev.current ? 1 : -1
+    prev.current = value
+    setState((s) => ({ key: s.key + 1, dir }))
+  }, [value])
+  return state
+}
+
+function popClass(p: PopState) {
+  if (p.key === 0) return 'value-pop'
+  return p.dir > 0 ? 'value-pop value-pop-up' : 'value-pop value-pop-down'
 }

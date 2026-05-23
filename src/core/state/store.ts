@@ -46,7 +46,7 @@ export type GameStore = {
   restart: () => void
 }
 
-const PLAYER_MAX_HP = 60
+const PLAYER_MAX_HP = 40
 
 function freshPlayer(): Player {
   return {
@@ -69,7 +69,10 @@ function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
     archetype,
     hp: def.maxHp,
     maxHp: def.maxHp,
-    block: 0,
+    // Initial block intent is pre-applied so the enemy is already
+    // guarded when the player makes their first move. Mirrors the
+    // telegraph-time pre-application done by executeEnemyTurn.
+    block: first.intent.kind === 'block' ? first.intent.amount : 0,
     currentIntent: first.intent,
     nextIntentIndex: 0,
   }
@@ -155,14 +158,12 @@ export const useGameStore = create<GameStore>()(
       const decoratedSwap = withPoolGainedEvents(swap.events)
       player = applyPoolDeltas(player, deltas)
 
-      // Per-match damage + heal commit. Walk the (pool-gained-decorated)
-      // event stream and, immediately after each red/green pool-gained,
-      // resolve the matched amount against state and inject a follow-up
-      // damage-dealt / healed event in-place. The result is that damage
-      // and heal commit *with* their gem match (animation-timed) instead
-      // of accumulating into a pool and dumping at end-of-phase. Block
-      // (blue) still pools to EOP — defensive setup needs to be ready
-      // before the enemy attack.
+      // Walk the pool-gained-decorated stream and, after each red/green
+      // pool-gained, apply the matched amount and inject a follow-up
+      // damage-dealt / healed event in-place so damage and heal commit
+      // *with* their gem match (animation-timed). Block (blue) still
+      // pools to EOP — defensive setup must be ready before the enemy
+      // attack.
       const damageHealStream: GameEvent[] = []
       for (const ev of decoratedSwap) {
         damageHealStream.push(ev)
@@ -171,21 +172,32 @@ export const useGameStore = create<GameStore>()(
           if (targetEnemyId == null) continue
           const target = enemies.find((e) => e.id === targetEnemyId)
           if (!target || target.hp <= 0) continue
-          const absorbed = Math.min(target.block, ev.amount)
+          const blockBefore = target.block
+          const absorbed = Math.min(blockBefore, ev.amount)
           const hpDamage = Math.min(target.hp, ev.amount - absorbed)
-          const totalDealt = absorbed + hpDamage
-          if (totalDealt <= 0) continue
+          const blockAfter = blockBefore - absorbed
+          if (absorbed + hpDamage <= 0) continue
           enemies = enemies.map((e) =>
             e.id === target.id
-              ? { ...e, block: e.block - absorbed, hp: e.hp - hpDamage }
+              ? { ...e, block: blockAfter, hp: e.hp - hpDamage }
               : e,
           )
           damageHealStream.push({
             kind: 'damage-dealt',
             targetId: target.id,
-            amount: totalDealt,
+            // amount = HP damage only. Total incoming = amount + blocked.
+            amount: hpDamage,
+            blocked: absorbed,
             source: 'player-attack',
           })
+          if (blockBefore > 0 && blockAfter === 0 && absorbed > 0) {
+            damageHealStream.push({ kind: 'block-broken', targetId: target.id })
+          } else if (absorbed > 0 && hpDamage === 0) {
+            damageHealStream.push({
+              kind: 'block-absorbed',
+              targetId: target.id,
+            })
+          }
           const after = enemies.find((e) => e.id === target.id)
           if (after && after.hp <= 0) {
             damageHealStream.push({ kind: 'enemy-killed', enemyId: target.id })
@@ -230,8 +242,23 @@ export const useGameStore = create<GameStore>()(
 
       const tailEvents: GameEvent[] = []
 
-      const extraTurn = hasExtraTurnMatch(swap.events)
+      // 4+ matches grant an extra turn — UNLESS the swap also killed the
+      // last enemy, in which case we want to fall through to
+      // resolveEndOfPhase so the victory transition fires now, not on the
+      // next swap.
+      const anyEnemyAlive = enemies.some((e) => e.hp > 0)
+      const extraTurn = anyEnemyAlive && hasExtraTurnMatch(swap.events)
       if (extraTurn) {
+        // Stamp the first 4+ match in the stream so the animator pops the
+        // "+1 TURN" callout at the moment of contact instead of waiting for
+        // a post-cascade banner.
+        for (let i = 0; i < damageHealStream.length; i++) {
+          const ev = damageHealStream[i]
+          if (ev && ev.kind === 'match-found' && ev.size >= 4) {
+            damageHealStream[i] = { ...ev, grantsExtraTurn: true }
+            break
+          }
+        }
         tailEvents.push({ kind: 'extra-turn-granted' })
       }
 

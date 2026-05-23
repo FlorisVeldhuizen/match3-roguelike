@@ -113,7 +113,7 @@ This makes "duration: 3" mean "3 of the owner's turns/phases" consistently and p
 ## ✅ Difficulty curve — rough targets (tune during playtest)
 
 Initial numbers, expected to change:
-- **Player base HP**: 60
+- **Player base HP**: 40
 - **Player Resolute passive**: +2 block at start of player phase, +1 per consecutive prior phase with no blue pool (cap +5)
 - **Knight spell costs**: Bulwark 3 mana (consumes blue pool, converts to attack at `floor(blue / 2)`), Reinforce 4 mana (doubles this phase's block on carry-over)
 - **Knight ultimate cost**: 8 purple charge

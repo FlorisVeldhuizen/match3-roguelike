@@ -186,5 +186,9 @@ export function resolveSwap(
     matches = detectMatches(board)
   }
 
+  // `level` was post-incremented at the bottom of every iteration, so it
+  // equals the total chain depth: 1 = just the initial match, 2+ = chain.
+  events.push({ kind: 'cascade-complete', levels: level })
+
   return { valid: true, board, rng: curRng, events }
 }

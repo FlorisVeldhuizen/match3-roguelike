@@ -57,13 +57,37 @@ describe('executeEnemyTurn', () => {
     expect(dmg).toMatchObject({ amount: 0, blocked: 5 })
   })
 
-  it('block intent adds to enemy block', () => {
-    const e = makeEnemy({ currentIntent: { kind: 'block', amount: 4 } })
+  it('block currentIntent is a no-op (block was pre-applied at telegraph)', () => {
+    // currentIntent=block means the block already went up at telegraph
+    // time on the previous turn — re-applying it here would double it.
+    const e = makeEnemy({
+      currentIntent: { kind: 'block', amount: 4 },
+      block: 4,
+    })
     const result = executeEnemyTurn(makePlayer(), [e], { seed: 1 })
     const updated = result.enemies[0]
+    // Block is unchanged by the currentIntent. (May still change if the
+    // freshly-rolled next intent is also a block — separately tested.)
     expect(updated?.block).toBe(4)
+  })
+
+  it('pre-applies block when next rolled intent is block', () => {
+    // Brute pattern is ['attack','attack','block','attack']. Starting at
+    // nextIntentIndex=1 means executeEnemyTurn will roll pattern[2]='block'
+    // for the next turn — that block should be applied to the enemy now.
+    const e = makeEnemy({
+      currentIntent: { kind: 'attack', amount: 5 },
+      nextIntentIndex: 1,
+      block: 0,
+    })
+    const result = executeEnemyTurn(makePlayer(), [e], { seed: 1 })
+    const updated = result.enemies[0]
+    expect(updated?.currentIntent.kind).toBe('block')
+    const blockAmount =
+      updated?.currentIntent.kind === 'block' ? updated.currentIntent.amount : 0
+    expect(updated?.block).toBe(blockAmount)
     const gained = result.events.find((ev) => ev.kind === 'enemy-block-gained')
-    expect(gained).toMatchObject({ enemyId: 'enemy-1', amount: 4 })
+    expect(gained).toMatchObject({ enemyId: 'enemy-1', amount: blockAmount })
   })
 
   it('advances pattern index and rolls next intent', () => {

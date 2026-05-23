@@ -18,12 +18,9 @@ const DROP_MIN_MS = 150
 const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
 
 // Combat beat pacing — each event gets its own breath so the player can read
-// what's happening. Tuned to feel snappy but distinct; Spacebar fast-forward
-// (Phase L) will collapse these to 0.
-// `damageDealt` and `healed` are per-match commits (plan B: pools resolve
-// during the cascade, not at EOP), so they need to be much shorter than the
-// old single-EOP beat — otherwise a 3-match cascade with 3 hits takes
-// >1 second of dead time just for damage beats.
+// what's happening. `damageDealt` and `healed` fire per-match during the
+// cascade, so they're kept short — otherwise a 3-hit cascade burns >1s of
+// dead time on damage beats alone.
 const BEAT = {
   damageDealt: 60,
   blockGained: 240,
@@ -87,10 +84,8 @@ const CALLOUT_PALETTE: Record<GemColor, number> = {
 
 const CASCADE_HEX = 0xfacc15
 
-// Darker "stored pool" palette — matches the loaded-pip backgrounds in
-// the HUD so a `+N` popup at the pip visually reads as the same currency
-// the pip is holding. Used for pool-arrival popups AND the end-of-phase
-// commit popups; the player sees one consistent colour story per pool.
+// Darker "stored pool" palette — matches the HUD pool backgrounds so a
+// `+N` popup reads as the same currency the indicator is holding.
 const STORED_HEX: Record<GemColor, number> = {
   red: 0xb84a44,
   blue: 0x6b9bd6,
@@ -214,10 +209,18 @@ export class AnimationController {
         if (event.level >= 1) this.spawnCascadeCallout(event.level + 1, anchor)
         return
       }
+      case 'cascade-complete':
+        // Celebration flourish (visual half of the audio celebration in
+        // sfx.ts). Same threshold and timing so visuals and chime land
+        // together. Fires-and-forgets via setTimeout so it doesn't block
+        // damage/heal events that come right after the cascade resolves.
+        if (event.levels >= 3) this.spawnCascadeCelebration(event.levels)
+        return
       case 'match-found':
         for (const c of event.cells) this.cellColor.set(keyOf(c), event.color)
         this.lastMatchCells.set(event.color, event.cells)
         this.spawnMatchCallout(event.size, event.shape, event.color, event.cells)
+        if (event.grantsExtraTurn) this.spawnExtraTurnCallout(event.cells)
         if (event.size >= 4) await wait(HIT_STOP_MS)
         return
       case 'gems-cleared':
@@ -234,10 +237,9 @@ export class AnimationController {
         await this.animateShuffle(event.cells)
         return
       case 'pool-gained':
-        // Trail always flies. Pool-arrival popup only for pools that
-        // are still pooled at EOP (blue/yellow/purple). Red and green
-        // resolve per-match, so their popup comes from the immediate
-        // damage-dealt / healed event — no double-pop.
+        // Trail always flies; arrival popup only for pools still pooled at
+        // EOP. Red/green resolve per-match — their popup is the damage-dealt
+        // / healed event, avoiding a double-pop.
         this.spawnPoolTrail(event.color)
         if (event.color !== 'red' && event.color !== 'green') {
           this.spawnPoolArrivalPopup(event.color, event.amount)
@@ -529,16 +531,55 @@ export class AnimationController {
       // heat so the air around bigger callouts gets visibly busier.
       overlay.spawnSparkle(center, 4 + Math.floor((heat - 1) * 1.5))
     }
-    if (heat >= 3) {
-      // Screenshake on chained callouts — the body class handles the
-      // animation. HUD listens for this event and toggles its shake state.
-      emitGameEvent({ kind: 'screen-shake', magnitude: Math.min(1, heat / 5) })
-    }
+    // Streak shake is driven off displayLevel (cascade depth), NOT heat.
+    // Heat decays in real-time (1.5s half-life) but each cascade link takes
+    // ~1s of clear+fall+spawn animation, so heat never reliably clears the
+    // earlier `>= 3` threshold on typical streaks. Tying shake to depth
+    // makes each chain link guaranteed-more-shaky than the last.
+    // displayLevel = event.level + 1:
+    //   2 (first cascade,  CHAIN!)   → 0.55
+    //   3 (FRENZY!)                  → 1.05
+    //   4 (RAMPAGE!)                 → 1.45
+    //   5+ (UNREAL!)                 → 1.75 (cap)
+    const streakMag = Math.min(1.75, 0.15 + 0.4 * (displayLevel - 1))
+    emitGameEvent({ kind: 'screen-shake', magnitude: streakMag })
     if (heat >= 4) {
       // Embers rising behind the text. Subtle — small particle count, short
       // life — but it adds the "things are getting hot" beat.
       overlay.spawnFlame(center, 7 + Math.floor(heat))
     }
+  }
+
+  // Visual celebration after a 3+ chain finishes resolving. Spawns a gold
+  // radial burst + upward sparkle shower at the board's center, timed to
+  // land with the audio celebration in sfx.ts (which also waits ~220ms
+  // after the cascade-complete event). Particle counts/speed grow with
+  // chain depth so a 6-chain visibly explodes more than a 3-chain.
+  private spawnCascadeCelebration(levels: number): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const center = this.cellScreenCenter({ x: 3.5, y: 3.5 })
+    if (!center) return
+    const extra = Math.max(0, levels - 3)
+    window.setTimeout(() => {
+      const o = this.overlay
+      if (!o) return
+      // Gold radial burst — biggest visible "pop" element of the flourish.
+      o.spawnBurst(center, CASCADE_HEX, {
+        count: 28 + extra * 10,
+        speedMin: 140,
+        speedMax: 260 + extra * 40,
+        radiusMin: 3,
+        radiusMax: 6,
+        lifeMs: 850,
+        gravity: 140,
+        spread: 1.2,
+      })
+      // Upward sparkle shower — the visual twin of the audio sparkle
+      // layer that kicks in at 5+ chains. Always plays here (3+) but
+      // grows with depth.
+      o.spawnSparkle(center, 8 + extra * 4)
+    }, 200)
   }
 
   private spawnMatchCallout(
@@ -575,6 +616,49 @@ export class AnimationController {
     })
   }
 
+  // The "+1 TURN" pop fired at the moment a 4+ match locks in. Layered on
+  // top of the existing POW/BOOM callout so the *cause* (the big match) and
+  // the *reward* (the bonus turn) are visually co-located. Replaces the old
+  // post-cascade "Bonus Turn" banner.
+  private spawnExtraTurnCallout(cells: Pos[]): void {
+    const overlay = this.overlay
+    if (!overlay || cells.length === 0) return
+    let sumX = 0
+    let sumY = 0
+    for (const c of cells) {
+      sumX += c.x
+      sumY += c.y
+    }
+    const at = this.cellScreenCenter({
+      x: sumX / cells.length,
+      y: sumY / cells.length,
+    })
+    if (!at) return
+    // Anchor above the match so it doesn't collide with the POW/BOOM word.
+    const textAt = { x: at.x, y: at.y - 36 }
+    overlay.spawnBurst(at, CASCADE_HEX, {
+      count: 28,
+      speedMin: 130,
+      speedMax: 260,
+      radiusMin: 3,
+      radiusMax: 6,
+      lifeMs: 780,
+      gravity: 100,
+      spread: 1,
+    })
+    overlay.spawnSparkle(textAt, 8)
+    overlay.spawnFloatingText(textAt, '+1 TURN', {
+      color: CASCADE_HEX,
+      fontSize: 38,
+      lifeMs: 900,
+      driftY: -42,
+      scaleCurve: popScaleCurve,
+      rotationFrom: this.nextTiltRadians(),
+      rotationEase: 0,
+    })
+    emitGameEvent({ kind: 'screen-shake', magnitude: 1.2 })
+  }
+
   // Subtle (±2-6°) tilt with alternating sign across all callouts so
   // consecutive pops never lean the same direction. Shared sign tracker
   // means cascade/match/prismatic also alternate against each other.
@@ -590,12 +674,8 @@ export class AnimationController {
     return (tiltDeg * Math.PI) / 180
   }
 
-  // Scheduled popup at the pool-target element to coincide with the
-  // particle trail's arrival (~700ms). This is the "impact" beat — the
-  // value lands visibly *before* the receiving UI element (HP bar, block
-  // badge, enemy frame) settles into its new value at end-of-phase. Red
-  // shows as a damage-coded "-N" at the targeted enemy; everything else
-  // shows as a "+N" tinted to the pool's palette color.
+  // Popup at the pool-target element synced with the trail's arrival
+  // (~700ms) so the number lands *before* the indicator settles.
   private spawnPoolArrivalPopup(color: GemColor, amount: number): void {
     if (amount <= 0) return
     window.setTimeout(() => {
@@ -609,10 +689,6 @@ export class AnimationController {
       if (!center) return
       const isDamage = color === 'red'
       const text = isDamage ? `-${amount}` : `+${amount}`
-      // Per-match popup uses the *stored*-pool tint (darker) so it
-      // reads as "added to the loaded pip", not as a direct hit.
-      // The EOP commit popup uses the same palette, so the player
-      // gets one consistent colour story per pool from load to cash-in.
       const popupColor = STORED_HEX[color]
       // Slight font bump for bigger gains so a 5-match feels heavier than
       // a 3-match without spawning a whole second callout.
@@ -631,11 +707,9 @@ export class AnimationController {
     }, 700)
   }
 
-  // Per-match damage / heal popups deferred to the trail's arrival
-  // moment. The store-walker emits damage-dealt/healed events directly
-  // after the matching pool-gained, but visually we want the number
-  // to pop *with* the gem trail's landing — same timing the player
-  // already associates with pool-arrival feedback.
+  // Damage/heal popups land *with* the gem trail rather than at the
+  // upstream event, matching the timing the player already associates
+  // with pool-arrival feedback.
   private scheduleDelayedDamagePopup(enemyId: string, amount: number): void {
     if (amount <= 0) return
     window.setTimeout(() => {
