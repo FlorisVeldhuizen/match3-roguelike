@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase E complete.** Working on Phase F next.
+Status: **Phase F complete.** Working on Phase G next.
 
 > **Design update (2026-05-22):** *Enemies share the board* pillar added to `01-design.md`. Every identity enemy archetype now gets a **board verb** (column smash, color hex, row petrify, cluster shove, tile burn). Implications:
 > - **Brute** shipped in Phase E without a board verb. Retrofit "column smash" is queued — either as a small dedicated retrofit between F and G, or folded into Phase H2 alongside the other archetypes. Decision pending.
