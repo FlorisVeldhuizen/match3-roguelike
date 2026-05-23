@@ -48,7 +48,7 @@ Canonical rules and architecture choices that emerged from the docs review. Each
 - Resolute **scales with blue drought**: +2 base, +1 per consecutive phase with no blue (cap +5). "No blue" = no blue *matched* this phase; Bulwark consuming the pool still counts as "matched blue" (counter resets).
 - Riposte counters for the **full incoming pre-block damage**; charged for the *next enemy turn only* — if that turn has no attack, Riposte expires unused.
 - Cascade / scoring multipliers apply to **all five pool deltas** (R/B/G/Y/P).
-- Status re-application: **DoT stacks damage + refreshes duration; multiplier debuffs refresh duration only** (no multiplier stacking).
+- Statuses use **one number** (`stacks`, Slay-the-Spire pattern). Stacks doubles as magnitude AND turns-remaining; each tick decays by 1. Burn deals damage equal to current stacks before decrementing. Re-application: **DoTs accumulate (Burn `stacks += incoming`); multiplier debuffs refresh via `max(current, incoming)`** — multipliers stay binary on/off.
 
 **Architecture (`03-architecture.md`):**
 - `GameEvent[]` is a **side-channel**, not in `GameState`. Not persisted in saves.

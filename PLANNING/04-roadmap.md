@@ -163,8 +163,8 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - ✓ Bulwark consumes this phase's blue pool, converts to attack as `floor(blue / 2)`; no defense from blue that phase
 - ✓ Reinforce **doubles** this phase's block on carry-over (then decays normally the phase after)
 - ✓ Riposte counter-attacks the next enemy attack for the **full incoming pre-block damage**; if the next enemy turn has no attack, Riposte expires unused at the end of that turn
-- ✓ Burn DoT visibly ticks down, deals damage at owner's turn start; re-apply stacks damage + refreshes duration
-- ✓ Vulnerable/Weak multiply damage correctly; re-apply refreshes duration only (multipliers don't stack)
+- ✓ Burn DoT visibly ticks at owner's turn start: deals `stacks` damage, then `stacks -= 1` (StS-style decay). Re-application accumulates `stacks` (both damage and turns left)
+- ✓ Vulnerable/Weak multiply damage correctly; re-apply takes `max(current, incoming.stacks)` (refresh; multipliers stay binary on/off)
 - ✓ Smolder applies Burn on hit
 - ✓ **Damage preview on hover:** hovering an enemy with a telegraphed `⚔ N` shows `N − block = X to HP`, with Vulnerable/Weak factored in
 - ✓ **Tests:** status apply/tick/expire unit tests; Bulwark end-of-phase resolution test (cumulative blue pool across extra turns is what's converted, block stat is zero that phase); damage-pipeline test (Vulnerable + Weak compose correctly; re-application rules respected)
@@ -301,7 +301,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - 10 more relics designed + implemented (mix of remaining hooks: onPhaseStart, onSpellCast, onBlockGained, onRelicGained, onRoundStarted, etc.)
 - **Ordering hints in relic descriptions** for order-sensitive effects (e.g. "(applies after multipliers)") — no drag-to-reorder UI
 - Extend relic-pair property test from Phase G to cover the full 20-relic pool (~190 pairs)
-- Status effect numeric tuning (Burn DoT amount + duration; Vulnerable/Weak duration)
+- Status effect numeric tuning (Burn DoT starting stacks; Vulnerable/Weak starting stacks)
 - Difficulty pass: 3-5 real end-to-end runs; tune enemy HP/damage, gold drops, shop prices toward 50-60% win rate target
 - Final balance review: no degenerate strategies (e.g. infinite block, one-shot ult)
 - **Shareable seed URL** (`?seed=abc123` on load → starts a run with that seed; "copy seed" button on game-over). One afternoon, RNG infra already in place.

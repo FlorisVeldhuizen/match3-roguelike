@@ -89,17 +89,19 @@ Remaining ~10 relics designed during execution alongside playtest feedback.
 ### Status effects: 3 (locked)
 | Status | Type | Effect | Re-application |
 |--------|------|--------|----------------|
-| **Burn** | DoT | `stacks` damage at **start of owner's phase/turn**, `duration` decrements by 1 same tick | **Stacks damage + refreshes duration to max of (current, new).** |
-| **Vulnerable** | Debuff | Owner takes +50% damage for `duration` phases/turns | **Refreshes duration only.** Multiplier does not stack — Vulnerable is binary on/off. |
-| **Weak** | Debuff | Owner deals -50% damage for `duration` phases/turns | **Refreshes duration only.** Multiplier does not stack — Weak is binary on/off. |
+| **Burn** | DoT | At **start of owner's phase/turn**, deals `stacks` damage, then `stacks -= 1` (decay-while-damaging) | **`stacks += incoming.stacks`** (accumulates both damage AND remaining turns) |
+| **Vulnerable** | Debuff | Owner takes +50% damage from attacks while `stacks > 0`; each tick `stacks -= 1` | **`stacks = max(current, incoming.stacks)`** (refresh; multiplier stays binary on/off) |
+| **Weak** | Debuff | Owner deals -50% damage with attacks while `stacks > 0`; each tick `stacks -= 1` | **`stacks = max(current, incoming.stacks)`** (refresh; binary multiplier) |
 
-All three share the same shape: `{ stacks: int, duration: int }`. Stored as a map on player/enemy entities. Single render path for status icons + tooltip. **Rule of thumb: DoT stacks build up, multiplier debuffs refresh duration only.** Prevents Vulnerable spiraling into damage-pipeline breakage; keeps Burn feeling like a build-up.
+All three share the same shape: `{ stacks: int }`. **One number per status (StS pattern)** — `stacks` is both the magnitude and the turns-remaining; each tick decays it by 1. Burn 3 → ticks 3, 2, 1 → expires (6 damage over 3 turns). Vulnerable 2 → multiplier active for 2 turns, then expires.
+
+Stored as an array on player/enemy entities. Single render path for status icons + tooltip showing the current `stacks`.
 
 **Tick granularity (locked):**
-- On **player**: status ticks fire **once at phase start**, not per-swap. Burn deals stacks once, duration counts down by 1. Extra-turn cycles inside the same phase do **not** retick. Player phase = 1 duration unit.
-- On **enemy**: status ticks fire **once at the start of that enemy's turn** (each enemy ticks on its own turn-start). Enemy turn = 1 duration unit.
+- On **player**: status ticks fire **once at phase start**, not per-swap. Burn deals current stacks, then all statuses decrement stacks by 1. Extra-turn cycles inside the same phase do **not** retick. Player phase = 1 stacks unit.
+- On **enemy**: status ticks fire **once at the start of that enemy's turn** (each enemy ticks on its own turn-start). Enemy turn = 1 stacks unit.
 
-This makes "duration: 3" mean "3 of the owner's turns/phases" consistently and prevents extra-turn chains from accidentally chewing through debuffs faster than the enemy can act.
+This makes "Burn 3" / "Vulnerable 2" read consistently as "this many of the owner's turns" and prevents extra-turn chains from accidentally chewing through statuses faster than the enemy can act.
 
 ### Special tiles: simple (locked)
 - **3-match**: base payout.
