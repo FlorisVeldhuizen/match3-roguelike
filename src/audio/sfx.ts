@@ -1,11 +1,5 @@
-import { Howl } from 'howler'
 import { subscribeGameEvents } from '../core/events/emitter'
-
-export type SfxName = 'victory'
-
-const sounds: Record<SfxName, Howl> = {
-  victory: new Howl({ src: ['/sfx/victory.wav'], volume: 0.55, preload: true }),
-}
+import { scheduleAtTrailArrival } from '../timing'
 
 const MUTE_KEY = 'sfx-muted'
 
@@ -41,9 +35,55 @@ export function subscribeMuted(listener: (value: boolean) => void): () => void {
   }
 }
 
-export function playSfx(name: SfxName): void {
-  if (muted) return
-  sounds[name].play()
+// --- Master volume ---
+// 0..1 multiplier persisted in localStorage; applied via a single GainNode
+// (built lazily with the AudioContext) all synths route through.
+
+const VOLUME_KEY = 'sfx-volume'
+const DEFAULT_VOLUME = 0.7
+
+function readVolume(): number {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY)
+    if (raw == null) return DEFAULT_VOLUME
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return DEFAULT_VOLUME
+    return Math.min(1, Math.max(0, n))
+  } catch {
+    return DEFAULT_VOLUME
+  }
+}
+
+let volume = readVolume()
+let masterGainNode: GainNode | null = null
+const volumeListeners = new Set<(v: number) => void>()
+
+export function getVolume(): number {
+  return volume
+}
+
+export function setVolume(value: number): void {
+  const next = Math.min(1, Math.max(0, value))
+  volume = next
+  try {
+    localStorage.setItem(VOLUME_KEY, String(next))
+  } catch {
+    // localStorage unavailable
+  }
+  if (masterGainNode) {
+    // 30ms ramp so dragging the slider doesn't click.
+    const c = masterGainNode.context
+    masterGainNode.gain.cancelScheduledValues(c.currentTime)
+    masterGainNode.gain.linearRampToValueAtTime(next, c.currentTime + 0.03)
+  }
+  for (const l of volumeListeners) l(next)
+}
+
+export function subscribeVolume(listener: (v: number) => void): () => void {
+  volumeListeners.add(listener)
+  return () => {
+    volumeListeners.delete(listener)
+  }
 }
 
 // --- WebAudio synthesis ---
@@ -87,25 +127,40 @@ function getCtx(): AudioContext | null {
         .webkitAudioContext
     if (!Ctx) return null
     ctx = new Ctx()
+    masterGainNode = ctx.createGain()
+    masterGainNode.gain.value = volume
+    masterGainNode.connect(ctx.destination)
     return ctx
   } catch {
     return null
   }
 }
 
-// Short low-frequency thunk: ~80→55 Hz pitch slide with a fast exponential
-// decay and a touch of click at the head. Reads as a gem dropping into a
-// slot — felt more than heard. Pitch jitter on each call so repeated drops
-// don't feel sample-loopy.
-function synthDrop(): void {
+// Final output for all synths — routes through the master gain so volume
+// scales every voice. Fallback to destination is defensive; getCtx always
+// builds the gain.
+function out(c: AudioContext): AudioNode {
+  return masterGainNode ?? c.destination
+}
+
+// Drop-sound variants — fires once per cascade step when columns settle. This
+// cue fires a LOT (every cascade resolves at least once, deep chains many
+// times) so all variants are mixed quieter than per-match cues like clack
+// or attack. Peak gains here cap around 0.15 — about half of the original
+// thump's 0.32 — to keep the cue subtle. User locked in 'clack' as the
+// default after an A/B against the other four; the picker UI has been
+// removed but the variants and dispatch remain so a new UI (or programmatic
+// override via setDropVariant) can reach them.
+
+// Thump: original low-frequency body slide, now turned down. Felt more than
+// heard — for players who want a physical "settle" cue.
+function synthDropThump(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
-  // Duration and velocity jitter so chained drops feel like separate impacts,
-  // not a sample-loop. Pitch already varied below.
   const dur = 0.18 * jitter(0.15)
   const baseFreq = 78 + (Math.random() - 0.5) * 10
-  const velocity = jitter(0.25) // ±12% peak gain
+  const velocity = jitter(0.25)
 
   const osc = c.createOscillator()
   osc.type = 'sine'
@@ -114,27 +169,166 @@ function synthDrop(): void {
 
   const gain = c.createGain()
   gain.gain.setValueAtTime(0.0001, now)
-  gain.gain.exponentialRampToValueAtTime(0.32 * velocity, now + 0.005)
+  // Was 0.32 — toned down to 0.16 since this cue fires constantly during cascades.
+  gain.gain.exponentialRampToValueAtTime(0.16 * velocity, now + 0.005)
   gain.gain.exponentialRampToValueAtTime(0.0001, now + dur)
 
-  // Tiny noise transient at the head adds a "tick" of contact.
-  const noiseBuf = c.createBuffer(1, 0.02 * c.sampleRate, c.sampleRate)
-  const data = noiseBuf.getChannelData(0)
-  for (let i = 0; i < data.length; i++) {
-    data[i] = (Math.random() * 2 - 1) * (1 - i / data.length)
-  }
-  const noise = c.createBufferSource()
-  noise.buffer = noiseBuf
+  const noise = makeNoiseBurst(c)
   const noiseGain = c.createGain()
-  noiseGain.gain.setValueAtTime(0.08 * velocity, now)
+  noiseGain.gain.setValueAtTime(0.05 * velocity, now)
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04)
 
-  osc.connect(gain).connect(c.destination)
-  noise.connect(noiseGain).connect(c.destination)
+  osc.connect(gain).connect(out(c))
+  noise.connect(noiseGain).connect(out(c))
   osc.start(now)
   osc.stop(now + dur + 0.02)
   noise.start(now)
   noise.stop(now + 0.05)
+}
+
+// Clack: woody/percussive tap with almost no low body — closer to a wooden
+// domino landing than a gem dropping into a slot. Bandpassed noise around
+// 1.4 kHz (Q=4 keeps it tonal-woody, not hissy) plus a tiny low body sine
+// for weight without committing to a thump.
+function synthDropClack(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const pitchJ = jitter(0.18)
+  const velocity = jitter(0.25)
+
+  // The clack: short bandpassed noise burst. Q=4 narrows the band enough
+  // to read as a defined "tac" rather than a wash of noise.
+  const tacDur = 0.045
+  const tac = makeNoiseBurst(c)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 1400 * pitchJ
+  bp.Q.value = 4
+  const tg = c.createGain()
+  tg.gain.setValueAtTime(0.0001, now)
+  tg.gain.exponentialRampToValueAtTime(0.13 * velocity, now + 0.002)
+  tg.gain.exponentialRampToValueAtTime(0.0001, now + tacDur)
+  tac.connect(bp).connect(tg).connect(out(c))
+  tac.start(now)
+  tac.stop(now + tacDur + 0.02)
+
+  // Light body: short sine ping at ~200 Hz. Almost subliminal — gives the
+  // clack a hint of weight so it doesn't sound like only-treble.
+  const body = c.createOscillator()
+  body.type = 'sine'
+  body.frequency.setValueAtTime(200 * pitchJ, now)
+  body.frequency.exponentialRampToValueAtTime(150 * pitchJ, now + 0.04)
+  const bg = c.createGain()
+  bg.gain.setValueAtTime(0.0001, now)
+  bg.gain.exponentialRampToValueAtTime(0.04 * velocity, now + 0.003)
+  bg.gain.exponentialRampToValueAtTime(0.0001, now + 0.05)
+  body.connect(bg).connect(out(c))
+  body.start(now)
+  body.stop(now + 0.07)
+}
+
+// Tick: sharp/clicky high register — plastic-on-plastic click. Very short
+// bandpassed noise at ~3 kHz with a high Q for a defined "snick". No body
+// at all — this is the lightest variant, almost subliminal.
+function synthDropTick(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const pitchJ = jitter(0.15)
+  const velocity = jitter(0.3)
+
+  const dur = 0.025
+  const tick = makeNoiseBurst(c)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 3000 * pitchJ
+  bp.Q.value = 5
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, now)
+  g.gain.exponentialRampToValueAtTime(0.11 * velocity, now + 0.001)
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+  tick.connect(bp).connect(g).connect(out(c))
+  tick.start(now)
+  tick.stop(now + dur + 0.02)
+}
+
+// Pebble: small stone landing on cloth. Lowpassed noise burst mid-range,
+// pitch-jittered sine for the body. Sits between thump and clack — has
+// a soft "plump" character without committing to either extreme.
+function synthDropPebble(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const pitchJ = jitter(0.2)
+  const velocity = jitter(0.25)
+
+  // Lowpassed noise plump.
+  const dur = 0.07
+  const burst = makeNoiseBurst(c)
+  const lp = c.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 1200 * pitchJ
+  lp.Q.value = 0.8
+  const bg = c.createGain()
+  bg.gain.setValueAtTime(0.0001, now)
+  bg.gain.exponentialRampToValueAtTime(0.13 * velocity, now + 0.003)
+  bg.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+  burst.connect(lp).connect(bg).connect(out(c))
+  burst.start(now)
+  burst.stop(now + dur + 0.02)
+
+  // Body weight — short sine in low-mid.
+  const body = c.createOscillator()
+  body.type = 'sine'
+  body.frequency.setValueAtTime(180 * pitchJ, now)
+  body.frequency.exponentialRampToValueAtTime(130 * pitchJ, now + 0.06)
+  const og = c.createGain()
+  og.gain.setValueAtTime(0.0001, now)
+  og.gain.exponentialRampToValueAtTime(0.06 * velocity, now + 0.003)
+  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.08)
+  body.connect(og).connect(out(c))
+  body.start(now)
+  body.stop(now + 0.1)
+}
+
+// Tap: bright glass/marble tap with a tonal hint. High bandpass + a brief
+// sine ping at a related frequency. Reads as "ting" — small object on a
+// hard surface. Cheery without being chimey.
+function synthDropTap(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const pitchJ = jitter(0.15)
+  const velocity = jitter(0.25)
+
+  // Noise transient: bright, very short.
+  const dur = 0.04
+  const burst = makeNoiseBurst(c)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 2500 * pitchJ
+  bp.Q.value = 3
+  const bg = c.createGain()
+  bg.gain.setValueAtTime(0.0001, now)
+  bg.gain.exponentialRampToValueAtTime(0.1 * velocity, now + 0.001)
+  bg.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+  burst.connect(bp).connect(bg).connect(out(c))
+  burst.start(now)
+  burst.stop(now + dur + 0.02)
+
+  // Tonal ping — quick sine at ~2.4 kHz with fast decay. Adds the "ting"
+  // character; without it the burst alone reads as a hiss.
+  const ping = c.createOscillator()
+  ping.type = 'sine'
+  ping.frequency.value = 2400 * pitchJ
+  const pg = c.createGain()
+  pg.gain.setValueAtTime(0.0001, now)
+  pg.gain.exponentialRampToValueAtTime(0.05 * velocity, now + 0.002)
+  pg.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
+  ping.connect(pg).connect(out(c))
+  ping.start(now)
+  ping.stop(now + 0.08)
 }
 
 // Sweeping whoosh + low rumble for the "board reshuffled" cue. Longer than
@@ -153,13 +347,11 @@ function synthShuffle(): void {
   const velocity = jitter(0.2)
 
   // Filtered noise sweep: bandpass slides upward then back, giving a
-  // whooshy "cards shuffling" texture without sounding like a hiss.
-  const bufSize = Math.floor(dur * c.sampleRate)
-  const noiseBuf = c.createBuffer(1, bufSize, c.sampleRate)
-  const data = noiseBuf.getChannelData(0)
-  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1
-  const noise = c.createBufferSource()
-  noise.buffer = noiseBuf
+  // whooshy "cards shuffling" texture without sounding like a hiss. Pulls
+  // from the shared noise pool — shuffle fires only on reshuffle events
+  // (rare) but routing through the same pool keeps the allocation path
+  // unified.
+  const noise = makeNoiseBurst(c)
 
   const filter = c.createBiquadFilter()
   filter.type = 'bandpass'
@@ -173,23 +365,39 @@ function synthShuffle(): void {
   gain.gain.exponentialRampToValueAtTime(0.22 * velocity, now + 0.08)
   gain.gain.exponentialRampToValueAtTime(0.0001, now + dur)
 
-  noise.connect(filter).connect(gain).connect(c.destination)
+  noise.connect(filter).connect(gain).connect(out(c))
   noise.start(now)
   noise.stop(now + dur + 0.02)
 }
 
-// Helper: short noise burst that decays from full to zero across `dur`.
-// Used as the impact transient for shield-block and as fragment hits for
-// shield-break. Returns the BufferSource so the caller can attach filters.
-function makeNoiseBurst(c: AudioContext, dur: number): AudioBufferSourceNode {
-  const len = Math.max(1, Math.floor(dur * c.sampleRate))
-  const buf = c.createBuffer(1, len, c.sampleRate)
-  const data = buf.getChannelData(0)
-  for (let i = 0; i < len; i++) {
-    data[i] = (Math.random() * 2 - 1) * (1 - i / len)
+// Shared white-noise buffer pool. Each synth burst used to allocate its
+// own buffer; routing through 4 pre-built 1s buffers (picked at random)
+// gives variety without the per-call alloc. `dur` is kept as a callsite
+// hint; the buffer outlasts any reasonable cue and callers stop the
+// source at their own envelope tail.
+const NOISE_POOL_SIZE = 4
+const NOISE_POOL_DURATION_S = 1.0
+let noisePool: AudioBuffer[] | null = null
+
+function ensureNoisePool(c: AudioContext): void {
+  if (noisePool) return
+  const pool: AudioBuffer[] = []
+  const len = Math.floor(NOISE_POOL_DURATION_S * c.sampleRate)
+  for (let n = 0; n < NOISE_POOL_SIZE; n++) {
+    const buf = c.createBuffer(1, len, c.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1
+    pool.push(buf)
   }
+  noisePool = pool
+}
+
+function makeNoiseBurst(c: AudioContext): AudioBufferSourceNode {
+  ensureNoisePool(c)
+  const pool = noisePool!
+  const buf = pool[Math.floor(Math.random() * pool.length)] ?? pool[0]
   const src = c.createBufferSource()
-  src.buffer = buf
+  if (buf) src.buffer = buf
   return src
 }
 
@@ -217,7 +425,7 @@ function synthShieldThump(amount: number): void {
   subGain.gain.setValueAtTime(0.0001, now)
   subGain.gain.exponentialRampToValueAtTime(0.4 * subVel, now + 0.004)
   subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
-  sub.connect(subGain).connect(c.destination)
+  sub.connect(subGain).connect(out(c))
   sub.start(now)
   sub.stop(now + 0.18)
 
@@ -240,14 +448,14 @@ function synthShieldThump(amount: number): void {
     g.gain.setValueAtTime(0.0001, now)
     g.gain.exponentialRampToValueAtTime(peakJ, now + 0.004)
     g.gain.exponentialRampToValueAtTime(0.0001, now + decayS)
-    osc.connect(g).connect(c.destination)
+    osc.connect(g).connect(out(c))
     osc.start(now)
     osc.stop(now + decayS + 0.02)
   }
 
   // Impact smack: lowpassed noise burst — the "contact" of weapon on plate.
   // Lowpass keeps it dull/heavy instead of bright/tinny.
-  const noise = makeNoiseBurst(c, 0.05)
+  const noise = makeNoiseBurst(c)
   const lp = c.createBiquadFilter()
   lp.type = 'lowpass'
   lp.frequency.value = 700 * jitter(0.15)
@@ -256,7 +464,7 @@ function synthShieldThump(amount: number): void {
   ng.gain.setValueAtTime(0.0001, now)
   ng.gain.exponentialRampToValueAtTime(0.32 * jitter(0.18) * I, now + 0.003)
   ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
-  noise.connect(lp).connect(ng).connect(c.destination)
+  noise.connect(lp).connect(ng).connect(out(c))
   noise.start(now)
   noise.stop(now + 0.08)
 }
@@ -272,11 +480,17 @@ function synthShieldThump(amount: number): void {
 // partials at staggered start times. Multiple partials and stagger mean
 // the ear doesn't lock onto any single pitch; perceptually they merge
 // into a "shimmery metallic decay" rather than a tone.
+// Track recent shield-cracks so we can drop debris/ring count when they
+// pile up faster than the ear can resolve them.
+let lastShieldCrackAtSec = 0
+
 function synthShieldCrack(amount: number): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
   const I = intensity(amount)
+  const stacked = now - lastShieldCrackAtSec < 0.15
+  lastShieldCrackAtSec = now
 
   // Sub-thud: anchor, not centerpiece. Peak cut from 0.5 → 0.32 and decay
   // shortened so the cue doesn't lead with a heavy bass drop — that
@@ -290,7 +504,7 @@ function synthShieldCrack(amount: number): void {
   thudGain.gain.setValueAtTime(0.0001, now)
   thudGain.gain.exponentialRampToValueAtTime(0.32 * jitter(0.18) * I, now + 0.005)
   thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
-  thud.connect(thudGain).connect(c.destination)
+  thud.connect(thudGain).connect(out(c))
   thud.start(now)
   thud.stop(now + 0.18)
 
@@ -300,7 +514,7 @@ function synthShieldCrack(amount: number): void {
   // (slightly brighter than before) gives the "settling crrk" with a touch
   // more shatter character.
   const snapDur = 0.12
-  const snap = makeNoiseBurst(c, snapDur)
+  const snap = makeNoiseBurst(c)
   const snapBp = c.createBiquadFilter()
   snapBp.type = 'bandpass'
   snapBp.frequency.value = 1600 * jitter(0.18)
@@ -318,14 +532,14 @@ function synthShieldCrack(amount: number): void {
     .connect(snapBp)
     .connect(snapLp)
     .connect(snapGain)
-    .connect(c.destination)
+    .connect(out(c))
   snap.start(now)
   snap.stop(now + snapDur + 0.02)
 
   // Fracture crunch: lowpassed noise burst — the wideband "crack" of the
   // material giving way. Brighter start (3 kHz → 800 Hz sweep) so the
   // initial crack has shatter bite, not just dull thud.
-  const crunch = makeNoiseBurst(c, 0.14)
+  const crunch = makeNoiseBurst(c)
   const crunchLp = c.createBiquadFilter()
   crunchLp.type = 'lowpass'
   crunchLp.frequency.setValueAtTime(3000 * jitter(0.18), now)
@@ -335,7 +549,7 @@ function synthShieldCrack(amount: number): void {
   crunchGain.gain.setValueAtTime(0.0001, now)
   crunchGain.gain.exponentialRampToValueAtTime(0.36 * jitter(0.18) * I, now + 0.004)
   crunchGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
-  crunch.connect(crunchLp).connect(crunchGain).connect(c.destination)
+  crunch.connect(crunchLp).connect(crunchGain).connect(out(c))
   crunch.start(now)
   crunch.stop(now + 0.18)
 
@@ -345,12 +559,19 @@ function synthShieldCrack(amount: number): void {
   // than a single chord. The stagger is what prevents the squeak — a
   // single sustained sine in this band registers as a pure tone, but
   // three brief overlapping ones merge into "metallic shimmer".
-  const ringPartials: [number, number, number][] = [
-    // freq, startOffset(s), decay(s)
-    [1820, 0.0, 0.13],
-    [2470, 0.012, 0.1],
-    [3540, 0.024, 0.08],
-  ]
+  // Stacked instances drop the third (highest, quietest) partial — its
+  // 80ms decay is short enough that listeners won't notice it missing
+  // when another crack is already filling the same band.
+  const ringPartials: [number, number, number][] = stacked
+    ? [
+        [1820, 0.0, 0.13],
+        [2470, 0.012, 0.1],
+      ]
+    : [
+        [1820, 0.0, 0.13],
+        [2470, 0.012, 0.1],
+        [3540, 0.024, 0.08],
+      ]
   for (const [freq, offset, decay] of ringPartials) {
     const osc = c.createOscillator()
     osc.type = 'sine'
@@ -360,7 +581,7 @@ function synthShieldCrack(amount: number): void {
     g.gain.setValueAtTime(0.0001, t)
     g.gain.exponentialRampToValueAtTime(0.05, t + 0.003)
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay)
-    osc.connect(g).connect(c.destination)
+    osc.connect(g).connect(out(c))
     osc.start(t)
     osc.stop(t + decay + 0.02)
   }
@@ -370,10 +591,12 @@ function synthShieldCrack(amount: number): void {
   // metallic chunks rather than wood/stone tumbling. Count scales with the
   // intensity of the break — a 6-damage hit kicks up more shrapnel than a
   // 1-damage finisher.
-  const debrisCount = 3 + Math.floor((I - 1) * 3) // I=1 → 3, I=1.7 → 5
+  // Stacked: cap debris at 2 regardless of intensity. The lost shrapnel
+  // count is masked by the previous crack still ringing.
+  const debrisCount = stacked ? 2 : 3 + Math.floor((I - 1) * 3) // I=1 → 3, I=1.7 → 5
   for (let i = 0; i < debrisCount; i++) {
     const t = now + 0.06 + Math.random() * 0.2
-    const burst = makeNoiseBurst(c, 0.08)
+    const burst = makeNoiseBurst(c)
     const bp = c.createBiquadFilter()
     bp.type = 'bandpass'
     bp.frequency.value = 400 + Math.random() * 1300
@@ -382,18 +605,25 @@ function synthShieldCrack(amount: number): void {
     g.gain.setValueAtTime(0.0001, t)
     g.gain.exponentialRampToValueAtTime(0.18 * I, t + 0.004)
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08)
-    burst.connect(bp).connect(g).connect(c.destination)
+    burst.connect(bp).connect(g).connect(out(c))
     burst.start(t)
     burst.stop(t + 0.1)
   }
 }
 
-// Health-potion bleep. Two-note arcade pickup (root → perfect fifth) on a
+// ---- Heal / health-potion variants ----
+// Bleep (the original/baseline) is a two-note arcade pickup with a fizzy
+// noise sprinkle. Variants below explore different "what does drinking a
+// potion sound like" sketches: pure music-box chime, pure bubbling fizz
+// (no melody), longer rising arpeggio, slow-swell pad, scattered sparkle,
+// and a three-note chord.
+
+// Bleep (baseline): Two-note arcade pickup (root → perfect fifth) on a
 // square wave for the classic 8-bit pickup character, with a bandpassed
 // noise sprinkle threaded behind it so the cue reads as "fizzy" / "rustly"
 // rather than a clean tone. Tiny pitch jitter per call so chained heals
 // don't sound like a tape loop.
-function synthHeal(amount: number): void {
+function synthHealBleep(amount: number): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
@@ -424,7 +654,7 @@ function synthHeal(amount: number): void {
     g.gain.setValueAtTime(0.0001, t)
     g.gain.exponentialRampToValueAtTime(0.14 * I, t + 0.008)
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-    osc.connect(lp).connect(g).connect(c.destination)
+    osc.connect(lp).connect(g).connect(out(c))
     osc.start(t)
     osc.stop(t + dur + 0.02)
   }
@@ -433,7 +663,7 @@ function synthHeal(amount: number): void {
   // "rustle" of potion bubbling/sparkling. Bandpass keeps it from hissing.
   // Bigger heals get more fizz — louder, longer, brighter.
   const fizzDur = 0.22 * (0.85 + 0.3 * (I - 1) / 0.7)
-  const noise = makeNoiseBurst(c, fizzDur)
+  const noise = makeNoiseBurst(c)
   const bp = c.createBiquadFilter()
   bp.type = 'bandpass'
   bp.frequency.setValueAtTime(2400, now)
@@ -443,14 +673,227 @@ function synthHeal(amount: number): void {
   ng.gain.setValueAtTime(0.0001, now)
   ng.gain.exponentialRampToValueAtTime(0.06 * I, now + 0.01)
   ng.gain.exponentialRampToValueAtTime(0.0001, now + fizzDur)
-  noise.connect(bp).connect(ng).connect(c.destination)
+  noise.connect(bp).connect(ng).connect(out(c))
   noise.start(now)
   noise.stop(now + fizzDur + 0.02)
 }
 
+// Shared sine-with-envelope partial used by the chime/arpeggio/swell/sparkle/
+// chord heal variants. Scheduled at absolute AudioContext time `t`.
+function schedRingPartial(
+  c: AudioContext,
+  t: number,
+  freq: number,
+  peak: number,
+  decay: number,
+  attack: number,
+): void {
+  const osc = c.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.value = freq
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(peak, t + attack)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay)
+  osc.connect(g).connect(out(c))
+  osc.start(t)
+  osc.stop(t + decay + 0.02)
+}
+
+// Chime: mellow pure-sine version of the bleep. Same two-note pattern (root
+// → perfect fifth) but pure sines and no fizz — music-box character rather
+// than arcade. Slightly longer decays so it doesn't feel rushed without the
+// noise underneath.
+function synthHealChime(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+  const pitchJ = jitter(0.05)
+  const fifthOffset = 0.075 + (Math.random() - 0.5) * 0.015
+
+  schedRingPartial(c, now, 660 * pitchJ, 0.11 * I, 0.18, 0.005)
+  schedRingPartial(c, now + fifthOffset, 990 * pitchJ, 0.11 * I, 0.22, 0.005)
+}
+
+// Bubble: pure potion-bubbling — no melodic content. Three bandpassed-noise
+// bursts at random frequencies in the 1.5–3.5 kHz band, scattered across
+// 180ms. Reads as "you're drinking something" without any acquisition pip.
+function synthHealBubble(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+
+  for (let i = 0; i < 3; i++) {
+    const t = now + i * 0.055 + Math.random() * 0.025
+    const dur = 0.06
+    const burst = makeNoiseBurst(c)
+    const bp = c.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.frequency.value = 1500 + Math.random() * 2000
+    bp.Q.value = 2.2
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(0.1 * I, t + 0.005)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    burst.connect(bp).connect(g).connect(out(c))
+    burst.start(t)
+    burst.stop(t + dur + 0.02)
+  }
+}
+
+// Arpeggio: longer rising 4-note major arpeggio (root + third + fifth +
+// octave). Starts at 520 Hz so the run climbs into chime territory. Reads
+// as a more deliberate "you regained health" pattern than the 2-note bleep.
+function synthHealArpeggio(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+  const pitchJ = jitter(0.04)
+
+  const base = 520 * pitchJ
+  // Root + major third + perfect fifth + octave.
+  const RATIOS = [1.0, 1.26, 1.5, 2.0]
+  for (let i = 0; i < RATIOS.length; i++) {
+    const ratio = RATIOS[i]
+    if (ratio === undefined) continue
+    schedRingPartial(c, now + i * 0.04, base * ratio, 0.085 * I, 0.16, 0.004)
+  }
+}
+
+// Swell: slow-attack sustained sine pad — 60ms swell-in, 400ms decay, two
+// octave-stacked partials (root + octave). Reads as warm regenerative
+// healing rather than a quick pickup pip. Most "passive heal" of the variants.
+function synthHealSwell(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+  const pitchJ = jitter(0.04)
+
+  const root = 520 * pitchJ
+  schedRingPartial(c, now, root, 0.09 * I, 0.4, 0.06)
+  schedRingPartial(c, now, root * 2.0, 0.045 * I, 0.3, 0.06)
+}
+
+// Sparkle: scattered high pings — same family as armor's sparkle but in a
+// slightly lower band (1.6–3.2 kHz). 5 short sine pings, random frequencies,
+// scattered across 180ms. Reads as "magical healing energy" rather than
+// "drinking a potion".
+function synthHealSparkle(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+
+  for (let i = 0; i < 5; i++) {
+    const t = now + Math.random() * 0.18
+    const freq = 1600 + Math.random() * 1600
+    schedRingPartial(c, t, freq, 0.06 * I, 0.1, 0.003)
+  }
+}
+
+// Chord: three notes played simultaneously — root + fifth + octave — at
+// 520/780/1040 Hz on pure sines. Same arpeggio notes as Arpeggio but all at
+// once instead of in sequence. Reads as a brief warm triadic chime, no
+// time-spread climb.
+function synthHealChord(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+  const pitchJ = jitter(0.04)
+
+  const root = 520 * pitchJ
+  schedRingPartial(c, now, root, 0.07 * I, 0.22, 0.005)
+  schedRingPartial(c, now, root * 1.5, 0.055 * I, 0.2, 0.005)
+  schedRingPartial(c, now, root * 2.0, 0.04 * I, 0.18, 0.005)
+}
+
+// --- Heal-variant selection (parallel to armor variant machinery). ---
+
+export const HEAL_VARIANTS = [
+  'bleep',
+  'chime',
+  'bubble',
+  'arpeggio',
+  'swell',
+  'sparkle',
+  'chord',
+] as const
+export type HealVariant = (typeof HEAL_VARIANTS)[number]
+
+const HEAL_VARIANT_KEY = 'heal-variant'
+// Locked in as the 4-note rising arpeggio after picker A/B. The HealPicker UI
+// has been removed; the variant machinery stays reachable via setHealVariant()
+// so the alternatives can be re-auditioned without re-deriving them.
+const DEFAULT_HEAL_VARIANT: HealVariant = 'arpeggio'
+
+function readHealVariant(): HealVariant {
+  try {
+    const v = localStorage.getItem(HEAL_VARIANT_KEY) as HealVariant | null
+    if (v && (HEAL_VARIANTS as readonly string[]).includes(v)) return v
+  } catch {
+    // localStorage unavailable
+  }
+  return DEFAULT_HEAL_VARIANT
+}
+
+let healVariant: HealVariant = readHealVariant()
+const healVariantListeners = new Set<(v: HealVariant) => void>()
+
+export function getHealVariant(): HealVariant {
+  return healVariant
+}
+
+export function setHealVariant(v: HealVariant): void {
+  healVariant = v
+  try {
+    localStorage.setItem(HEAL_VARIANT_KEY, v)
+  } catch {
+    // no-op
+  }
+  for (const l of healVariantListeners) l(v)
+}
+
+export function subscribeHealVariant(
+  listener: (v: HealVariant) => void,
+): () => void {
+  healVariantListeners.add(listener)
+  return () => {
+    healVariantListeners.delete(listener)
+  }
+}
+
+function synthHealForVariant(v: HealVariant, amount: number): void {
+  switch (v) {
+    case 'bleep':
+      return synthHealBleep(amount)
+    case 'chime':
+      return synthHealChime(amount)
+    case 'bubble':
+      return synthHealBubble(amount)
+    case 'arpeggio':
+      return synthHealArpeggio(amount)
+    case 'swell':
+      return synthHealSwell(amount)
+    case 'sparkle':
+      return synthHealSparkle(amount)
+    case 'chord':
+      return synthHealChord(amount)
+  }
+}
+
 export function playHealSfx(amount = 1): void {
   if (muted) return
-  synthHeal(amount)
+  synthHealForVariant(healVariant, amount)
+}
+
+// Audition a heal variant — bypasses mute on purpose, matching previewDropVariant.
+export function previewHealVariant(v: HealVariant): void {
+  synthHealForVariant(v, 1)
 }
 
 // Cascade chime — fires on each chain link (level >= 1). Mellow music-box
@@ -504,7 +947,7 @@ function synthCascadeChime(level: number): void {
     // "click" edge, fast enough not to read as a blown/flute attack.
     g.gain.exponentialRampToValueAtTime(peakJ * loudness, now + attackTime)
     g.gain.exponentialRampToValueAtTime(0.0001, now + decayS)
-    osc.connect(g).connect(c.destination)
+    osc.connect(g).connect(out(c))
     osc.start(now)
     osc.stop(now + decayS + 0.02)
   }
@@ -591,7 +1034,7 @@ function synthCascadeCelebration(levels: number): void {
         startT + attackTime,
       )
       g.gain.exponentialRampToValueAtTime(0.0001, startT + decayS)
-      osc.connect(g).connect(c.destination)
+      osc.connect(g).connect(out(c))
       osc.start(startT)
       osc.stop(startT + decayS + 0.02)
     }
@@ -614,7 +1057,7 @@ function synthCascadeCelebration(levels: number): void {
       pg.gain.setValueAtTime(0.0001, t)
       pg.gain.exponentialRampToValueAtTime(0.022 * depthScale, t + 0.008)
       pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.16)
-      ping.connect(pg).connect(c.destination)
+      ping.connect(pg).connect(out(c))
       ping.start(t)
       ping.stop(t + 0.18)
     }
@@ -663,7 +1106,7 @@ function synthTurnStart(): void {
       g.gain.setValueAtTime(0.0001, t)
       g.gain.exponentialRampToValueAtTime(peakJ, t + attackTime)
       g.gain.exponentialRampToValueAtTime(0.0001, t + decayS)
-      osc.connect(g).connect(c.destination)
+      osc.connect(g).connect(out(c))
       osc.start(t)
       osc.stop(t + decayS + 0.02)
     }
@@ -712,7 +1155,7 @@ function synthExtraTurn(): void {
       g.gain.setValueAtTime(0.0001, t)
       g.gain.exponentialRampToValueAtTime(peakJ, t + attackTime)
       g.gain.exponentialRampToValueAtTime(0.0001, t + decayS)
-      osc.connect(g).connect(c.destination)
+      osc.connect(g).connect(out(c))
       osc.start(t)
       osc.stop(t + decayS + 0.02)
     }
@@ -733,7 +1176,7 @@ function synthExtraTurn(): void {
     pg.gain.setValueAtTime(0.0001, t)
     pg.gain.exponentialRampToValueAtTime(0.022, t + 0.008)
     pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.18)
-    ping.connect(pg).connect(c.destination)
+    ping.connect(pg).connect(out(c))
     ping.start(t)
     ping.stop(t + 0.2)
   }
@@ -744,61 +1187,399 @@ export function playExtraTurnSfx(): void {
   synthExtraTurn()
 }
 
-// Subtle wooden clack for gem clears. Pitched bandpassed noise burst in the
-// mid-range gives the "tac" of contact, layered with a short low sine for
-// body weight. Pitch jitter per call so chained clears don't sound like a
-// sample loop. Kept quiet — this fires on every cascade step and shouldn't
-// fight the chime or damage cues.
-function synthClack(clusterSize: number): void {
+// 7-note C-major arpeggio climbing two octaves (~770ms) + sustained C3
+// bass + sparkle shower. Final note rings ~2s so the cue lands rather
+// than beeps.
+function synthVictory(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
-  // Renamed from `jitter` to `pitchJ` — shadowed the module-level jitter()
-  // helper, which made the function read confusingly after the helper was
-  // introduced.
-  const pitchJ = 1 + (Math.random() - 0.5) * 0.2
-  // Cluster intensity: a 3-match plays at baseline; 4- and 5-matches read as
-  // chunkier (more weight, slightly bigger tac). Keep the curve gentler than
-  // damage/heal — clack fires constantly and any per-cell loudness boost
-  // adds up fast in a cascade.
-  const I = 1 + 0.18 * Math.log2(Math.max(1, clusterSize / 3))
-
-  // Wooden "tac": bandpassed noise around 1.8 kHz. Q=3 keeps it tonal-ish
-  // (woody) rather than bright/hissy. ~55ms total so it doesn't smear into
-  // the next event in a fast cascade.
-  const tacDur = 0.055
-  const tac = makeNoiseBurst(c, tacDur)
-  const bp = c.createBiquadFilter()
-  bp.type = 'bandpass'
-  bp.frequency.value = 1800 * pitchJ
-  bp.Q.value = 3
-  const tg = c.createGain()
-  tg.gain.setValueAtTime(0.0001, now)
-  tg.gain.exponentialRampToValueAtTime(0.18 * I, now + 0.002)
-  tg.gain.exponentialRampToValueAtTime(0.0001, now + tacDur)
-  tac.connect(bp).connect(tg).connect(c.destination)
-  tac.start(now)
-  tac.stop(now + tacDur + 0.02)
-
-  // Body thump: short sine at ~280 Hz with fast decay — gives the clack a
-  // bit of weight so it doesn't sound thin/papery. Inaudible on its own but
-  // matters when stacked. Larger clusters pitch the body a hair lower.
-  const body = c.createOscillator()
-  body.type = 'sine'
-  body.frequency.setValueAtTime(280 * pitchJ * (2 - I), now)
-  body.frequency.exponentialRampToValueAtTime(200 * pitchJ * (2 - I), now + 0.05)
+  // C5 base, ascending triad doubled across two octaves on pure 5/4/3/2
+  // ratios so the climb lands on chord tones.
+  const baseFreq = 523.25
+  const RATIOS = [1, 5 / 4, 3 / 2, 2, 5 / 2, 3, 4]
+  const noteCount = RATIOS.length
+  const stagger = 0.11
+  for (let i = 0; i < noteCount; i++) {
+    const ratio = RATIOS[i]
+    if (ratio === undefined) continue
+    // First note locks the downbeat; rest humanise with small jitter.
+    const staggerJ = i === 0 ? 0 : (Math.random() - 0.5) * 0.025
+    const t = now + stagger * i + staggerJ
+    const isLast = i === noteCount - 1
+    // Final note rings ~3.5× longer — turns the arpeggio into a chord
+    // landing instead of a 7-note trill.
+    const decayMul = isLast ? 3.6 : 1.0
+    const partials: [number, number, number][] = [
+      [1.0, 0.1, 600 * decayMul],
+      [2.0, 0.04, 360 * decayMul],
+      [4.0, 0.014, 180 * decayMul],
+    ]
+    const attackTime = 0.014 * jitter(0.2)
+    for (const [pRatio, peak, decay] of partials) {
+      const osc = c.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = baseFreq * ratio * pRatio
+      const peakJ = peak * jitter(0.15)
+      const decayS = (decay / 1000) * jitter(0.15)
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(peakJ, t + attackTime)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decayS)
+      osc.connect(g).connect(out(c))
+      osc.start(t)
+      osc.stop(t + decayS + 0.02)
+    }
+  }
+  // C3 bass thrum — center of gravity under the arpeggio.
+  const arpEnd = now + stagger * (noteCount - 1)
+  const bass = c.createOscillator()
+  bass.type = 'sine'
+  bass.frequency.value = 130.81
   const bg = c.createGain()
   bg.gain.setValueAtTime(0.0001, now)
-  bg.gain.exponentialRampToValueAtTime(0.1 * I, now + 0.003)
-  bg.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
-  body.connect(bg).connect(c.destination)
-  body.start(now)
-  body.stop(now + 0.08)
+  bg.gain.exponentialRampToValueAtTime(0.09, now + 0.1)
+  bg.gain.setValueAtTime(0.09, arpEnd)
+  bg.gain.exponentialRampToValueAtTime(0.0001, arpEnd + 1.5)
+  bass.connect(bg).connect(out(c))
+  bass.start(now)
+  bass.stop(arpEnd + 1.6)
+  // 8 high pings scattered through the arpeggio for shimmer.
+  const arpDur = stagger * (noteCount - 1) + 1.0
+  for (let i = 0; i < 8; i++) {
+    const t = now + 0.08 + Math.random() * arpDur
+    const freq = baseFreq * (4 + Math.random() * 3)
+    if (freq > 5500) continue
+    const ping = c.createOscillator()
+    ping.type = 'sine'
+    ping.frequency.value = freq
+    const pg = c.createGain()
+    pg.gain.setValueAtTime(0.0001, t)
+    pg.gain.exponentialRampToValueAtTime(0.025, t + 0.008)
+    pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.2)
+    ping.connect(pg).connect(out(c))
+    ping.start(t)
+    ping.stop(t + 0.22)
+  }
+}
+
+export function playVictorySfx(): void {
+  if (muted) return
+  synthVictory()
+}
+
+// Staggered — the enemy's shield broke and they're dazed, skipping their
+// turn. Three descending sine notes, each bending slightly downward, give
+// a "stumble / off-balance" feel. Same music-box sine voice as turn-start
+// and extra-turn so it reads as part of the same family, but the descent
+// inverts the "triumphant" character — this is the *enemy* reeling, not
+// the player being rewarded directly. Lands shortly after the shield-crack
+// SFX (which fired on player attack) so it shouldn't double up on impact.
+function synthStaggered(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  // Minor-flavored descent (roughly E5 → C#5 → A4). Pitch jitter per call
+  // so chained stagger events on multi-enemy boards don't sample-loop.
+  const detune = jitter(0.03)
+  const FREQS = [660, 555, 440]
+  const gap = 0.085 + (Math.random() - 0.5) * 0.012
+  for (let i = 0; i < FREQS.length; i++) {
+    const freq = FREQS[i]
+    if (freq === undefined) continue
+    const t = now + gap * i
+    // Each note bends down ~6% over its decay — the "wobble" of a dazed
+    // enemy. Subtle, but enough that the cue doesn't read as pure-tone.
+    const decay = 0.22
+    const partials: [number, number][] = [
+      [1.0, 0.09],
+      [2.0, 0.022],
+    ]
+    const attack = 0.02 * jitter(0.25)
+    for (const [ratio, peak] of partials) {
+      const osc = c.createOscillator()
+      osc.type = 'sine'
+      const startF = freq * ratio * detune
+      osc.frequency.setValueAtTime(startF, t)
+      osc.frequency.exponentialRampToValueAtTime(startF * 0.94, t + decay)
+      const g = c.createGain()
+      const peakJ = peak * jitter(0.2)
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(peakJ, t + attack)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay)
+      osc.connect(g).connect(out(c))
+      osc.start(t)
+      osc.stop(t + decay + 0.02)
+    }
+  }
+}
+
+export function playStaggeredSfx(): void {
+  if (muted) return
+  synthStaggered()
+}
+
+// Gem-match-clear variants — fires once per cleared cluster from a match.
+// Like the drop cue, this fires very frequently, so all variants are mixed
+// quietly. All variants scale with cluster size via the shared `I` factor
+// (gentler curve than damage/heal — clack fires constantly and per-cell
+// loudness boosts add up fast in a cascade).
+function matchIntensity(clusterSize: number): number {
+  return 1 + 0.18 * Math.log2(Math.max(1, clusterSize / 3))
+}
+
+// ---- Twinkle family ----
+// All twinkle variants share the same DNA: a small number of short pure-sine
+// pings, staggered. They differ in interval choice (octave / fifth / both)
+// and timing. Twinkle (octave, default) is the anchor — Glint and Chirp
+// are siblings that explore adjacent territory without losing minimalism.
+//
+// All use the same base frequency (1700 Hz) and same intensity-driven pitch
+// scaling so the family feels coherent — only the interval pattern changes.
+
+// Helper: render a sequence of staggered sine-ping notes at a given base
+// frequency. Used by all three twinkle variants. Centralized here so they
+// stay tightly comparable — the *only* differences between variants are
+// the ratios array and the per-note stagger / peak / decay tuple.
+function renderTwinkleSeq(
+  c: AudioContext,
+  now: number,
+  base: number,
+  detune: number,
+  ratios: number[],
+  stagger: number,
+  peak: number,
+  decay: number,
+  attack: number,
+  intensity: number,
+): void {
+  for (let i = 0; i < ratios.length; i++) {
+    const ratio = ratios[i]
+    if (ratio === undefined) continue
+    const t = now + stagger * i
+    const osc = c.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = base * ratio * detune
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(peak * intensity, t + attack)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay)
+    osc.connect(g).connect(out(c))
+    osc.start(t)
+    osc.stop(t + decay + 0.02)
+  }
+}
+
+// Twinkle (default): root + octave. The user-validated minimal anchor.
+function synthMatchTwinkle(clusterSize: number): void {
+  const c = getCtx()
+  if (!c) return
+  const I = matchIntensity(clusterSize)
+  const detune = jitter(0.025)
+  const base = 1700 * (1 + 0.06 * (I - 1) / 0.18)
+  renderTwinkleSeq(c, c.currentTime, base, detune, [1, 2], 0.012, 0.045, 0.08, 0.003, I)
+}
+
+// Glint: root + perfect fifth (7 semitones) instead of an octave. Smaller
+// interval = a gentler tonal step — the cue reads as "two pings" rather
+// than "low ping, high ping". Slightly quieter and shorter decay so the
+// fifth doesn't accidentally land as a melody fragment.
+function synthMatchGlint(clusterSize: number): void {
+  const c = getCtx()
+  if (!c) return
+  const I = matchIntensity(clusterSize)
+  const detune = jitter(0.025)
+  const base = 1700 * (1 + 0.06 * (I - 1) / 0.18)
+  // 2^(7/12) = perfect fifth (~1.498). Equal-tempered fifth so it lines up
+  // cleanly with the cascade chime if both are playing.
+  const FIFTH = Math.pow(2, 7 / 12)
+  renderTwinkleSeq(
+    c, c.currentTime, base, detune,
+    [1, FIFTH],
+    0.012,
+    0.04,   // slightly quieter than Twinkle (0.045)
+    0.07,   // slightly shorter decay (0.08 → 0.07)
+    0.003,
+    I,
+  )
+}
+
+// Reserved (not bound): coin-pickup ping. Originally auditioned as a match-
+// clear variant ("Chirp") — a tiny rising root-fifth-octave arpeggio in the
+// twinkle voice. Validated by user as "a great sound for a coin", so it's
+// parked here for a future coin / gold / loot cue. Not currently wired to
+// any event. Call playCoinPingSfx() when that cue is introduced.
+function synthCoinPing(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  // Re-use matchIntensity for now — small/big coin gain reads bigger/louder
+  // the same way a small/big match does. When the coin cue is wired up, swap
+  // this for a coin-specific curve if needed.
+  const I = matchIntensity(amount)
+  const detune = jitter(0.025)
+  const base = 1700 * (1 + 0.06 * (I - 1) / 0.18)
+  const FIFTH = Math.pow(2, 7 / 12)
+  renderTwinkleSeq(
+    c, c.currentTime, base, detune,
+    [1, FIFTH, 2],
+    0.01,   // tighter stagger so three notes don't bleed into a melody
+    0.035,  // each note quieter — three notes in a row sum louder than two
+    0.07,   // short decay so the arp resolves fast
+    0.003,
+    I,
+  )
+}
+
+export function playCoinPingSfx(amount = 1): void {
+  if (muted) return
+  synthCoinPing(amount)
+}
+
+// ---- Whoosh family ----
+// All whoosh variants share the same DNA: filtered noise with an upward
+// frequency sweep and a swell envelope. They differ in sweep range, peak
+// loudness, and whether they include a tonal anchor.
+
+// Whoosh (formerly the only one): same upward sweep but ~50% louder and
+// peaks earlier (35% into the cue, was 55%) so it punches forward instead
+// of fading in from nothing. Slightly wider sweep range too — the previous
+// version was hard to hear because the bandpass narrowed all the noise
+// content into a thin slice.
+function synthMatchWhoosh(clusterSize: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = matchIntensity(clusterSize)
+  const dur = 0.095
+
+  const noise = makeNoiseBurst(c)
+  const hp = c.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 400
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  // Q lowered from 1.6 → 1.3 — wider band lets more noise energy through.
+  bp.Q.value = 1.3
+  bp.frequency.setValueAtTime(550 * jitter(0.1), now)
+  bp.frequency.exponentialRampToValueAtTime(2800 * jitter(0.1), now + dur)
+
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, now)
+  // Peak ~0.20 (was 0.13) and at 35% of duration (was 55%) — bigger swell
+  // that lands forward, not from behind.
+  g.gain.exponentialRampToValueAtTime(0.2 * I, now + dur * 0.35)
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+  noise.connect(hp).connect(bp).connect(g).connect(out(c))
+  noise.start(now)
+  noise.stop(now + dur + 0.02)
+}
+
+// Swell: longer sibling of Whoosh — same sweep range and Q, but stretched
+// out to 135ms and with the envelope peaking later (50% into the cue, was
+// 35%). Reads as a more deliberate "draw-in" — the motion takes its time
+// before resolving. Slightly quieter peak (0.18 vs 0.20) because the longer
+// duration means more sustained energy.
+function synthMatchSwell(clusterSize: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = matchIntensity(clusterSize)
+  const dur = 0.135
+
+  const noise = makeNoiseBurst(c)
+  const hp = c.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 400
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.Q.value = 1.3
+  bp.frequency.setValueAtTime(550 * jitter(0.1), now)
+  bp.frequency.exponentialRampToValueAtTime(2800 * jitter(0.1), now + dur)
+
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, now)
+  g.gain.exponentialRampToValueAtTime(0.18 * I, now + dur * 0.5)
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+  noise.connect(hp).connect(bp).connect(g).connect(out(c))
+  noise.start(now)
+  noise.stop(now + dur + 0.02)
+}
+
+// User auditioned all five against each other and locked in 'swell' as
+// the match-clear cue. The picker UI was removed at that point, but the
+// variant state stays so the underlying synth functions (twinkle / glint /
+// whoosh / swell) remain reachable via setMatchVariant() — useful if we
+// ever want to A/B again, swap defaults, or expose a new UI. 'chirp' was
+// repurposed as the reserved coin-ping synth above; not listed here.
+export const MATCH_VARIANTS = [
+  'twinkle',
+  'glint',
+  'whoosh',
+  'swell',
+] as const
+export type MatchVariant = (typeof MATCH_VARIANTS)[number]
+
+const MATCH_VARIANT_KEY = 'match-variant'
+const DEFAULT_MATCH_VARIANT: MatchVariant = 'swell'
+
+function readMatchVariant(): MatchVariant {
+  try {
+    const v = localStorage.getItem(MATCH_VARIANT_KEY) as MatchVariant | null
+    if (v && (MATCH_VARIANTS as readonly string[]).includes(v)) return v
+  } catch {
+    // localStorage unavailable
+  }
+  return DEFAULT_MATCH_VARIANT
+}
+
+let matchVariant: MatchVariant = readMatchVariant()
+const matchVariantListeners = new Set<(v: MatchVariant) => void>()
+
+export function getMatchVariant(): MatchVariant {
+  return matchVariant
+}
+
+export function setMatchVariant(v: MatchVariant): void {
+  matchVariant = v
+  try {
+    localStorage.setItem(MATCH_VARIANT_KEY, v)
+  } catch {
+    // no-op
+  }
+  for (const l of matchVariantListeners) l(v)
+}
+
+export function subscribeMatchVariant(
+  listener: (v: MatchVariant) => void,
+): () => void {
+  matchVariantListeners.add(listener)
+  return () => {
+    matchVariantListeners.delete(listener)
+  }
+}
+
+function synthMatchForVariant(v: MatchVariant, clusterSize: number): void {
+  switch (v) {
+    case 'twinkle':
+      return synthMatchTwinkle(clusterSize)
+    case 'glint':
+      return synthMatchGlint(clusterSize)
+    case 'whoosh':
+      return synthMatchWhoosh(clusterSize)
+    case 'swell':
+      return synthMatchSwell(clusterSize)
+  }
 }
 
 export function playClackSfx(clusterSize = 3): void {
   if (muted) return
-  synthClack(clusterSize)
+  synthMatchForVariant(matchVariant, clusterSize)
+}
+
+// Audition a match variant at a representative cluster size. Mirrors
+// previewDropVariant — bypasses mute so the picker isn't silent on mute.
+export function previewMatchVariant(v: MatchVariant): void {
+  synthMatchForVariant(v, 3)
 }
 
 // Attack hit. Blade-slash character: an air-cutting *swhip* leading into a
@@ -847,7 +1628,7 @@ function synthAttack(amount: number): void {
     now + 0.003,
   )
   kickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08)
-  kick.connect(kickGain).connect(c.destination)
+  kick.connect(kickGain).connect(out(c))
   kick.start(now)
   kick.stop(now + 0.1)
 
@@ -862,7 +1643,7 @@ function synthAttack(amount: number): void {
   // Highpass at 800 Hz upstream removes low rumble so the muffling stage
   // at the end of the sweep doesn't turn into a low-frequency thump.
   const swooshDur = 0.11
-  const swoosh = makeNoiseBurst(c, swooshDur)
+  const swoosh = makeNoiseBurst(c)
   const swooshHp = c.createBiquadFilter()
   swooshHp.type = 'highpass'
   swooshHp.frequency.value = 800
@@ -883,7 +1664,7 @@ function synthAttack(amount: number): void {
     .connect(swooshHp)
     .connect(swooshLp)
     .connect(swooshGain)
-    .connect(c.destination)
+    .connect(out(c))
   swoosh.start(now)
   swoosh.stop(now + swooshDur + 0.02)
 
@@ -891,7 +1672,7 @@ function synthAttack(amount: number): void {
   // defined contact transient. Pulled down from earlier "shink" territory
   // into the upper-mid band so it sits closer to the snap/ring and reads
   // as part of the impact body rather than a separate high layer.
-  const shink = makeNoiseBurst(c, 0.018)
+  const shink = makeNoiseBurst(c)
   const shinkBp = c.createBiquadFilter()
   shinkBp.type = 'bandpass'
   shinkBp.frequency.value = 2400 * pitchJ
@@ -903,14 +1684,14 @@ function synthAttack(amount: number): void {
     now + 0.001,
   )
   shinkGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.018)
-  shink.connect(shinkBp).connect(shinkGain).connect(c.destination)
+  shink.connect(shinkBp).connect(shinkGain).connect(out(c))
   shink.start(now)
   shink.stop(now + 0.025)
 
   // Bright snap: the cutting bite at the moment of contact. Bandpass at
   // 3 kHz with Q=2 keeps it tonal-cracky rather than hissy. Pushed a touch
   // hotter than before so it bridges the shink into the mid crunch.
-  const snap = makeNoiseBurst(c, 0.04)
+  const snap = makeNoiseBurst(c)
   const snapBp = c.createBiquadFilter()
   snapBp.type = 'bandpass'
   snapBp.frequency.value = 3000 * pitchJ
@@ -922,13 +1703,13 @@ function synthAttack(amount: number): void {
     now + 0.002,
   )
   snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045)
-  snap.connect(snapBp).connect(snapGain).connect(c.destination)
+  snap.connect(snapBp).connect(snapGain).connect(out(c))
   snap.start(now)
   snap.stop(now + 0.06)
 
   // Mid crunch: the meat. Bandpass at ~1.1 kHz, slightly downward sweep so
   // the impact "settles" rather than holding steady.
-  const crunch = makeNoiseBurst(c, 0.09)
+  const crunch = makeNoiseBurst(c)
   const crunchBp = c.createBiquadFilter()
   crunchBp.type = 'bandpass'
   crunchBp.frequency.setValueAtTime(1200 * pitchJ, now)
@@ -943,7 +1724,7 @@ function synthAttack(amount: number): void {
     now + 0.003,
   )
   crunchGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1)
-  crunch.connect(crunchBp).connect(crunchGain).connect(c.destination)
+  crunch.connect(crunchBp).connect(crunchGain).connect(out(c))
   crunch.start(now)
   crunch.stop(now + 0.12)
 }
@@ -953,9 +1734,91 @@ export function playAttackSfx(amount = 1): void {
   synthAttack(amount)
 }
 
+// --- Drop sound variant selection ---
+//
+// `playDropSfx` fires very frequently (once per cascade settle). The picker
+// UI was removed once the user locked in 'clack', but the state machinery
+// (variants list, localStorage persistence, dispatch switch) stays so a
+// future UI — or a programmatic setDropVariant() call — can swap flavors
+// without re-deriving them. See the synthDrop* functions above for the
+// per-variant character.
+
+export const DROP_VARIANTS = [
+  'clack',
+  'thump',
+  'tick',
+  'pebble',
+  'tap',
+] as const
+export type DropVariant = (typeof DROP_VARIANTS)[number]
+
+const DROP_VARIANT_KEY = 'drop-variant'
+const DEFAULT_DROP_VARIANT: DropVariant = 'clack'
+
+function readDropVariant(): DropVariant {
+  try {
+    const v = localStorage.getItem(DROP_VARIANT_KEY) as DropVariant | null
+    if (v && (DROP_VARIANTS as readonly string[]).includes(v)) return v
+  } catch {
+    // localStorage unavailable
+  }
+  return DEFAULT_DROP_VARIANT
+}
+
+let dropVariant: DropVariant = readDropVariant()
+const dropVariantListeners = new Set<(v: DropVariant) => void>()
+
+export function getDropVariant(): DropVariant {
+  return dropVariant
+}
+
+export function setDropVariant(v: DropVariant): void {
+  dropVariant = v
+  try {
+    localStorage.setItem(DROP_VARIANT_KEY, v)
+  } catch {
+    // no-op
+  }
+  for (const l of dropVariantListeners) l(v)
+}
+
+export function subscribeDropVariant(
+  listener: (v: DropVariant) => void,
+): () => void {
+  dropVariantListeners.add(listener)
+  return () => {
+    dropVariantListeners.delete(listener)
+  }
+}
+
+function synthDropForVariant(v: DropVariant): void {
+  switch (v) {
+    case 'thump':
+      return synthDropThump()
+    case 'clack':
+      return synthDropClack()
+    case 'tick':
+      return synthDropTick()
+    case 'pebble':
+      return synthDropPebble()
+    case 'tap':
+      return synthDropTap()
+  }
+}
+
 export function playDropSfx(): void {
   if (muted) return
-  synthDrop()
+  synthDropForVariant(dropVariant)
+}
+
+// Audition a variant without changing the persisted selection. Used by the
+// settings popover so the user can compare options before committing. Note
+// that this BYPASSES the mute check on purpose — if you're auditioning, you
+// want to hear it. (We could honor mute, but then the picker would seem
+// broken on mute; better to let the user audition silently-by-action by
+// just not opening the picker.)
+export function previewDropVariant(v: DropVariant): void {
+  synthDropForVariant(v)
 }
 
 export function playShuffleSfx(): void {
@@ -973,72 +1836,13 @@ export function playShieldCrackSfx(amount = 1): void {
   synthShieldCrack(amount)
 }
 
-// Thump of a blue particle landing on the block badge. Same family as
-// synthShieldThump (low sine pop + lowpassed noise impact) but shorter and
-// brighter so it sits at the same perceived loudness as the other per-match
-// cues (clack, heal, attack). Previously all content sat below 600 Hz —
-// sub-bass alone doesn't cut through small speakers, which made the cue
-// feel weak relative to its siblings. Lifting the lowpass to 1.2 kHz gives
-// the contact a bit of presence without losing the "small thud against a
-// big shield" character.
-function synthShieldParticleTick(amount: number): void {
-  const c = getCtx()
-  if (!c) return
-  const now = c.currentTime
-  const I = intensity(amount)
-  // Heavier = lower-pitched and longer sustain. Pitch drops up to ~25% at
-  // max intensity (1 → 110 Hz, 6 → ~85 Hz) so the thud sits closer to a
-  // "big shield" thunk than the original "light tink".
-  const weightMul = 1 - 0.25 * (I - 1) / 0.7 // I=1 → 1.0, I=1.7 → 0.75
-  const decayMul = 0.85 + 0.4 * (I - 1) / 0.7 // I=1 → 0.85, I=1.7 → 1.25
-
-  // Low sine pop: the body weight of the contact. Pitch jitter per call
-  // keeps chained particle hits from sounding identical.
-  const baseFreq = (110 + (Math.random() - 0.5) * 16) * weightMul
-  const thud = c.createOscillator()
-  thud.type = 'sine'
-  thud.frequency.setValueAtTime(baseFreq, now)
-  thud.frequency.exponentialRampToValueAtTime(
-    baseFreq * 0.62,
-    now + 0.09 * decayMul,
-  )
-  const thudGain = c.createGain()
-  thudGain.gain.setValueAtTime(0.0001, now)
-  thudGain.gain.exponentialRampToValueAtTime(0.34 * I, now + 0.004)
-  thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11 * decayMul)
-  thud.connect(thudGain).connect(c.destination)
-  thud.start(now)
-  thud.stop(now + 0.13 * decayMul)
-
-  // Lowpassed noise impact: the "smack" of contact. Lowpass raised from
-  // 600 → 1200 Hz so a bit of low-mid bite comes through — the previous
-  // setting was almost entirely sub-bass and got lost behind other cues.
-  const noise = makeNoiseBurst(c, 0.05 * decayMul)
-  const lp = c.createBiquadFilter()
-  lp.type = 'lowpass'
-  // Bigger impacts get a touch more low-end weight (cutoff lower) — the
-  // contact sounds chunkier as more shield piles up.
-  lp.frequency.value = 1200 * (1 - 0.2 * (I - 1) / 0.7)
-  lp.Q.value = 1
-  const ng = c.createGain()
-  ng.gain.setValueAtTime(0.0001, now)
-  ng.gain.exponentialRampToValueAtTime(0.24 * I, now + 0.003)
-  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.06 * decayMul)
-  noise.connect(lp).connect(ng).connect(c.destination)
-  noise.start(now)
-  noise.stop(now + 0.07 * decayMul)
-}
-
+// Armor cue (blue particle landing on the block badge) shares the shield-
+// thump sound with the enemy's block-absorbed event. Intentional reuse —
+// both are "armor doing its job".
 export function playShieldParticleTickSfx(amount = 1): void {
   if (muted) return
-  synthShieldParticleTick(amount)
+  synthShieldThump(amount)
 }
-
-// Delay between a pool-gained/healed event firing in the engine and the
-// trail particles visibly landing on their target (HP bar / block badge /
-// enemy). Mirrors TRAIL_TRAVEL_MS in HUD.tsx and TRAIL_ARRIVAL_MS in the
-// AnimationController. Keep in sync if any of them changes.
-const TRAIL_ARRIVAL_MS = 700
 
 // Wire events → SFX. Idempotent — calling install() twice is safe.
 let installed = false
@@ -1046,33 +1850,53 @@ export function installSfxBindings(): void {
   if (installed) return
   installed = true
   // `block-absorbed`/`block-broken` don't carry the blocked amount, but they
-  // fire immediately after `damage-taken` (see enemyTurn.ts) which does.
-  // Stash the most recent damage-taken values and consume them when the
-  // pair-event arrives so the shield SFX can scale with how big the hit was.
-  let lastBlocked = 1
-  let lastUnblocked = 1
+  // fire immediately after their paired damage event. For enemy attacks on
+  // the player that's `damage-taken` (enemyTurn.ts); for player attacks on
+  // an enemy that's `damage-dealt` with source='player-attack' (store.ts).
+  // Stash each side separately so a player breaking an enemy shield doesn't
+  // scale from stale values left over from the previous enemy turn.
+  let lastPlayerBlocked = 1
+  let lastPlayerUnblocked = 1
+  let lastEnemyBlocked = 1
+  let lastEnemyUnblocked = 1
+  const FALL_MIN_MS = 150
+  const FALL_PER_CELL_MS = 80
+  const scheduleDrop = (maxDist: number) => {
+    const fallMs = Math.max(FALL_MIN_MS, FALL_PER_CELL_MS * maxDist)
+    window.setTimeout(playDropSfx, fallMs)
+  }
   subscribeGameEvents((event) => {
     switch (event.kind) {
       case 'gems-cleared':
         if (event.cells.length > 0) playClackSfx(event.cells.length)
         return
       case 'gems-fell':
-        // Once per cascade step, not per gem — otherwise a fully-cleared
-        // row plays a stack of overlapping thunks. Delay matches the longest
-        // gem's fall duration (mirror of AnimationController's
-        // `max(DROP_MIN_MS, DROP_PER_CELL_MS * distance)`) so the thump
-        // lands when the gems visibly hit the board, not when the event
-        // fires at the start of the animation.
+        // One thunk per event, not per gem — otherwise a fully-cleared row
+        // plays a stack of overlapping thunks. Delay matches the longest
+        // gem's fall duration so the thump lands when the gems visibly hit
+        // the board, not when the event fires at the start of the animation.
         if (event.movements.length > 0) {
           let maxDist = 0
           for (const m of event.movements) {
             const d = Math.abs(m.to.y - m.from.y)
             if (d > maxDist) maxDist = d
           }
-          const FALL_MIN_MS = 150
-          const FALL_PER_CELL_MS = 80
-          const fallMs = Math.max(FALL_MIN_MS, FALL_PER_CELL_MS * maxDist)
-          window.setTimeout(playDropSfx, fallMs)
+          scheduleDrop(maxDist)
+        }
+        return
+      case 'gems-spawned':
+        // Spawned gems fall in alongside gems-fell (AnimationController runs
+        // animateFall and animateSpawn in parallel), so this thunk fires near
+        // the fall thunk. Spawn fall distance is usually larger (gems enter
+        // from above the board), so the spawn thunk still lands slightly
+        // later. Spawn at y starts (y+1) cells above the board.
+        if (event.spawns.length > 0) {
+          let maxDist = 0
+          for (const s of event.spawns) {
+            const d = s.at.y + 1
+            if (d > maxDist) maxDist = d
+          }
+          scheduleDrop(maxDist)
         }
         return
       case 'cascade-start':
@@ -1099,10 +1923,15 @@ export function installSfxBindings(): void {
         // but future enemy reflect damage etc.) don't have travel time, so
         // play immediately. Pass the amount so big hits sound heavier than
         // small ones.
+        //
+        // Also stash blocked/amount so the block-absorbed/block-broken event
+        // that follows (for enemy targets) can scale itself correctly.
         const amt = event.amount
         if (event.source === 'player-attack') {
-          window.setTimeout(() => playAttackSfx(amt), TRAIL_ARRIVAL_MS)
-        } else {
+          lastEnemyBlocked = event.blocked
+          lastEnemyUnblocked = event.amount
+          if (amt > 0) scheduleAtTrailArrival(() => playAttackSfx(amt))
+        } else if (amt > 0) {
           playAttackSfx(amt)
         }
         return
@@ -1111,7 +1940,7 @@ export function installSfxBindings(): void {
         // Delay so the cue lands when the green trail visibly hits the HP
         // bar, not at gem-match time. Bigger heals → louder, fizzier.
         const amt = event.amount
-        window.setTimeout(() => playHealSfx(amt), TRAIL_ARRIVAL_MS)
+        scheduleAtTrailArrival(() => playHealSfx(amt))
         return
       }
       case 'pool-gained': {
@@ -1119,10 +1948,7 @@ export function installSfxBindings(): void {
         // Scale with the amount: 6-armor lands chunkier than 1-armor.
         if (event.color === 'blue') {
           const amt = event.amount
-          window.setTimeout(
-            () => playShieldParticleTickSfx(amt),
-            TRAIL_ARRIVAL_MS,
-          )
+          scheduleAtTrailArrival(() => playShieldParticleTickSfx(amt))
         }
         return
       }
@@ -1134,24 +1960,42 @@ export function installSfxBindings(): void {
         // can scale itself, then play the attack cue if any damage got
         // through the shield. (If everything was blocked, the shield SFX
         // does the talking on its own.)
-        lastBlocked = event.blocked
-        lastUnblocked = event.amount
+        lastPlayerBlocked = event.blocked
+        lastPlayerUnblocked = event.amount
         if (event.amount > 0) playAttackSfx(event.amount)
         return
-      case 'block-absorbed':
-        // The shield-block visual (spawnShieldEffect in AnimationController)
-        // fires synchronously with the event, NOT delayed to trail-arrival.
-        // SFX matches that — play immediately so it lands with the visual,
-        // ahead of the +700ms attack SFX. This naturally gives the sequence
-        // "shield reacts → blow follows through". Scale by the blocked
-        // amount that was just stashed from damage-taken.
-        playShieldThumpSfx(lastBlocked)
+      case 'block-absorbed': {
+        // Player target (enemy attacking): the shield-block visual fires
+        // synchronously and the damage-taken SFX also plays immediately,
+        // so play the thump now too — lands with the visual, ahead of any
+        // leaked damage SFX. Enemy target (player attacking): the red gem
+        // trail arrives at +TRAIL_ARRIVAL_MS, so delay both to land with
+        // the attack rather than at gem-match time.
+        if (event.targetId === 'player') {
+          playShieldThumpSfx(lastPlayerBlocked)
+        } else {
+          const amt = lastEnemyBlocked
+          scheduleAtTrailArrival(() => playShieldThumpSfx(amt))
+        }
         return
-      case 'block-broken':
-        // Shield broke — scale by total incoming damage (blocked + leaked)
-        // so a shield breaking under a 6-damage hit cracks harder than one
-        // breaking under a 1-damage finisher.
-        playShieldCrackSfx(lastBlocked + lastUnblocked)
+      }
+      case 'block-broken': {
+        // Same target-split timing as block-absorbed. Scale by total
+        // incoming damage so a shield breaking under a 6-damage hit cracks
+        // harder than one breaking under a 1-damage finisher.
+        if (event.targetId === 'player') {
+          playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
+        } else {
+          const amt = lastEnemyBlocked + lastEnemyUnblocked
+          scheduleAtTrailArrival(() => playShieldCrackSfx(amt))
+        }
+        return
+      }
+      case 'enemy-staggered':
+        // Plays alongside the "Staggered" banner. Lands after the shield-
+        // crack already cued the break — this is the follow-up "reeling"
+        // beat, not the impact itself.
+        playStaggeredSfx()
         return
       case 'enemy-block-gained':
         // Shield going up on the enemy. Reuses the impact thump for now —
@@ -1169,7 +2013,7 @@ export function installSfxBindings(): void {
         playExtraTurnSfx()
         return
       case 'phase-changed':
-        if (event.phase === 'victory') playSfx('victory')
+        if (event.phase === 'victory') playVictorySfx()
         // Begin-of-turn doorbell on every transition back to player-acting.
         // Note: the very first turn of a fight is set up without emitting a
         // phase-changed event (initial state is constructed directly), so

@@ -105,7 +105,7 @@ describe('cascade.resolveSwap', () => {
     const board: Cell[][] = Array.from({ length: 8 }, () =>
       Array.from(
         { length: 8 },
-        (): Cell => ({ gemColor: 'red', flags: {} }),
+        (): Cell => ({ gemColor: 'red' }),
       ),
     )
     // Pre-cleanse: alternate non-blue colors so no spurious matches.

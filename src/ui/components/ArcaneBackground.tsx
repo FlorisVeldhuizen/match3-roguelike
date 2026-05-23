@@ -163,13 +163,20 @@ export function ArcaneBackground() {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const start = performance.now()
     let raf = 0
+    // Drift is 0.04 Hz — well under Nyquist for 30Hz, so we draw at 30Hz
+    // and halve the FBM workload. rAF still runs at vsync; we just skip
+    // GL on alternate frames.
+    const FRAME_MIN_MS = 1000 / 30
+    let lastDraw = 0
 
     const draw = (now: number) => {
+      if (!reducedMotion) raf = requestAnimationFrame(draw)
+      if (!reducedMotion && now - lastDraw < FRAME_MIN_MS) return
+      lastDraw = now
       const t = reducedMotion ? 0 : (now - start) / 1000
       gl.uniform1f(uTime, t)
       gl.uniform2f(uRes, canvas.width, canvas.height)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
-      if (!reducedMotion) raf = requestAnimationFrame(draw)
     }
 
     if (reducedMotion) {

@@ -44,7 +44,7 @@ function fillAndDematch(
     Array.from({ length: width }, () => {
       const color = GEM_COLORS[randIdx()]
       if (!color) throw new Error('fill: oob color idx')
-      return { gemColor: color, flags: {} }
+      return { gemColor: color }
     }),
   )
   for (let y = 0; y < height; y++) {
@@ -171,7 +171,7 @@ function tryForceSegment(
   for (let x = 0; x < 4; x++) {
     const cell = row[x]
     if (!cell) return false
-    snapshot.push({ gemColor: cell.gemColor, flags: { ...cell.flags } })
+    snapshot.push({ gemColor: cell.gemColor })
     cell.gemColor = segment[x] ?? a
   }
   // Validate: forced cells must not complete matches with cells above/below.

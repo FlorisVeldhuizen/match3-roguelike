@@ -71,9 +71,23 @@ const TAIL_MAX_LENGTH = 22
 
 type Effect = PhysicsEffect | BezierEffect
 
-// Full-window transparent Pixi overlay used for effects that need to live
-// outside the board's fixed canvas: particle bursts, gem-to-HUD trails, and
-// floating text (damage numbers, cascade callouts).
+// Full-window transparent Pixi overlay for particle bursts, gem-to-HUD
+// trails, and floating text (damage numbers, cascade callouts).
+
+// Reduced-motion gates the heavy particle methods (burst/sparkle/flame).
+// Trails and floating text stay — they're the actual feedback. Live
+// `change` listener so OS toggling takes effect without a reload.
+let reducedMotion = false
+try {
+  const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+  reducedMotion = mql.matches
+  mql.addEventListener('change', (ev) => {
+    reducedMotion = ev.matches
+  })
+} catch {
+  // matchMedia unavailable (SSR / older browsers).
+}
+
 export class OverlayScene {
   private app: Application | null = null
   private layer: Container | null = null
@@ -158,7 +172,10 @@ export class OverlayScene {
     if (!layer) return
     const hex =
       typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
-    const count = opts.count ?? 10
+    // Reduced-motion: cut to 25% (floor 3) so bursts still register as
+    // feedback without filling the screen.
+    const rawCount = opts.count ?? 10
+    const count = reducedMotion ? Math.max(3, Math.floor(rawCount * 0.25)) : rawCount
     const speedMin = opts.speedMin ?? 90
     const speedMax = opts.speedMax ?? 180
     const radiusMin = opts.radiusMin ?? 2.5
@@ -255,6 +272,9 @@ export class OverlayScene {
   spawnSparkle(at: ScreenPoint, count = 5): void {
     const layer = this.layer
     if (!layer) return
+    // Sparkle is heat decoration on top of the callout/burst — skip
+    // entirely under reduced-motion.
+    if (reducedMotion) return
     for (let i = 0; i < count; i++) {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.65
       const speed = 60 + Math.random() * 90
@@ -295,6 +315,9 @@ export class OverlayScene {
   spawnFlame(at: ScreenPoint, count = 8): void {
     const layer = this.layer
     if (!layer) return
+    // Embers are intensity decoration on top of the burst — skip under
+    // reduced-motion.
+    if (reducedMotion) return
     for (let i = 0; i < count; i++) {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.7
       const speed = 80 + Math.random() * 110
@@ -585,8 +608,13 @@ export class OverlayScene {
     const dt = dtMs / 1000
     const layer = this.layer
     if (!layer) return
-    const survivors: Effect[] = []
-    for (const e of this.effects) {
+    // Two-pointer compaction — avoids allocating a survivors array each
+    // frame during cascades with 100+ live particles.
+    const effects = this.effects
+    let writeIdx = 0
+    for (let readIdx = 0; readIdx < effects.length; readIdx++) {
+      const e = effects[readIdx]
+      if (!e) continue
       e.life -= dtMs
       if (e.life <= 0) {
         layer.removeChild(e.view)
@@ -680,9 +708,10 @@ export class OverlayScene {
           e.tail.alpha = 1
         }
       }
-      survivors.push(e)
+      if (writeIdx !== readIdx) effects[writeIdx] = e
+      writeIdx++
     }
-    this.effects = survivors
+    effects.length = writeIdx
   }
 }
 

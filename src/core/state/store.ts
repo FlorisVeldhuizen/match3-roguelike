@@ -11,6 +11,7 @@ import {
 } from '../combat/turn'
 import { executeEnemyTurn } from '../combat/enemyTurn'
 import { rollIntent } from '../combat/intents'
+import { applyDamage } from '../combat/damage'
 import {
   computeMatchPayouts,
   hasExtraTurnMatch,
@@ -172,34 +173,29 @@ export const useGameStore = create<GameStore>()(
           if (targetEnemyId == null) continue
           const target = enemies.find((e) => e.id === targetEnemyId)
           if (!target || target.hp <= 0) continue
-          const blockBefore = target.block
-          const absorbed = Math.min(blockBefore, ev.amount)
-          const hpDamage = Math.min(target.hp, ev.amount - absorbed)
-          const blockAfter = blockBefore - absorbed
-          if (absorbed + hpDamage <= 0) continue
+          const res = applyDamage(target.block, target.hp, ev.amount)
+          if (res.blocked + res.hpDamage <= 0) continue
           enemies = enemies.map((e) =>
             e.id === target.id
-              ? { ...e, block: blockAfter, hp: e.hp - hpDamage }
+              ? { ...e, block: res.blockAfter, hp: res.hpAfter }
               : e,
           )
           damageHealStream.push({
             kind: 'damage-dealt',
             targetId: target.id,
-            // amount = HP damage only. Total incoming = amount + blocked.
-            amount: hpDamage,
-            blocked: absorbed,
+            amount: res.hpDamage,
+            blocked: res.blocked,
             source: 'player-attack',
           })
-          if (blockBefore > 0 && blockAfter === 0 && absorbed > 0) {
+          if (res.blockBroken) {
             damageHealStream.push({ kind: 'block-broken', targetId: target.id })
-          } else if (absorbed > 0 && hpDamage === 0) {
+          } else if (res.blockAbsorbed) {
             damageHealStream.push({
               kind: 'block-absorbed',
               targetId: target.id,
             })
           }
-          const after = enemies.find((e) => e.id === target.id)
-          if (after && after.hp <= 0) {
+          if (res.killed) {
             damageHealStream.push({ kind: 'enemy-killed', enemyId: target.id })
             const nextLiving = enemies.find(
               (e) => e.id !== target.id && e.hp > 0,

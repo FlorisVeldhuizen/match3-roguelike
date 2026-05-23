@@ -10,10 +10,16 @@ import { createPortal } from 'react-dom'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
+import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
 import type { Intent } from '../../types'
 
 const HIT_FLASH_MS = 280
-const INTENT_FIRE_MS = 420
+// Must match (or slightly outlast) the longest .firing-* animation in
+// index.css — currently enemy-firing-attack at 460ms.
+const INTENT_FIRE_MS = 460
+// Death pulse duration — long enough to read the scale-flash arc, short
+// enough to settle into the static .dead state before the next event.
+const KILL_PULSE_MS = 720
 
 function intentIcon(intent: Intent): string {
   return intent.kind === 'attack' ? '⚔' : '🛡'
@@ -35,6 +41,10 @@ export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
   const rootSeed = useGameStore((s) => s.rootSeed)
+  // Drive the lethal-intent warning. Store values (not HUD's display-timed
+  // ones) — intent only shows during player-acting, when they're settled.
+  const playerHp = useGameStore((s) => s.fight.player.hp)
+  const playerBlock = useGameStore((s) => s.fight.player.block)
   const animatedPhase = useAnimatedPhase()
 
   // Displayed HP per enemy, mirrored event-driven so the bar drains on
@@ -59,10 +69,25 @@ export function EnemyFrame() {
     return out
   })
 
+  // Displayed block lags the store too. executeEnemyTurn pre-applies the
+  // next block intent at telegraph time, so `enemy.block` jumps the moment
+  // the swap commits — long before the shield pulse + intent badge play.
+  // Mirror it event-driven instead: bump on enemy-block-gained (sync with
+  // the firing-block pulse) and drain on player-attack damage-dealt at
+  // trail arrival (sync with displayedHp).
+  const [displayedBlock, setDisplayedBlock] = useState<Record<string, number>>(() => {
+    const out: Record<string, number> = {}
+    for (const e of enemies) out[e.id] = e.block
+    return out
+  })
+
   const [flashing, setFlashing] = useState<Record<string, number>>({})
   // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
   // Cleared by id so the pulse stops if the player switches targets mid-phase.
   const [trailPulse, setTrailPulse] = useState<Record<string, number>>({})
+  // Scale+flash CSS transition into the dead state. Triggered when
+  // displayedHp hits zero, in sync with the death burst.
+  const [killedPulse, setKilledPulse] = useState<Record<string, number>>({})
   // Stagger pulse: the enemy's shield was broken and their turn is spent
   // recovering. Drives the .staggered CSS recoil animation on the frame.
   const [staggered, setStaggered] = useState<Record<string, number>>({})
@@ -82,15 +107,27 @@ export function EnemyFrame() {
         const amount = event.amount
         const isPlayerAttack = event.source === 'player-attack'
         // Player-attack hits commit per-match; the matching red trail
-        // takes ~700ms to land, so we delay the bar drain + hit flash
-        // until it arrives. Other damage sources (future DoTs, etc.)
+        // takes TRAIL_ARRIVAL_MS to land, so we delay the bar drain + hit
+        // flash until it arrives. Other damage sources (future DoTs, etc.)
         // are not trail-driven — apply instantly.
-        const delay = isPlayerAttack ? 700 : 0
+        const delay = isPlayerAttack ? TRAIL_ARRIVAL_MS : 0
         window.setTimeout(() => {
-          setDisplayedHp((prev) => ({
-            ...prev,
-            [id]: Math.max(0, (prev[id] ?? 0) - amount),
-          }))
+          setDisplayedHp((prev) => {
+            const before = prev[id] ?? 0
+            const after = Math.max(0, before - amount)
+            // Kill transition (alive → 0): fire the .killed pulse in sync
+            // with the death burst (both land at trail arrival).
+            if (before > 0 && after === 0) {
+              setKilledPulse((p) => ({ ...p, [id]: (p[id] ?? 0) + 1 }))
+              window.setTimeout(() => {
+                setKilledPulse((p) => ({
+                  ...p,
+                  [id]: Math.max(0, (p[id] ?? 0) - 1),
+                }))
+              }, KILL_PULSE_MS)
+            }
+            return { ...prev, [id]: after }
+          })
           setFlashing((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
           window.setTimeout(() => {
             setFlashing((prev) => ({
@@ -98,13 +135,19 @@ export function EnemyFrame() {
               [id]: Math.max(0, (prev[id] ?? 0) - 1),
             }))
           }, HIT_FLASH_MS)
+          if (event.blocked > 0) {
+            setDisplayedBlock((prev) => ({
+              ...prev,
+              [id]: Math.max(0, (prev[id] ?? 0) - event.blocked),
+            }))
+          }
         }, delay)
       } else if (event.kind === 'pool-gained' && event.color === 'red') {
         // Brief outline pulse when the trail lands. Damage popup itself
         // comes from the per-match damage-dealt event.
         const id = useGameStore.getState().fight.targetEnemyId
         if (!id) return
-        window.setTimeout(() => {
+        scheduleAtTrailArrival(() => {
           setTrailPulse((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
           window.setTimeout(() => {
             setTrailPulse((prev) => ({
@@ -112,7 +155,7 @@ export function EnemyFrame() {
               [id]: Math.max(0, (prev[id] ?? 0) - 1),
             }))
           }, 380)
-        }, 700)
+        })
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
         // Enemy's attack landed — pulse the currently-acting enemy. Single-
         // enemy fight today; multi-enemy routing waits on a damage-taken
@@ -121,6 +164,10 @@ export function EnemyFrame() {
         if (id) bumpIntentFiring(setIntentFiring, id, 'attack')
       } else if (event.kind === 'enemy-block-gained') {
         bumpIntentFiring(setIntentFiring, event.enemyId, 'block')
+        setDisplayedBlock((prev) => ({
+          ...prev,
+          [event.enemyId]: (prev[event.enemyId] ?? 0) + event.amount,
+        }))
       } else if (event.kind === 'enemy-staggered') {
         const id = event.enemyId
         setStaggered((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
@@ -149,9 +196,14 @@ export function EnemyFrame() {
     return useGameStore.subscribe((s) => {
       if (s.rootSeed === prevSeed) return
       prevSeed = s.rootSeed
-      const fresh: Record<string, number> = {}
-      for (const e of s.fight.enemies) fresh[e.id] = e.hp
-      setDisplayedHp(fresh)
+      const freshHp: Record<string, number> = {}
+      const freshBlock: Record<string, number> = {}
+      for (const e of s.fight.enemies) {
+        freshHp[e.id] = e.hp
+        freshBlock[e.id] = e.block
+      }
+      setDisplayedHp(freshHp)
+      setDisplayedBlock(freshBlock)
     })
   }, [rootSeed])
 
@@ -159,6 +211,7 @@ export function EnemyFrame() {
     <section className="enemy-row" aria-label="Enemies">
       {enemies.map((enemy) => {
         const shownHp = displayedHp[enemy.id] ?? enemy.hp
+        const shownBlock = displayedBlock[enemy.id] ?? enemy.block
         // Use the *displayed* HP for the dead-vs-alive visual so the
         // skull/intent-hide flips in sync with the bar drain, not at
         // store-commit time.
@@ -167,10 +220,14 @@ export function EnemyFrame() {
         const isHit = (flashing[enemy.id] ?? 0) > 0
         const isTrailHit = (trailPulse[enemy.id] ?? 0) > 0
         const isStaggered = (staggered[enemy.id] ?? 0) > 0
+        const isKilledPulse = (killedPulse[enemy.id] ?? 0) > 0
         const firingState = intentFiring[enemy.id]
         const isFiring = (firingState?.count ?? 0) > 0
         const firingKind = firingState?.kind
         const intent = displayedIntent[enemy.id] ?? enemy.currentIntent
+        // Lethal: telegraphed attack exceeds hp + visible block.
+        const lethalIntent =
+          intent.kind === 'attack' && intent.amount > playerHp + playerBlock
         const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
         // Targeted, living enemy is the attractor for red gem trails.
         const poolTargetAttr = isTarget && !dead ? 'red' : undefined
@@ -182,6 +239,7 @@ export function EnemyFrame() {
             className={[
               'enemy-frame',
               dead ? 'dead' : '',
+              isKilledPulse ? 'killed' : '',
               isTarget ? 'targeted' : '',
               isHit ? 'hit' : '',
               isTrailHit ? 'trail-pulsing' : '',
@@ -196,6 +254,7 @@ export function EnemyFrame() {
               <IntentBadge
                 intent={intent}
                 tick={intentTick[enemy.id] ?? 0}
+                lethal={lethalIntent}
               />
             )}
             <div className="enemy-sprite" aria-hidden>
@@ -206,16 +265,16 @@ export function EnemyFrame() {
                 mount on block gain shifted the HP bar down. */}
             <div
               className={`enemy-block-badge${
-                !dead && enemy.block > 0 ? '' : ' empty'
+                !dead && shownBlock > 0 ? '' : ' empty'
               }`}
               title="Block"
               aria-label={
-                !dead && enemy.block > 0 ? `Block ${enemy.block}` : undefined
+                !dead && shownBlock > 0 ? `Block ${shownBlock}` : undefined
               }
-              aria-hidden={dead || enemy.block <= 0}
+              aria-hidden={dead || shownBlock <= 0}
             >
               <span aria-hidden>🛡</span>
-              <span>{enemy.block}</span>
+              <span>{shownBlock}</span>
             </div>
             <div className="enemy-hp-bar" role="img">
               <div className="enemy-hp-fill" style={{ width: `${hpPct}%` }} />
@@ -232,7 +291,15 @@ export function EnemyFrame() {
 
 // Badge + viewport-aware tooltip. The tooltip is portalled to body and
 // position is computed in JS so it never clips the viewport edges.
-function IntentBadge({ intent, tick }: { intent: Intent; tick: number }) {
+function IntentBadge({
+  intent,
+  tick,
+  lethal,
+}: {
+  intent: Intent
+  tick: number
+  lethal: boolean
+}) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState(false)
@@ -270,9 +337,9 @@ function IntentBadge({ intent, tick }: { intent: Intent; tick: number }) {
         // key on the wrapping element re-mounts on intent change so the
         // pop-in animation replays for the freshly telegraphed intent.
         key={`${intent.kind}-${intent.amount}-${tick}`}
-        className={`enemy-intent intent-${intent.kind}`}
+        className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         role="img"
-        aria-label={intentLabel(intent)}
+        aria-label={`${intentLabel(intent)}${lethal ? ' — lethal!' : ''}`}
         tabIndex={0}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}

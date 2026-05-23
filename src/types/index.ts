@@ -10,7 +10,6 @@ export const GEM_COLORS: readonly GemColor[] = [
 
 export type Cell = {
   gemColor: GemColor
-  flags: { cursed?: boolean }
 }
 
 export type Pos = { x: number; y: number }
@@ -81,10 +80,7 @@ export type GameEvent =
 
 export type CombatPhase =
   | 'player-acting'
-  | 'resolving'
-  | 'player-phase-end'
   | 'enemy-acting'
-  | 'enemy-end'
   | 'victory'
   | 'game-over'
 

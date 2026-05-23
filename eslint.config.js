@@ -35,6 +35,7 @@ export default defineConfig([
         { type: 'pixi', pattern: 'src/pixi/**/*', mode: 'file' },
         { type: 'audio', pattern: 'src/audio/**/*', mode: 'file' },
         { type: 'types', pattern: 'src/types/**/*', mode: 'file' },
+        { type: 'timing', pattern: 'src/timing.{ts,tsx}', mode: 'file' },
         { type: 'root', pattern: 'src/*.{ts,tsx}', mode: 'file' },
       ],
     },
@@ -64,6 +65,7 @@ export default defineConfig([
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
                 { to: { type: 'audio' } },
+                { to: { type: 'timing' } },
               ],
             },
             {
@@ -72,6 +74,7 @@ export default defineConfig([
                 { to: { type: 'audio' } },
                 { to: { type: 'core' } },
                 { to: { type: 'types' } },
+                { to: { type: 'timing' } },
               ],
             },
             {
@@ -81,11 +84,16 @@ export default defineConfig([
                 { to: { type: 'core' } },
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
+                { to: { type: 'timing' } },
               ],
             },
             {
               from: { type: 'types' },
               allow: [{ to: { type: 'types' } }],
+            },
+            {
+              from: { type: 'timing' },
+              allow: [],
             },
             // bootstrap (main.tsx etc.) may import anything
             {

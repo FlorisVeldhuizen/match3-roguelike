@@ -1,3 +1,16 @@
+/* Visually-hidden — used for aria-live regions. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 :root {
   /* Fantasy palette: ink-stained midnight, parchment, tarnished gold, ember red,
      arcane blue, mossy green, royal purple. Tuned to read as "tome on a stone
@@ -144,6 +157,66 @@ body::before {
   color: var(--parchment-dim);
 }
 
+/* Run seed — monospace, click-to-select for easy copy. */
+.hud-seed {
+  opacity: 0.4;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  color: var(--parchment-dim);
+  user-select: all;
+  margin-right: 0.6rem;
+  transition: opacity 120ms ease;
+}
+.hud-seed:hover {
+  opacity: 0.8;
+}
+
+.volume-slider {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.5rem;
+}
+.volume-slider input[type='range'] {
+  --thumb: var(--gold-1);
+  --track: var(--ink-0);
+  width: 84px;
+  height: 18px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.volume-slider input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
+  border: 1px solid var(--stone-2);
+  border-radius: 3px;
+}
+.volume-slider input[type='range']::-moz-range-track {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
+  border: 1px solid var(--stone-2);
+  border-radius: 3px;
+}
+.volume-slider input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--gold-1);
+  border: 1px solid var(--ink-1);
+  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+.volume-slider input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold-1);
+  border: 1px solid var(--ink-1);
+  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+
 .mute-toggle {
   background: transparent;
   border: 1px solid var(--gold-3);
@@ -287,6 +360,40 @@ body::before {
   box-shadow: 0 0 14px rgba(238, 94, 87, 0.25), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* Lethal warning — pulse and ring on attack badges that exceed hp + block. */
+.enemy-intent.intent-attack.lethal {
+  animation:
+    intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05),
+    intent-lethal 1100ms ease-in-out 320ms infinite;
+  color: #ffe1de;
+  border-color: #ff5550;
+}
+
+@keyframes intent-lethal {
+  0%, 100% {
+    background: linear-gradient(180deg, #4a1a1a, #2a0d0d);
+    box-shadow: 0 0 14px rgba(238, 94, 87, 0.45), 0 2px 8px rgba(0, 0, 0, 0.55);
+    border-color: #ff5550;
+  }
+  50% {
+    background: linear-gradient(180deg, #7a2222, #4a1010);
+    box-shadow:
+      0 0 26px 4px rgba(238, 94, 87, 0.85),
+      0 0 0 2px rgba(238, 94, 87, 0.55),
+      0 2px 8px rgba(0, 0, 0, 0.55);
+    border-color: #ff8a85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enemy-intent.intent-attack.lethal {
+    animation: intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+    background: linear-gradient(180deg, #6a1c1c, #3a0d0d);
+    box-shadow: 0 0 18px rgba(238, 94, 87, 0.65), 0 2px 8px rgba(0, 0, 0, 0.55);
+    border-color: #ff5550;
+  }
+}
+
 .enemy-intent.intent-block {
   border-color: var(--arcane-1);
   color: var(--arcane-2);
@@ -353,13 +460,23 @@ body::before {
     filter: brightness(1);
     border-color: var(--stone-2);
   }
-  25% {
-    transform: translate3d(0, -3px, 0) scale(1.06);
-    filter: brightness(1.8) saturate(1.4);
-    border-color: #ff7a72;
-    box-shadow: 0 0 22px rgba(238, 94, 87, 0.55);
+  /* Anticipation: brief squash-down + droop. Reads as the enemy
+     coiling/winding up before the strike. ~50ms of dwell here is what
+     makes the subsequent forward pop feel like a release rather than a
+     standalone scale jump. */
+  14% {
+    transform: translate3d(0, 2px, 0) scaleX(1.05) scaleY(0.9);
+    filter: brightness(0.85);
+    border-color: var(--stone-2);
   }
-  60% {
+  /* Strike: spring forward + upward + bright. */
+  32% {
+    transform: translate3d(0, -4px, 0) scale(1.1);
+    filter: brightness(2) saturate(1.5);
+    border-color: #ff7a72;
+    box-shadow: 0 0 24px rgba(238, 94, 87, 0.6);
+  }
+  65% {
     transform: translate3d(2px, 4px, 0) scale(1.02);
     filter: brightness(1.3);
     border-color: #ff7a72;
@@ -390,7 +507,10 @@ body::before {
 }
 
 .enemy-frame.firing-attack {
-  animation: enemy-firing-attack 420ms ease-out;
+  /* cubic-bezier eases out of the anticipation hold and into the spring
+     forward — keyword `ease-out` rushed past the squash too fast to feel
+     like a wind-up. */
+  animation: enemy-firing-attack 460ms cubic-bezier(0.32, 0, 0.18, 1);
 }
 
 .enemy-frame.firing-block {
@@ -431,6 +551,47 @@ body::before {
 .enemy-frame.dead {
   opacity: 0.4;
   filter: grayscale(0.4);
+}
+
+/* Kill moment — flash up, settle into the static .dead look. Duration
+   must match KILL_PULSE_MS in EnemyFrame.tsx. */
+.enemy-frame.killed {
+  animation: enemy-kill 720ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes enemy-kill {
+  0% {
+    transform: scale(1);
+    filter: brightness(1) grayscale(0);
+    opacity: 1;
+  }
+  12% {
+    transform: scale(1.18) rotate(-2deg);
+    filter: brightness(2.4) saturate(1.8);
+    opacity: 1;
+  }
+  28% {
+    transform: scale(1.08) rotate(2deg);
+    filter: brightness(1.6) saturate(1.4);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(0.96);
+    filter: brightness(1) grayscale(0);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(0.98);
+    filter: grayscale(0.4);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enemy-frame.killed {
+    animation-duration: 240ms;
+    animation-timing-function: ease-out;
+  }
 }
 
 .enemy-sprite {
@@ -1178,6 +1339,39 @@ body.vignette-damage::before {
 
 .hp-bar.hit {
   animation: hp-hit 420ms ease-out;
+}
+
+/* Low-HP urgency pulse via ::after so it doesn't stomp the .hit/.glow
+   box-shadow animations on the main element. */
+.hp-bar.low::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  animation: hp-low-pulse 1500ms ease-in-out infinite;
+}
+
+@keyframes hp-low-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 10px 1px rgba(238, 94, 87, 0.32),
+      0 0 6px rgba(238, 94, 87, 0.18);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 22px 2px rgba(238, 94, 87, 0.72),
+      0 0 18px rgba(238, 94, 87, 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-bar.low::after {
+    animation: none;
+    box-shadow:
+      inset 0 0 16px 2px rgba(238, 94, 87, 0.55),
+      0 0 10px rgba(238, 94, 87, 0.35);
+  }
 }
 
 .value-pop {

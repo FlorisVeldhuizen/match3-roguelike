@@ -17,7 +17,7 @@ export type SwapResolution = {
 }
 
 const cloneBoard = (board: Cell[][]): Cell[][] =>
-  board.map((row) => row.map((c) => ({ gemColor: c.gemColor, flags: { ...c.flags } })))
+  board.map((row) => row.map((c) => ({ gemColor: c.gemColor })))
 
 const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
   const rowA = board[a.y]
@@ -31,13 +31,6 @@ const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
 }
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
-
-function pickColor(rng: RngState): [GemColor, RngState] {
-  const [idx, n] = nextInt(rng, GEM_COLORS.length)
-  const c = GEM_COLORS[idx]
-  if (!c) throw new Error('pickColor: oob')
-  return [c, n]
-}
 
 // Compute the full set of cells to clear for a cascade step, including
 // special-clear extensions: 5-line clears whole row/col of that color;
@@ -170,13 +163,19 @@ export function resolveSwap(
     if (movements.length > 0) events.push({ kind: 'gems-fell', movements })
 
     const spawns: { at: Pos; color: GemColor }[] = []
+    // Inlined nextInt for refill — saves one allocation per gem (the
+    // pickColor wrapper used to return its own [color, rng] tuple on top
+    // of nextInt's tuple). A full 8×8 board refill on a cascade walks 64
+    // gems, so this matters during deep chains.
     const refilled: Cell[][] = fallen.map((row, y) =>
       row.map((c, x): Cell => {
         if (c) return c
-        const [color, nr] = pickColor(curRng)
+        const [idx, nr] = nextInt(curRng, GEM_COLORS.length)
         curRng = nr
+        const color = GEM_COLORS[idx]
+        if (!color) throw new Error('cascade: refill color oob')
         spawns.push({ at: { x, y }, color })
-        return { gemColor: color, flags: {} }
+        return { gemColor: color }
       }),
     )
     if (spawns.length > 0) events.push({ kind: 'gems-spawned', spawns })

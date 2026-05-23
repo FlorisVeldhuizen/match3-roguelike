@@ -18,10 +18,24 @@ const BOARD_PADDING = 8
 const BOARD_DIM = 8
 const LOGICAL_SIZE = BOARD_PADDING * 2 + CELL_SIZE * BOARD_DIM
 
-const cellCenter = (x: number, y: number) => ({
-  x: x * CELL_SIZE + CELL_SIZE / 2,
-  y: y * CELL_SIZE + CELL_SIZE / 2,
-})
+// Precomputed cell centers. tickFloat samples all 64 every frame and
+// applyHoverState walks ~25 per pointermove; the inline `{x, y}` allocation
+// added up.
+const CELL_CENTERS: { x: number; y: number }[][] = Array.from(
+  { length: BOARD_DIM },
+  (_, y) =>
+    Array.from({ length: BOARD_DIM }, (_, x) => ({
+      x: x * CELL_SIZE + CELL_SIZE / 2,
+      y: y * CELL_SIZE + CELL_SIZE / 2,
+    })),
+)
+// Falls back to live computation for off-grid sample points (e.g. the
+// {3.5, -1} anchor for callouts above the board).
+const cellCenter = (x: number, y: number) =>
+  CELL_CENTERS[y]?.[x] ?? {
+    x: x * CELL_SIZE + CELL_SIZE / 2,
+    y: y * CELL_SIZE + CELL_SIZE / 2,
+  }
 
 const inBounds = (p: Pos): boolean =>
   p.x >= 0 && p.x < BOARD_DIM && p.y >= 0 && p.y < BOARD_DIM
@@ -155,8 +169,14 @@ export class BoardScene {
   private ghostRing: Graphics | null = null
   private disposed = false
   private unsubscribeSelection: (() => void) | null = null
+  private unsubscribeRestart: (() => void) | null = null
   private detachPointer: (() => void) | null = null
+  private detachKeyboard: (() => void) | null = null
+  private detachRectInvalidation: (() => void) | null = null
   private activePointer: PointerState | null = null
+  // Canvas rect cached across calls; getBoundingClientRect is a sync layout
+  // boundary that pointermove would otherwise hit at 100Hz.
+  private cachedCanvasRect: DOMRect | null = null
   private overlay: import('./OverlayScene').OverlayScene | null = null
   private hoverHalo: Graphics | null = null
   private hoveredCell: Pos | null = null
@@ -176,6 +196,9 @@ export class BoardScene {
   private activeShimmers: ShimmerInstance[] = []
   private shimmerCooldownMs = randomShimmerInterval()
   private floatElapsedMs = 0
+  // Throttle idle breath to ~30Hz; sub-pixel amplitude makes 33ms cadence
+  // invisible, and skips 64 cells × 4 sin() on alternate frames.
+  private floatAccumMs = 0
   // Per-sprite random phases. WeakMap so destroyed sprites don't hold memory.
   private floatPhases = new WeakMap<Sprite, FloatPhases>()
   private effectsTickerCb: ((ticker: Ticker) => void) | null = null
@@ -195,16 +218,38 @@ export class BoardScene {
   // Screen-space center of cell (x,y), accounting for board padding and the
   // canvas's CSS scaling. Returns null if the canvas isn't measurable yet.
   cellScreenCenter(pos: Pos): { x: number; y: number } | null {
-    const canvas = this.app?.canvas
-    if (!canvas) return null
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return null
+    const rect = this.getCanvasRect()
+    if (!rect) return null
     const center = cellCenter(pos.x, pos.y)
     const lx = BOARD_PADDING + center.x
     const ly = BOARD_PADDING + center.y
     return {
       x: rect.left + (lx / LOGICAL_SIZE) * rect.width,
       y: rect.top + (ly / LOGICAL_SIZE) * rect.height,
+    }
+  }
+
+  private getCanvasRect(): DOMRect | null {
+    if (this.cachedCanvasRect) return this.cachedCanvasRect
+    const canvas = this.app?.canvas
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return null
+    this.cachedCanvasRect = rect
+    return rect
+  }
+
+  // Capture-phase scroll catches inner scrollers (events don't bubble from
+  // them); passive keeps us off the scroll critical path.
+  private attachRectInvalidation(): void {
+    const invalidate = () => {
+      this.cachedCanvasRect = null
+    }
+    window.addEventListener('resize', invalidate)
+    window.addEventListener('scroll', invalidate, { capture: true, passive: true })
+    this.detachRectInvalidation = () => {
+      window.removeEventListener('resize', invalidate)
+      window.removeEventListener('scroll', invalidate, { capture: true })
     }
   }
 
@@ -249,6 +294,8 @@ export class BoardScene {
     if (this.overlay) this.animator.setOverlay(this.overlay)
     this.subscribeSelection()
     this.attachPointerEvents(app.canvas)
+    this.attachKeyboardEvents()
+    this.attachRectInvalidation()
     this.startEffectsTicker()
   }
 
@@ -256,8 +303,15 @@ export class BoardScene {
     this.disposed = true
     this.unsubscribeSelection?.()
     this.unsubscribeSelection = null
+    this.unsubscribeRestart?.()
+    this.unsubscribeRestart = null
     this.detachPointer?.()
     this.detachPointer = null
+    this.detachKeyboard?.()
+    this.detachKeyboard = null
+    this.detachRectInvalidation?.()
+    this.detachRectInvalidation = null
+    this.cachedCanvasRect = null
     if (this.effectsTickerCb) Ticker.shared.remove(this.effectsTickerCb)
     this.effectsTickerCb = null
     if (this.app) {
@@ -275,6 +329,52 @@ export class BoardScene {
     this.activeShimmers = []
     this.boardLayer = null
     this.activePointer = null
+  }
+
+  // In-place rebuild on restart. Tears down sprites + animator but keeps
+  // the Pixi app, canvas, pointer wiring, ticker, and store subscriptions.
+  private async rebuildBoard(): Promise<void> {
+    const app = this.app
+    const layer = this.boardLayer
+    if (!app || !layer) return
+    // Shimmers hold mask-clone refs to gem textures; dispose before the
+    // underlying sprites are destroyed.
+    for (const s of this.activeShimmers) this.disposeShimmer(s)
+    this.activeShimmers = []
+    for (const child of layer.children.slice()) {
+      layer.removeChild(child)
+      child.destroy({ children: true })
+    }
+    this.hoverAnims.clear()
+    this.hoveredCell = null
+    this.hoverHaloTargetAlpha = 0
+    this.hasHoverPosition = false
+    this.hoverIsPressed = false
+    this.activePointer = null
+    this.selectionRing = null
+    this.ghostRing = null
+    this.hoverHalo = null
+    this.animator = null
+
+    // Pixi Assets caches textures, so this resolves synchronously after
+    // the first load.
+    const textures = await this.loadGemTextures()
+    if (this.disposed) return
+
+    this.drawBoardBackground(layer)
+    const sprites = this.buildSprites(layer, textures)
+    this.buildSelectionRing(layer)
+    this.buildHoverHalo(layer)
+
+    this.animator = new AnimationController({
+      parent: layer,
+      sprites,
+      geometry: { cellSize: CELL_SIZE, gemSize: GEM_SIZE, cellCenter },
+      textures,
+      cellScreenCenter: (pos) => this.cellScreenCenter(pos),
+    })
+    if (this.overlay) this.animator.setOverlay(this.overlay)
+    this.updateSelectionRing()
   }
 
   private async loadGemTextures(): Promise<Record<GemColor, Texture>> {
@@ -356,10 +456,23 @@ export class BoardScene {
   }
 
   private subscribeSelection(): void {
-    this.unsubscribeSelection = useGameStore.subscribe(() => {
+    // Scoped to board.selected — without this, the ring redrew on every
+    // store mutation (every per-match damage commit during a cascade).
+    // The drag-ghost ring updates separately via pointer handlers.
+    let prevSelected = useGameStore.getState().board.selected
+    this.unsubscribeSelection = useGameStore.subscribe((s) => {
+      if (s.board.selected === prevSelected) return
+      prevSelected = s.board.selected
       this.updateSelectionRing()
     })
     this.updateSelectionRing()
+    // rootSeed flip = restart → rebuild sprites in place.
+    let prevSeed = useGameStore.getState().rootSeed
+    this.unsubscribeRestart = useGameStore.subscribe((s) => {
+      if (s.rootSeed === prevSeed) return
+      prevSeed = s.rootSeed
+      void this.rebuildBoard()
+    })
   }
 
   private updateSelectionRing(): void {
@@ -406,10 +519,8 @@ export class BoardScene {
   }
 
   private clientToCell(clientX: number, clientY: number): Pos | null {
-    const canvas = this.app?.canvas
-    if (!canvas) return null
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return null
+    const rect = this.getCanvasRect()
+    if (!rect) return null
     const logicalX = ((clientX - rect.left) * LOGICAL_SIZE) / rect.width
     const logicalY = ((clientY - rect.top) * LOGICAL_SIZE) / rect.height
     const bx = logicalX - BOARD_PADDING
@@ -526,6 +637,63 @@ export class BoardScene {
     }
   }
 
+  // Keyboard alternative to pointer interaction:
+  //   Arrow:        move the selection cursor (selects center cell first)
+  //   Shift+Arrow:  swap selected gem with the adjacent in that direction
+  //   Escape:       clear selection
+  // Window-level so the canvas doesn't need focus; ignored when a form
+  // control has focus.
+  private attachKeyboardEvents(): void {
+    const DIRS: Record<string, Pos> = {
+      ArrowUp: { x: 0, y: -1 },
+      ArrowDown: { x: 0, y: 1 },
+      ArrowLeft: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 },
+    }
+    const onKeyDown = (ev: KeyboardEvent) => {
+      const t = ev.target
+      if (
+        t instanceof HTMLElement &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      ) {
+        return
+      }
+      const store = useGameStore.getState()
+      if (store.fight.phase === 'victory' || store.fight.phase === 'game-over')
+        return
+      if (this.animator?.isAnimating) return
+      if (ev.key === 'Escape') {
+        if (store.board.selected) {
+          ev.preventDefault()
+          store.selectCell(null)
+        }
+        return
+      }
+      const dir = DIRS[ev.key]
+      if (!dir) return
+      ev.preventDefault()
+      const selected = store.board.selected
+      if (!selected) {
+        const mid = Math.floor(BOARD_DIM / 2)
+        store.selectCell({ x: mid, y: mid })
+        return
+      }
+      const target: Pos = { x: selected.x + dir.x, y: selected.y + dir.y }
+      if (!inBounds(target)) return
+      if (ev.shiftKey) {
+        store.selectCell(null)
+        void this.performSwap(selected, target)
+        return
+      }
+      store.selectCell(target)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    this.detachKeyboard = () => window.removeEventListener('keydown', onKeyDown)
+  }
+
   private async performSwap(from: Pos, to: Pos): Promise<void> {
     const animator = this.animator
     if (!animator || animator.isAnimating) return
@@ -572,10 +740,8 @@ export class BoardScene {
   // Re-runs on every pointermove and on press-state changes.
   private applyHoverState(): void {
     if (!this.hasHoverPosition) return
-    const canvas = this.app?.canvas
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return
+    const rect = this.getCanvasRect()
+    if (!rect) return
     const cell = this.clientToCell(this.lastHoverClientX, this.lastHoverClientY)
     if (!cell) {
       this.setHover(null)
@@ -791,8 +957,17 @@ export class BoardScene {
     // Freeze the clock during animations so when breathing resumes, sin(t)
     // returns exactly the value it had on the last idle frame — the next
     // write equals the last write, zero snap.
-    if (animating) return
+    if (animating) {
+      this.floatAccumMs = 0
+      return
+    }
     this.floatElapsedMs += dtMs
+    // 30Hz cadence — accumulate dt and only run the per-cell sweep when
+    // we've crossed the threshold. Resets to 0 on animation, so the first
+    // post-animation frame runs immediately (no snap on resume).
+    this.floatAccumMs += dtMs
+    if (this.floatAccumMs < 33) return
+    this.floatAccumMs = 0
     const animator = this.animator
     if (!animator) return
     const t = this.floatElapsedMs

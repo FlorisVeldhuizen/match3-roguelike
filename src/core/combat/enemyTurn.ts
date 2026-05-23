@@ -1,6 +1,7 @@
 import type { RngState } from '../rng/mulberry32'
 import type { CombatPhase, Enemy, GameEvent, Player } from '../../types'
 import { rollIntent } from './intents'
+import { applyDamage } from './damage'
 
 export type EnemyTurnResult = {
   player: Player
@@ -39,25 +40,21 @@ export function executeEnemyTurn(
     let updatedEnemy: Enemy = enemy
 
     if (intent.kind === 'attack') {
-      const incoming = intent.amount
-      const blockBefore = nextPlayer.block
-      const blocked = Math.min(blockBefore, incoming)
-      const hpDamage = incoming - blocked
-      const blockAfter = blockBefore - blocked
+      const res = applyDamage(nextPlayer.block, nextPlayer.hp, intent.amount)
       nextPlayer = {
         ...nextPlayer,
-        block: blockAfter,
-        hp: Math.max(0, nextPlayer.hp - hpDamage),
+        block: res.blockAfter,
+        hp: res.hpAfter,
       }
       events.push({
         kind: 'damage-taken',
-        amount: hpDamage,
-        blocked,
+        amount: res.hpDamage,
+        blocked: res.blocked,
         source: 'enemy-attack',
       })
-      if (blockBefore > 0 && blockAfter === 0 && blocked > 0) {
+      if (res.blockBroken) {
         events.push({ kind: 'block-broken', targetId: 'player' })
-      } else if (blocked > 0 && hpDamage === 0) {
+      } else if (res.blockAbsorbed) {
         events.push({ kind: 'block-absorbed', targetId: 'player' })
       }
     } else if (intent.kind === 'block' && enemy.block === 0) {

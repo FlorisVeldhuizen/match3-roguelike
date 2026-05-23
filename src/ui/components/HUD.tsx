@@ -1,20 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { TRAIL_ARRIVAL_MS } from '../../timing'
 import type { CombatPhase, GemColor } from '../../types'
 
 const PHASE_LABEL: Record<CombatPhase, string> = {
   'player-acting': 'Your turn',
-  resolving: 'Resolving…',
-  'player-phase-end': 'Resolving…',
   'enemy-acting': 'Enemy turn',
-  'enemy-end': 'Enemy turn',
   victory: 'Victory',
   'game-over': 'Defeated',
 }
 
-// Particle trail travels ~700ms; pulse the indicator on arrival.
-const TRAIL_TRAVEL_MS = 700
 const PULSE_MS = 380
 
 export function HUD() {
@@ -84,7 +80,7 @@ export function HUD() {
           else if (color === 'blue') setStagedBlue((s) => s + amount)
           // Red and green commit per-match via damage-dealt/healed
           // events; nothing accumulates on the HUD for those.
-        }, TRAIL_TRAVEL_MS)
+        }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'block-gained') {
         // Just flip styling to "committed". The number itself keeps
         // climbing via late pool-gained timeouts; engine guarantees
@@ -102,7 +98,7 @@ export function HUD() {
               h + amount,
             ),
           )
-        }, TRAIL_TRAVEL_MS)
+        }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'damage-taken') {
         // Delta-based so this commutes with any still-in-flight heal /
         // block trails. Engine has already absorbed `blocked` from the
@@ -196,6 +192,8 @@ export function HUD() {
   const chargePop = usePopOnChange(displayedCharge)
 
   const hpPct = Math.max(0, (displayedHp / player.maxHp) * 100)
+  // Low-HP urgency pulse, ≤30%, excluding 0 (game-over overlay handles that).
+  const isLowHp = displayedHp > 0 && displayedHp / player.maxHp <= 0.3
   const badgeBlock = stagedBlue
   const blockHasPending = badgeBlock > 0 && !blockCommitted
   const blockActive = badgeBlock > 0 && blockCommitted
@@ -207,7 +205,7 @@ export function HUD() {
       </div>
       <div className="hud-row">
         <div
-          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${cls('green', '')}`}
+          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${isLowHp ? 'low' : ''} ${cls('green', '')}`}
           role="img"
           aria-label={`HP ${displayedHp}/${player.maxHp}`}
           data-pool-target="green"

@@ -4,6 +4,7 @@ import { tweenSwap } from './animations/swap'
 import { tweenClear } from './animations/clear'
 import { tweenDrop } from './animations/drop'
 import { emitGameEvent } from '../core/events/emitter'
+import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../timing'
 import {
   elementCenter,
   type Attractor,
@@ -29,6 +30,14 @@ function dropJitterMs(x: number, y: number): number {
 }
 const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
 
+// Brief freeze before damage popup + shake. Heavy hits (5+) get a
+// dedicated "ouch" beat; lighter hits get a barely-perceptible nudge.
+function hitPauseMs(amount: number): number {
+  if (amount >= 5) return 110
+  if (amount >= 3) return 55
+  return 0
+}
+
 // Combat beat pacing — each event gets its own breath so the player can read
 // what's happening. `damageDealt` and `healed` fire per-match during the
 // cascade, so they're kept short — otherwise a 3-hit cascade burns >1s of
@@ -37,20 +46,20 @@ const BEAT = {
   damageDealt: 60,
   blockGained: 240,
   healed: 60,
-  enemyKilled: 480,
+  // Shorter than damageTaken — fully-blocked hits have no shake/vignette,
+  // just a popup to confirm "shield ate it".
+  blockedHit: 280,
   enemyStaggered: 520,
   damageTaken: 440,
   enemyBlockGained: 320,
-  intentTelegraphed: 180,
+  // Stagger between back-to-back intent badges (multi-enemy). Pop-in CSS
+  // anim runs autonomously, so this just serializes the queue.
+  intentTelegraphed: 80,
   phaseToEnemy: 600,
   phaseToPlayer: 380,
   phaseToVictory: 500,
   phaseToGameOver: 500,
 } as const
-
-// Per-match damage/heal popups schedule themselves on this delay so the
-// number lands at the same moment the gem trail arrives at its target.
-const TRAIL_ARRIVAL_MS = 700
 
 export type BoardGeometry = {
   cellSize: number
@@ -95,7 +104,12 @@ const CALLOUT_PALETTE: Record<GemColor, number> = {
   purple: 0xc080ff,
 }
 
-const CASCADE_HEX = 0xfacc15
+// Shared visual hex — mirrors the CSS palette in index.css.
+const VISUAL = {
+  cascadeGold: 0xfacc15,
+  damageRed: 0xee5e57,
+  shieldBlue: 0x9ec5ff,
+} as const
 
 // Darker "stored pool" palette — matches the HUD pool backgrounds so a
 // `+N` popup reads as the same currency the indicator is holding.
@@ -113,6 +127,56 @@ const STORED_HEX: Record<GemColor, number> = {
 // those are impact moments, not chain escalation.
 function cascadeCalloutText(displayLevel: number): string {
   return `×${displayLevel}`
+}
+
+// 26px base, +2px per gem above 3, capped at +6.
+function damagePopupFontSize(amount: number): number {
+  return 26 + Math.min(6, Math.max(0, amount - 3) * 2)
+}
+
+// Shared shape for tilt-and-pop word callouts. Callers add color, fontSize,
+// lifeMs, driftY, and rotationFrom (from nextTiltRadians).
+const WORD_POP = {
+  scaleCurve: popScaleCurve,
+  rotationEase: 0,
+} as const
+
+function centroidOf(cells: Pos[]): Pos | null {
+  if (cells.length === 0) return null
+  let sumX = 0
+  let sumY = 0
+  for (const c of cells) {
+    sumX += c.x
+    sumY += c.y
+  }
+  return { x: sumX / cells.length, y: sumY / cells.length }
+}
+
+// Scan the event queue starting at `start` for the contiguous run of
+// match-found events emitted between this cascade-start and the next
+// gems-cleared. Returns the screen-space centroid of all matched cells in
+// that run, or null if no matches are queued. Used to anchor the chain-link
+// callout to the gems that triggered the cascade rather than the previous
+// link's cells.
+function cascadeAnchorFromUpcoming(
+  events: GameEvent[],
+  start: number,
+  toScreen: (p: Pos) => { x: number; y: number } | null,
+): { x: number; y: number } | null {
+  let sumX = 0
+  let sumY = 0
+  let n = 0
+  for (let j = start; j < events.length; j++) {
+    const e = events[j]
+    if (!e || e.kind !== 'match-found') break
+    for (const c of e.cells) {
+      sumX += c.x
+      sumY += c.y
+      n++
+    }
+  }
+  if (n === 0) return null
+  return toScreen({ x: sumX / n, y: sumY / n })
 }
 
 // Per-match dopamine callout. Only line matches of size 4+ get a word —
@@ -149,6 +213,9 @@ export class AnimationController {
   // screenshake at heat ≥ 3, flame burst at heat ≥ 4.
   private heat = 0
   private heatLastTimestamp = 0
+  // Memoised selector → element lookups. Revalidated via isConnected so a
+  // React re-render that swapped the element falls back to a fresh query.
+  private domCache = new Map<string, HTMLElement>()
   // Current cascade level (0 = initial match, 1+ = chain link). Drives the
   // particle-count escalation in spawnBurstsForCells so chained matches
   // visibly read as bigger explosions.
@@ -190,7 +257,41 @@ export class AnimationController {
       await prev
       this.busy = true
       try {
-        for (const event of events) {
+        for (let i = 0; i < events.length; i++) {
+          const event = events[i]
+          if (!event) continue
+          // Run gems-fell + gems-spawned together when they appear back-to-back
+          // (the normal case during a cascade step). They animate disjoint
+          // sprites — existing gems sliding down, new gems entering from above
+          // — so playing them as one waterfall reads more naturally and trims
+          // dead time before the next cascade's clear starts.
+          const peek = events[i + 1]
+          if (event.kind === 'gems-fell' && peek?.kind === 'gems-spawned') {
+            emitGameEvent(event)
+            emitGameEvent(peek)
+            await Promise.all([
+              this.animateFall(event.movements),
+              this.animateSpawn(peek.spawns),
+            ])
+            i++
+            continue
+          }
+          // Chain-link callout (×N) anchors to the *new* matches that form
+          // this link — the gems the player is reading as "the cascade trigger"
+          // — not the previous link's centroid. Cascade-start fires before the
+          // match-found events for its own level, so we look ahead through the
+          // contiguous match-found run to compute that centroid up front.
+          if (event.kind === 'cascade-start' && event.level >= 1) {
+            const anchor = cascadeAnchorFromUpcoming(events, i + 1, (p) =>
+              this.cellScreenCenter(p),
+            )
+            emitGameEvent(event)
+            this.cellColor.clear()
+            this.lastMatchCells.clear()
+            this.currentCascadeLevel = event.level
+            this.spawnCascadeCallout(event.level + 1, anchor)
+            continue
+          }
           await this.playEvent(event)
         }
       } finally {
@@ -210,25 +311,20 @@ export class AnimationController {
       case 'swap-reverted':
         await this.animateSwap(event.from, event.to)
         return
-      case 'cascade-start': {
-        // Cascade-start fires BEFORE the next round of matches. The cells
-        // we want to anchor the callout to are the ones that just cleared
-        // (the previous step's matches), still sitting in lastMatchCells.
-        // Snapshot the centroid before clearing.
-        const anchor =
-          event.level >= 1 ? this.cascadeAnchorFromLastMatches() : null
+      case 'cascade-start':
+        // Level-0 cascade-start: just reset per-step trackers. Chain links
+        // (level >= 1) are handled in play() with a lookahead anchor so the
+        // callout can target the upcoming matches' centroid, not the previous
+        // link's cells.
         this.cellColor.clear()
         this.lastMatchCells.clear()
         this.currentCascadeLevel = event.level
-        if (event.level >= 1) this.spawnCascadeCallout(event.level + 1, anchor)
         return
-      }
       case 'cascade-complete':
-        // Celebration flourish (visual half of the audio celebration in
-        // sfx.ts). Same threshold and timing so visuals and chime land
-        // together. Fires-and-forgets via setTimeout so it doesn't block
-        // damage/heal events that come right after the cascade resolves.
-        if (event.levels >= 3) this.spawnCascadeCelebration(event.levels)
+        // Celebration flourish. 2-chain gets a scaled-down visual-only
+        // version (no audio — the per-link chime + clack already mark the
+        // chain). 3+ gets the full visual + audio flourish.
+        if (event.levels >= 2) this.spawnCascadeCelebration(event.levels)
         return
       case 'match-found':
         for (const c of event.cells) this.cellColor.set(keyOf(c), event.color)
@@ -277,8 +373,13 @@ export class AnimationController {
         return
       case 'damage-taken':
         if (event.amount > 0) {
+          const pause = hitPauseMs(event.amount)
+          if (pause > 0) await wait(pause)
           this.spawnPlayerDamagePopup(event.amount)
           await wait(BEAT.damageTaken)
+        } else if (event.blocked > 0) {
+          this.spawnPlayerBlockedPopup(event.blocked)
+          await wait(BEAT.blockedHit)
         }
         return
       case 'enemy-block-gained':
@@ -288,9 +389,17 @@ export class AnimationController {
       case 'block-gained':
         await wait(BEAT.blockGained)
         return
-      case 'enemy-killed':
-        await wait(BEAT.enemyKilled)
+      case 'enemy-killed': {
+        // Schedule the burst to land when the HP bar reads zero (which is
+        // TRAIL_ARRIVAL_MS after the killing damage-dealt, and damage-dealt
+        // already waited BEAT.damageDealt). Then breathe for 320ms so the
+        // kill registers before the next event.
+        const visualDelay = Math.max(0, TRAIL_ARRIVAL_MS - BEAT.damageDealt)
+        const enemyId = event.enemyId
+        window.setTimeout(() => this.playEnemyDeathBurst(enemyId), visualDelay)
+        await wait(visualDelay + 320)
         return
+      }
       case 'enemy-staggered':
         await wait(BEAT.enemyStaggered)
         return
@@ -305,10 +414,28 @@ export class AnimationController {
         await wait(BEAT.phaseToPlayer)
         return
       case 'block-absorbed':
-        this.spawnShieldEffect(event.targetId, 'absorbed')
+        // Player target (enemy attack) fires synchronously with damage-taken.
+        // Enemy target (player attack) needs to land with the red gem trail,
+        // matching the delayed damage popup — otherwise the shield reacts
+        // before the blow actually arrives.
+        if (event.targetId === 'player') {
+          this.spawnShieldEffect(event.targetId, 'absorbed')
+        } else {
+          const targetId = event.targetId
+          scheduleAtTrailArrival(() =>
+            this.spawnShieldEffect(targetId, 'absorbed'),
+          )
+        }
         return
       case 'block-broken':
-        this.spawnShieldEffect(event.targetId, 'broken')
+        if (event.targetId === 'player') {
+          this.spawnShieldEffect(event.targetId, 'broken')
+        } else {
+          const targetId = event.targetId
+          scheduleAtTrailArrival(() =>
+            this.spawnShieldEffect(targetId, 'broken'),
+          )
+        }
         return
       case 'turn-ended':
       case 'screen-shake':
@@ -330,6 +457,15 @@ export class AnimationController {
     this.heatLastTimestamp = now
     this.heat = Math.min(6, this.heat + 1)
     return this.heat
+  }
+
+  private findEl(selector: string): HTMLElement | null {
+    const cached = this.domCache.get(selector)
+    if (cached && cached.isConnected) return cached
+    const found = document.querySelector<HTMLElement>(selector)
+    if (found) this.domCache.set(selector, found)
+    else this.domCache.delete(selector)
+    return found
   }
 
   private getSprite(p: Pos): Sprite | null {
@@ -430,13 +566,12 @@ export class AnimationController {
     const center = this.cellScreenCenter({ x: 3.5, y: 3.5 })
     if (!center) return
     overlay.spawnFloatingText(center, 'NO MOVES', {
-      color: 0xfacc15,
+      ...WORD_POP,
+      color: VISUAL.cascadeGold,
       fontSize: 44,
       lifeMs: 900,
       driftY: -10,
-      scaleCurve: popScaleCurve,
       rotationFrom: this.nextTiltRadians(),
-      rotationEase: 0,
     })
     overlay.spawnFloatingText(
       { x: center.x, y: center.y + 38 },
@@ -495,24 +630,6 @@ export class AnimationController {
     }
   }
 
-  // Compute a screen-space anchor from the cells in lastMatchCells (the
-  // matches that just cleared). Returns null if there's nothing to anchor
-  // to — caller falls back to the fixed position above the board.
-  private cascadeAnchorFromLastMatches(): { x: number; y: number } | null {
-    let sumX = 0
-    let sumY = 0
-    let n = 0
-    for (const cells of this.lastMatchCells.values()) {
-      for (const c of cells) {
-        sumX += c.x
-        sumY += c.y
-        n++
-      }
-    }
-    if (n === 0) return null
-    return this.cellScreenCenter({ x: sumX / n, y: sumY / n })
-  }
-
   private spawnCascadeCallout(
     displayLevel: number,
     anchor: { x: number; y: number } | null,
@@ -529,7 +646,7 @@ export class AnimationController {
     const fontHeatBoost = Math.min(2, Math.floor((heat - 1) / 2))
     const burstHeatBoost = Math.max(0, Math.floor(heat - 1))
     const fontSize = 36 + steps * 4 + fontHeatBoost
-    overlay.spawnBurst(center, CASCADE_HEX, {
+    overlay.spawnBurst(center, VISUAL.cascadeGold, {
       count: 20 + steps * 3 + burstHeatBoost,
       speedMin: 110,
       speedMax: 220 + steps * 18,
@@ -539,14 +656,18 @@ export class AnimationController {
       gravity: 120,
       spread: 0.9,
     })
-    overlay.spawnFloatingText(center, cascadeCalloutText(displayLevel), {
-      color: CASCADE_HEX,
+    // Text origin sits slightly above the match centroid so it stacks above
+    // POW/BOOM (at centroid, drifting up to ~y-55) and +1 TURN (at y-36,
+    // drifting to y-78) on size-4+ chain triggers. The gold burst stays at
+    // the centroid for visual punch on the merging gems themselves.
+    const textOrigin = { x: center.x, y: center.y - 70 }
+    overlay.spawnFloatingText(textOrigin, cascadeCalloutText(displayLevel), {
+      ...WORD_POP,
+      color: VISUAL.cascadeGold,
       fontSize,
       lifeMs: 750,
       driftY: -28,
-      scaleCurve: popScaleCurve,
       rotationFrom: this.nextTiltRadians(),
-      rotationEase: 0,
     })
     if (heat >= 2) {
       // White sparkles drifting upward around the text. Count grows with
@@ -572,35 +693,32 @@ export class AnimationController {
     }
   }
 
-  // Visual celebration after a 3+ chain finishes resolving. Spawns a gold
-  // radial burst + upward sparkle shower at the board's center, timed to
-  // land with the audio celebration in sfx.ts (which also waits ~220ms
-  // after the cascade-complete event). Particle counts/speed grow with
-  // chain depth so a 6-chain visibly explodes more than a 3-chain.
+  // 2-chain gets a minimal visual-only flourish; 3+ chains get the full
+  // burst + sparkle, paired with the audio celebration in sfx.ts. Deferred
+  // so it doesn't block the damage/heal events that follow the cascade.
   private spawnCascadeCelebration(levels: number): void {
     const overlay = this.overlay
     if (!overlay) return
     const center = this.cellScreenCenter({ x: 3.5, y: 3.5 })
     if (!center) return
+    const tier2 = levels === 2
     const extra = Math.max(0, levels - 3)
     window.setTimeout(() => {
       const o = this.overlay
       if (!o) return
-      // Gold radial burst — biggest visible "pop" element of the flourish.
-      o.spawnBurst(center, CASCADE_HEX, {
-        count: 28 + extra * 10,
-        speedMin: 140,
-        speedMax: 260 + extra * 40,
-        radiusMin: 3,
-        radiusMax: 6,
-        lifeMs: 850,
-        gravity: 140,
-        spread: 1.2,
+      o.spawnBurst(center, VISUAL.cascadeGold, {
+        count: tier2 ? 12 : 28 + extra * 10,
+        speedMin: tier2 ? 100 : 140,
+        speedMax: tier2 ? 200 : 260 + extra * 40,
+        radiusMin: tier2 ? 2 : 3,
+        radiusMax: tier2 ? 4 : 6,
+        lifeMs: tier2 ? 600 : 850,
+        gravity: tier2 ? 100 : 140,
+        spread: tier2 ? 0.8 : 1.2,
       })
-      // Upward sparkle shower — the visual twin of the audio sparkle
-      // layer that kicks in at 5+ chains. Always plays here (3+) but
-      // grows with depth.
-      o.spawnSparkle(center, 8 + extra * 4)
+      // Sparkle reserved for 3+ — separates "you chained twice" from
+      // "you chained a real combo".
+      if (!tier2) o.spawnSparkle(center, 8 + extra * 4)
     }, 200)
   }
 
@@ -611,30 +729,22 @@ export class AnimationController {
     cells: Pos[],
   ): void {
     const overlay = this.overlay
-    if (!overlay || cells.length === 0) return
+    if (!overlay) return
     const text = matchCalloutText(size, shape)
     if (!text) return
-    let sumX = 0
-    let sumY = 0
-    for (const c of cells) {
-      sumX += c.x
-      sumY += c.y
-    }
-    const at = this.cellScreenCenter({
-      x: sumX / cells.length,
-      y: sumY / cells.length,
-    })
+    const center = centroidOf(cells)
+    if (!center) return
+    const at = this.cellScreenCenter(center)
     if (!at) return
     const heat = this.bumpHeat()
     const heatBoost = Math.floor(Math.max(0, heat - 1))
     overlay.spawnFloatingText(at, text, {
+      ...WORD_POP,
       color: CALLOUT_PALETTE[color],
       fontSize: 28 + heatBoost,
       lifeMs: 650,
       driftY: -55,
-      scaleCurve: popScaleCurve,
       rotationFrom: this.nextTiltRadians(),
-      rotationEase: 0,
     })
   }
 
@@ -644,28 +754,20 @@ export class AnimationController {
   // reward lands with the "Bonus Turn" banner.
   private spawnExtraTurnCallout(cells: Pos[]): void {
     const overlay = this.overlay
-    if (!overlay || cells.length === 0) return
-    let sumX = 0
-    let sumY = 0
-    for (const c of cells) {
-      sumX += c.x
-      sumY += c.y
-    }
-    const at = this.cellScreenCenter({
-      x: sumX / cells.length,
-      y: sumY / cells.length,
-    })
+    if (!overlay) return
+    const center = centroidOf(cells)
+    if (!center) return
+    const at = this.cellScreenCenter(center)
     if (!at) return
     // Anchor above the match so it doesn't collide with the POW/BOOM word.
     const textAt = { x: at.x, y: at.y - 36 }
     overlay.spawnFloatingText(textAt, '+1 TURN', {
-      color: CASCADE_HEX,
+      ...WORD_POP,
+      color: VISUAL.cascadeGold,
       fontSize: 38,
       lifeMs: 900,
       driftY: -42,
-      scaleCurve: popScaleCurve,
       rotationFrom: this.nextTiltRadians(),
-      rotationEase: 0,
     })
   }
 
@@ -681,7 +783,7 @@ export class AnimationController {
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
     }
-    overlay.spawnBurst(at, CASCADE_HEX, {
+    overlay.spawnBurst(at, VISUAL.cascadeGold, {
       count: 28,
       speedMin: 130,
       speedMax: 260,
@@ -693,6 +795,53 @@ export class AnimationController {
     })
     overlay.spawnSparkle(at, 8)
     emitGameEvent({ kind: 'screen-shake', magnitude: 1.2 })
+  }
+
+  // Gold outer + red fragments + upward sparkle + DEFEATED callout + hard
+  // shake, anchored on the enemy frame. Timed externally to land at the
+  // HP-zero moment (see the 'enemy-killed' case in playEvent).
+  private playEnemyDeathBurst(enemyId: string): void {
+    const overlay = this.overlay
+    const el = this.findEl(`[data-enemy-id="${enemyId}"]`)
+    const center = overlay && el ? elementCenter(el) : null
+    if (overlay && center) {
+      overlay.spawnBurst(center, VISUAL.cascadeGold, {
+        count: 26,
+        speedMin: 180,
+        speedMax: 340,
+        radiusMin: 3,
+        radiusMax: 6,
+        lifeMs: 780,
+        gravity: 240,
+        spread: 1.5,
+      })
+      overlay.spawnBurst(center, 'red', {
+        count: 20,
+        speedMin: 140,
+        speedMax: 280,
+        radiusMin: 2.5,
+        radiusMax: 5,
+        lifeMs: 720,
+        gravity: 320,
+        spread: 1.4,
+      })
+      overlay.spawnSparkle(center, 12)
+      overlay.spawnFloatingText(
+        { x: center.x, y: center.y - 12 },
+        'DEFEATED',
+        {
+          ...WORD_POP,
+          color: VISUAL.cascadeGold,
+          fontSize: 34,
+          lifeMs: 1050,
+          driftY: -55,
+          rotationFrom: this.nextTiltRadians(),
+        },
+      )
+    }
+    // Above the cascade streak cap (1.75) and extra-turn (1.2) so the kill
+    // reads as its own tier.
+    emitGameEvent({ kind: 'screen-shake', magnitude: 1.6 })
   }
 
   // Subtle (±2-6°) tilt with alternating sign across all callouts so
@@ -711,36 +860,31 @@ export class AnimationController {
   }
 
   // Popup at the pool-target element synced with the trail's arrival
-  // (~700ms) so the number lands *before* the indicator settles.
+  // so the number lands *before* the indicator settles.
   private spawnPoolArrivalPopup(color: GemColor, amount: number): void {
     if (amount <= 0) return
-    window.setTimeout(() => {
+    scheduleAtTrailArrival(() => {
       const overlay = this.overlay
       if (!overlay) return
-      const el = document.querySelector<HTMLElement>(
-        `[data-pool-target="${color}"]`,
-      )
+      const el = this.findEl(`[data-pool-target="${color}"]`)
       if (!el) return
       const center = elementCenter(el)
       if (!center) return
       const isDamage = color === 'red'
       const text = isDamage ? `-${amount}` : `+${amount}`
       const popupColor = STORED_HEX[color]
-      // Slight font bump for bigger gains so a 5-match feels heavier than
-      // a 3-match without spawning a whole second callout.
-      const fontSize = 26 + Math.min(6, Math.max(0, amount - 3) * 2)
       overlay.spawnFloatingText(
         { x: center.x, y: center.y - 18 },
         text,
         {
           color: popupColor,
-          fontSize,
+          fontSize: damagePopupFontSize(amount),
           lifeMs: 720,
           driftY: -52,
           growBy: 0.25,
         },
       )
-    }, 700)
+    })
   }
 
   // Damage/heal popups land *with* the gem trail rather than at the
@@ -748,17 +892,17 @@ export class AnimationController {
   // with pool-arrival feedback.
   private scheduleDelayedDamagePopup(enemyId: string, amount: number): void {
     if (amount <= 0) return
-    window.setTimeout(() => {
+    scheduleAtTrailArrival(() => {
       this.spawnDamagePopup(enemyId, amount)
-    }, TRAIL_ARRIVAL_MS)
+    })
   }
 
   private scheduleDelayedHealPopup(amount: number): void {
     if (amount <= 0) return
-    window.setTimeout(() => {
+    scheduleAtTrailArrival(() => {
       const overlay = this.overlay
       if (!overlay) return
-      const el = document.querySelector<HTMLElement>('[data-pool-target="green"]')
+      const el = this.findEl('[data-pool-target="green"]')
       if (!el) return
       const center = elementCenter(el)
       if (!center) return
@@ -767,13 +911,13 @@ export class AnimationController {
         `+${amount}`,
         {
           color: STORED_HEX.green,
-          fontSize: 26 + Math.min(6, Math.max(0, amount - 3) * 2),
+          fontSize: damagePopupFontSize(amount),
           lifeMs: 720,
           driftY: -52,
           growBy: 0.25,
         },
       )
-    }, TRAIL_ARRIVAL_MS)
+    })
   }
 
   private spawnPoolTrail(color: GemColor): void {
@@ -786,9 +930,7 @@ export class AnimationController {
     const from = this.cellScreenCenter(source)
     if (!from) return
     const attractor: Attractor = () => {
-      const el = document.querySelector<HTMLElement>(
-        `[data-pool-target="${color}"]`,
-      )
+      const el = this.findEl(`[data-pool-target="${color}"]`)
       return el ? elementCenter(el) : null
     }
     overlay.spawnTrail(from, attractor, color, 5)
@@ -797,9 +939,7 @@ export class AnimationController {
   private spawnDamagePopup(enemyId: string, amount: number): void {
     const overlay = this.overlay
     if (!overlay) return
-    const el = document.querySelector<HTMLElement>(
-      `[data-enemy-id="${enemyId}"]`,
-    )
+    const el = this.findEl(`[data-enemy-id="${enemyId}"]`)
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
@@ -807,7 +947,7 @@ export class AnimationController {
       { x: center.x, y: center.y - 30 },
       `-${amount}`,
       {
-        color: 0xee5e57,
+        color: VISUAL.damageRed,
         fontSize: 30,
         lifeMs: 800,
         driftY: -75,
@@ -819,7 +959,7 @@ export class AnimationController {
   private spawnPlayerDamagePopup(amount: number): void {
     const overlay = this.overlay
     if (!overlay) return
-    const el = document.querySelector<HTMLElement>('[data-player-hud]')
+    const el = this.findEl('[data-player-hud]')
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
@@ -827,11 +967,31 @@ export class AnimationController {
       { x: center.x, y: center.y - 20 },
       `-${amount}`,
       {
-        color: 0xee5e57,
+        color: VISUAL.damageRed,
         fontSize: 30,
         lifeMs: 800,
         driftY: -70,
         growBy: 0.3,
+      },
+    )
+  }
+
+  private spawnPlayerBlockedPopup(blocked: number): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const el = this.findEl('[data-player-hud]')
+    if (!el) return
+    const center = elementCenter(el)
+    if (!center) return
+    overlay.spawnFloatingText(
+      { x: center.x, y: center.y - 20 },
+      `-${blocked} 🛡`,
+      {
+        color: VISUAL.shieldBlue,
+        fontSize: 24,
+        lifeMs: 700,
+        driftY: -55,
+        growBy: 0.2,
       },
     )
   }
@@ -850,7 +1010,7 @@ export class AnimationController {
       targetId === 'player'
         ? '[data-player-hud]'
         : `[data-enemy-id="${targetId}"]`
-    const el = document.querySelector<HTMLElement>(selector)
+    const el = this.findEl(selector)
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
@@ -861,9 +1021,7 @@ export class AnimationController {
   private spawnEnemyBlockPopup(enemyId: string, amount: number): void {
     const overlay = this.overlay
     if (!overlay) return
-    const el = document.querySelector<HTMLElement>(
-      `[data-enemy-id="${enemyId}"]`,
-    )
+    const el = this.findEl(`[data-enemy-id="${enemyId}"]`)
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
@@ -871,7 +1029,7 @@ export class AnimationController {
       { x: center.x, y: center.y - 30 },
       `+${amount} 🛡`,
       {
-        color: 0x9ec5ff,
+        color: VISUAL.shieldBlue,
         fontSize: 22,
         lifeMs: 750,
         driftY: -45,

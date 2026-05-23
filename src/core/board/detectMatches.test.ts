@@ -49,7 +49,7 @@ function build(rows: string[]): Cell[][] {
   return grid.map((row) =>
     row.map((c) => {
       if (!c) throw new Error('build: unfilled cell')
-      return { gemColor: c, flags: {} }
+      return { gemColor: c }
     }),
   )
 }
