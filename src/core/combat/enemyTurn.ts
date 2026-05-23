@@ -163,6 +163,7 @@ export function executeEnemyTurn(
             kind: 'status-applied',
             target: 'player',
             status: newStatus,
+            source: { kind: 'enemy', enemyId: updatedEnemy.id },
           })
         }
       }

@@ -203,6 +203,7 @@ export const useGameStore = create<GameStore>()(
             kind: 'status-applied',
             target: 'player',
             status: incoming,
+            source: { kind: 'board-cells', cells: ev.cells },
           })
           continue
         }

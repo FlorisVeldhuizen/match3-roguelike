@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import {
   getPendingMeta,
@@ -5,6 +6,11 @@ import {
   listUltimates,
 } from '../../core/combat/spellRegistry'
 import { HoverTooltip } from './HoverTooltip'
+
+// CSS flash duration on cast. Matches the spell-btn.just-cast keyframe
+// in index.css. Anything that "released" was kept inside one beat to
+// avoid double-cast confusion.
+const CAST_FLASH_MS = 520
 
 // Spell + ultimate cast surface. Disabled (visually + functionally) when:
 // - Not the player's phase
@@ -24,6 +30,20 @@ export function SpellTray() {
   const castSpell = useGameStore((s) => s.castSpell)
   const castUltimate = useGameStore((s) => s.castUltimate)
   const onPlayerPhase = phase === 'player-acting'
+
+  // Per-button "just cast" flash. Single concurrent timer per button id;
+  // a re-cast (can't happen now, but reserved for relics that refund
+  // pending) cleanly restarts the flash via the key bump.
+  const [flashKey, setFlashKey] = useState<Record<string, number>>({})
+  const flashCast = (id: string) => {
+    setFlashKey((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+    window.setTimeout(() => {
+      setFlashKey((prev) => {
+        if ((prev[id] ?? 0) <= 0) return prev
+        return { ...prev, [id]: Math.max(0, (prev[id] ?? 0) - 1) }
+      })
+    }, CAST_FLASH_MS)
+  }
 
   return (
     <div className="spell-tray" aria-label="Spells">
@@ -53,11 +73,15 @@ export function SpellTray() {
           >
             <button
               type="button"
-              className={`spell-btn${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}`}
+              className={`spell-btn${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}${(flashKey[def.id] ?? 0) > 0 ? ' just-cast' : ''}`}
+              // key re-mount on cast so the .just-cast keyframe replays
+              // even if rapid casts land within the same flash window.
+              key={`${def.id}-${flashKey[def.id] ?? 0}`}
               aria-disabled={blocked}
               onClick={() => {
                 if (blocked) return
-                castSpell(def.id)
+                const res = castSpell(def.id)
+                if (res.ok) flashCast(def.id)
               }}
             >
               <span className="spell-icon" aria-hidden>

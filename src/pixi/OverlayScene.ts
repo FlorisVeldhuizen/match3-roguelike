@@ -269,7 +269,7 @@ export class OverlayScene {
   spawnTrail(
     from: ScreenPoint,
     attractor: Attractor,
-    color: GemColor,
+    colorOrHex: GemColor | number,
     count = 5,
   ): void {
     const layer = this.layer
@@ -278,7 +278,8 @@ export class OverlayScene {
     // If the DOM target isn't there yet, skip the whole batch.
     const initialEnd = attractor()
     if (!initialEnd) return
-    const hex = COLOR_HEX[color]
+    const hex =
+      typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
     for (let i = 0; i < count; i++) {
       const start = jitterPoint(from, 5)
       const control = randomBezierControl(start, initialEnd)

@@ -109,7 +109,16 @@ const VISUAL = {
   cascadeGold: 0xfacc15,
   damageRed: 0xee5e57,
   shieldBlue: 0x9ec5ff,
+  burnEmber: 0xee5e57,
+  vulnerableOrange: 0xc47e3c,
+  weakPale: 0xc9b896,
 } as const
+
+const STATUS_HEX: Record<'burn' | 'vulnerable' | 'weak', number> = {
+  burn: VISUAL.burnEmber,
+  vulnerable: VISUAL.vulnerableOrange,
+  weak: VISUAL.weakPale,
+}
 
 // Darker "stored pool" palette — matches the HUD pool backgrounds so a
 // `+N` popup reads as the same currency the indicator is holding.
@@ -414,6 +423,9 @@ export class AnimationController {
         return
       case 'phase-changed':
         await wait(phaseBeat(event.phase))
+        return
+      case 'status-applied':
+        this.spawnStatusTrail(event)
         return
       case 'extra-turn-granted':
         this.spawnExtraTurnBannerBurst()
@@ -945,6 +957,56 @@ export class AnimationController {
       return el ? elementCenter(el) : null
     }
     overlay.spawnTrail(from, attractor, color, 5)
+  }
+
+  // Particle trail from caster → target for status applications. Source
+  // is taken from the event's `source` hint (set by combat layer); target
+  // is the receiving entity's frame. Tinted by status kind so Burn looks
+  // ember-y, Vulnerable orange, Weak pale.
+  private spawnStatusTrail(event: GameEvent & { kind: 'status-applied' }): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const source = event.source
+    if (!source) return
+
+    let from: { x: number; y: number } | null = null
+    if (source.kind === 'enemy') {
+      const el = this.findEl(`[data-enemy-id="${source.enemyId}"]`)
+      from = el ? elementCenter(el) : null
+    } else if (source.kind === 'board-cells') {
+      // Centroid of the cells in screen space so a 2-cell trigger
+      // visually originates between the two flames, not from just one.
+      let sx = 0
+      let sy = 0
+      let n = 0
+      for (const cell of source.cells) {
+        const c = this.cellScreenCenter(cell)
+        if (!c) continue
+        sx += c.x
+        sy += c.y
+        n++
+      }
+      if (n > 0) from = { x: sx / n, y: sy / n }
+    } else if (source.kind === 'player') {
+      const el = this.findEl('[data-player-hud]')
+      from = el ? elementCenter(el) : null
+    }
+    if (!from) return
+
+    const target = event.target
+    const attractor: Attractor = () => {
+      if (target === 'player') {
+        const el = this.findEl('[data-player-hud]')
+        return el ? elementCenter(el) : null
+      }
+      const el = this.findEl(`[data-enemy-id="${target}"]`)
+      return el ? elementCenter(el) : null
+    }
+
+    const hex = STATUS_HEX[event.status.kind]
+    // 6 particles — slightly heavier than the pool-trail's 5 so the
+    // status hand-off reads as a distinct beat from a regular match.
+    overlay.spawnTrail(from, attractor, hex, 6)
   }
 
   private spawnDamagePopup(enemyId: string, amount: number): void {

@@ -2191,3 +2191,57 @@ body.vignette-damage::before {
     animation: none;
   }
 }
+
+/* Cast flash — quick glow + scale pulse on the spell button at the
+   moment the spell is queued. Sells "the click landed" before the
+   button drops into its disabled .queued state. */
+.spell-btn.just-cast {
+  animation: spell-cast-flash 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.spell-btn.ultimate.just-cast {
+  animation: ultimate-cast-flash 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes spell-cast-flash {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(240, 208, 137, 0);
+    filter: brightness(1);
+  }
+  30% {
+    transform: scale(1.08);
+    box-shadow: 0 0 22px 4px rgba(240, 208, 137, 0.55);
+    filter: brightness(1.45);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(240, 208, 137, 0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes ultimate-cast-flash {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+    filter: brightness(1);
+  }
+  30% {
+    transform: scale(1.1);
+    box-shadow: 0 0 28px 6px rgba(184, 157, 255, 0.7);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spell-btn.just-cast,
+  .spell-btn.ultimate.just-cast {
+    animation: none;
+  }
+}

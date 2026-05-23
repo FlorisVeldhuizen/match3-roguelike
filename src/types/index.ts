@@ -91,6 +91,15 @@ export type GameEvent =
       kind: 'status-applied'
       target: 'player' | string
       status: StatusInstance
+      // Visual hint for the FX layer — where particles should fly *from*.
+      // Engine logic doesn't read this. `enemy` for Bleeder-on-hit style
+      // (caster is the acting enemy), `board-cells` for a tile-burn match
+      // that bounces Burn back at the player, `player` for player-applied
+      // statuses (none yet, but reserved for relics).
+      source?:
+        | { kind: 'enemy'; enemyId: string }
+        | { kind: 'board-cells'; cells: Pos[] }
+        | { kind: 'player' }
     }
   | {
       kind: 'status-ticked'
