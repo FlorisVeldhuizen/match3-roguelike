@@ -41,8 +41,8 @@ const makeEnemy = (overrides: Partial<Enemy> = {}): Enemy => ({
   ...overrides,
 })
 
-const vuln: StatusInstance = { kind: 'vulnerable', stacks: 1, duration: 2 }
-const weak: StatusInstance = { kind: 'weak', stacks: 1, duration: 2 }
+const vuln: StatusInstance = { kind: 'vulnerable', stacks: 2 }
+const weak: StatusInstance = { kind: 'weak', stacks: 2 }
 
 describe('Bulwark at end of phase', () => {
   it('converts entire blue pool to attack at floor(blue/2) and zeros block', () => {
@@ -186,21 +186,22 @@ describe('Burn at turn start', () => {
     const player = makePlayer()
     const enemy = makeEnemy({
       hp: 10,
-      statuses: [{ kind: 'burn', stacks: 3, duration: 2 }],
+      statuses: [{ kind: 'burn', stacks: 3 }],
       currentIntent: { kind: 'attack', amount: 4 },
     })
     const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     // Burn deals 3 first, then attack still resolves.
     expect(res.enemies[0]?.hp).toBe(7)
     expect(res.player.hp).toBe(56)
-    expect(res.enemies[0]?.statuses[0]?.duration).toBe(1)
+    // Stacks decay by 1 each tick (StS pattern).
+    expect(res.enemies[0]?.statuses[0]?.stacks).toBe(2)
   })
 
   it('burn that kills the enemy emits enemy-killed and skips its intent', () => {
     const player = makePlayer()
     const enemy = makeEnemy({
       hp: 2,
-      statuses: [{ kind: 'burn', stacks: 5, duration: 1 }],
+      statuses: [{ kind: 'burn', stacks: 5 }],
       currentIntent: { kind: 'attack', amount: 10 },
     })
     const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
@@ -208,5 +209,29 @@ describe('Burn at turn start', () => {
     // Player took no damage — the enemy died before attacking.
     expect(res.player.hp).toBe(60)
     expect(res.events.some((e) => e.kind === 'enemy-killed')).toBe(true)
+  })
+
+  // FX-pipeline contract: damage-dealt (burn proc on enemy) must come
+  // BEFORE the status-ticked / status-expired events, so the chip →
+  // enemy-frame particle trail can snapshot the chip's position while
+  // it's still mounted. Mirrors the player-side ordering in
+  // turn.test.ts.
+  it('emits damage-dealt before status-ticked/expired on enemy burn proc', () => {
+    const enemy = makeEnemy({
+      hp: 10,
+      // Burn 2 → ticks (dmg 2), then stacks decays to 1 (status-ticked).
+      // Burn 1 would expire (status-expired) — choose 2 so we test both
+      // the dealt-then-ticked ordering case.
+      statuses: [{ kind: 'burn', stacks: 2 }],
+      currentIntent: { kind: 'attack', amount: 4 },
+    })
+    const res = executeEnemyTurn(makePlayer(), [enemy], [], { seed: 1 })
+    const burnDealtIdx = res.events.findIndex(
+      (e) => e.kind === 'damage-dealt' && e.source === 'burn',
+    )
+    const tickedIdx = res.events.findIndex((e) => e.kind === 'status-ticked')
+    expect(burnDealtIdx).toBeGreaterThanOrEqual(0)
+    expect(tickedIdx).toBeGreaterThanOrEqual(0)
+    expect(burnDealtIdx).toBeLessThan(tickedIdx)
   })
 })

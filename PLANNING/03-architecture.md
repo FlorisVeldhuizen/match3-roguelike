@@ -82,7 +82,7 @@ type CellFlags = {
   cursed?: boolean;        // Corruptor — self-damage on match
   petrified?: number;      // Defender — turns remaining; cell cannot anchor a match
   hexed?: GemColor;        // Caster — color override; matching cells of this color apply Weak
-  burning?: number;        // Bleeder — turns remaining; matching applies Burn
+  burning?: number;        // Smolder — turns remaining; matching applies Burn
   pendingSmash?: number;   // Brute — turns remaining; column will be cleared without payout
 };
 

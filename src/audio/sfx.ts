@@ -1,5 +1,6 @@
 import { subscribeGameEvents } from '../core/events/emitter'
 import { scheduleAtTrailArrival } from '../timing'
+import { statusKindFromDamageSource } from '../core/combat/statuses'
 
 const MUTE_KEY = 'sfx-muted'
 
@@ -1844,102 +1845,184 @@ export function playShieldParticleTickSfx(amount = 1): void {
   synthShieldThump(amount)
 }
 
-// Tile ignite: Bleeder's tile-burn intent lights N cells. Soft whoosh
-// + low rumble — meant to register as "something happened" without
-// stealing the spotlight from the per-match cues that follow. Volumes
-// roughly halved from the first pass; user fed back the original mix
-// was hard to miss.
+// Tile ignite: Smolder's tile-burn intent lights N cells. Whoosh + low
+// rumble + sustained mid-roar bed + popping crackle. Layers tuned so
+// the cue clearly reads as "fire catches" — distinct from a generic
+// whoosh — without overpowering the per-match cues that follow.
 function synthBurnIgnite(count: number): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
   const I = intensity(count)
 
-  // Filtered noise whoosh: bandpass sweeps up, mimicking air drawn into
-  // a fire as it catches.
+  // Bandpass whoosh, sweeping up. Brighter top end and louder peak
+  // than the previous pass so the leading edge of the cue feels like
+  // air being sucked toward the flame.
   const noise = makeNoiseBurst(c)
   const bp = c.createBiquadFilter()
   bp.type = 'bandpass'
   bp.frequency.setValueAtTime(380 * jitter(0.1), now)
-  bp.frequency.exponentialRampToValueAtTime(1400 * jitter(0.1), now + 0.18)
+  bp.frequency.exponentialRampToValueAtTime(1700 * jitter(0.1), now + 0.18)
   bp.Q.value = 1.1
   const ng = c.createGain()
   ng.gain.setValueAtTime(0.0001, now)
-  ng.gain.exponentialRampToValueAtTime(0.085 * jitter(0.2) * I, now + 0.03)
-  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
+  ng.gain.exponentialRampToValueAtTime(0.14 * jitter(0.2) * I, now + 0.03)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.24)
   noise.connect(bp).connect(ng).connect(out(c))
   noise.start(now)
-  noise.stop(now + 0.24)
+  noise.stop(now + 0.26)
 
-  // Low rumble: a brief 90→55Hz sine for body. Quieter and softer
-  // attack so it sits under the whoosh instead of slapping out front.
+  // Sustained lowpassed roar — the "body" of the fire that wasn't there
+  // before. Longer tail than the whoosh, mid-low filter so it doesn't
+  // get hissy. Sits behind the whoosh, in front of the rumble.
+  const roar = makeNoiseBurst(c)
+  const lp = c.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 900 * jitter(0.1)
+  lp.Q.value = 0.7
+  const rg = c.createGain()
+  rg.gain.setValueAtTime(0.0001, now)
+  rg.gain.exponentialRampToValueAtTime(0.075 * I, now + 0.05)
+  rg.gain.exponentialRampToValueAtTime(0.0001, now + 0.36)
+  roar.connect(lp).connect(rg).connect(out(c))
+  roar.start(now)
+  roar.stop(now + 0.38)
+
+  // Low rumble: 95→55Hz sine for impact body. Louder than before so
+  // the cue has weight without relying on the whoosh alone.
   const sub = c.createOscillator()
   sub.type = 'sine'
   sub.frequency.setValueAtTime(95 * jitter(0.08), now)
   sub.frequency.exponentialRampToValueAtTime(55 * jitter(0.08), now + 0.2)
   const sg = c.createGain()
   sg.gain.setValueAtTime(0.0001, now)
-  sg.gain.exponentialRampToValueAtTime(0.1 * I, now + 0.02)
-  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
+  sg.gain.exponentialRampToValueAtTime(0.16 * I, now + 0.02)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.24)
   sub.connect(sg).connect(out(c))
   sub.start(now)
-  sub.stop(now + 0.24)
+  sub.stop(now + 0.26)
 
-  // High crackle accents — kept but quieter. They sell "alive" without
-  // adding much mass to the cue.
-  const sparks = 2 + Math.floor(Math.random() * 2)
+  // Crackle: 4-6 short bandpass-noise pops scattered across the first
+  // 150ms. More of them, louder, spread further so the cue feels like
+  // a flame actually catching — uneven, alive.
+  const sparks = 4 + Math.floor(Math.random() * 3)
   for (let i = 0; i < sparks; i++) {
-    const offset = 0.01 + Math.random() * 0.07
+    const offset = 0.01 + Math.random() * 0.14
     const n2 = makeNoiseBurst(c)
     const bp2 = c.createBiquadFilter()
     bp2.type = 'bandpass'
-    bp2.frequency.value = 2200 + Math.random() * 1800
+    bp2.frequency.value = 2000 + Math.random() * 2400
     bp2.Q.value = 4
     const g = c.createGain()
     g.gain.setValueAtTime(0.0001, now + offset)
-    g.gain.exponentialRampToValueAtTime(0.035 * jitter(0.3), now + offset + 0.004)
-    g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.06)
+    g.gain.exponentialRampToValueAtTime(0.075 * jitter(0.35), now + offset + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.07)
     n2.connect(bp2).connect(g).connect(out(c))
     n2.start(now + offset)
-    n2.stop(now + offset + 0.08)
+    n2.stop(now + offset + 0.09)
   }
 }
 
-// Burn burst: a burning tile got matched and is resolving. Quick fwoosh-
-// pop. Halved peak gains + tighter chirp range so it sits *under* the
-// per-match clack instead of poking through it.
+// Burn burst: a burning tile got matched and is resolving. Chirp +
+// crackle. Re-widened the chirp range and bumped the crackle peak so
+// the cue has real "pop" — previously it sat too far under the
+// per-match clack and didn't read as a discrete moment.
 function synthBurnBurst(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
 
-  // Pitched chirp — the "fwoosh" curl as the flame jumps and dies.
-  // Narrower upward sweep so the cue feels rounder, less screechy.
+  // Pitched chirp — fwoosh curl as the flame jumps and dies. Range
+  // 260→760 Hz (wider than the previous 260→620) gives the cue more
+  // bite at the peak without going screechy.
   const osc = c.createOscillator()
   osc.type = 'triangle'
   osc.frequency.setValueAtTime(260 * jitter(0.1), now)
-  osc.frequency.exponentialRampToValueAtTime(620 * jitter(0.1), now + 0.1)
+  osc.frequency.exponentialRampToValueAtTime(760 * jitter(0.1), now + 0.1)
   const og = c.createGain()
   og.gain.setValueAtTime(0.0001, now)
-  og.gain.exponentialRampToValueAtTime(0.1 * jitter(0.2), now + 0.01)
-  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
+  og.gain.exponentialRampToValueAtTime(0.17 * jitter(0.2), now + 0.01)
+  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
   osc.connect(og).connect(out(c))
   osc.start(now)
-  osc.stop(now + 0.18)
+  osc.stop(now + 0.2)
 
-  // Crackle: highpassed noise — sparks flying outward.
+  // Crackle: highpassed noise — sparks flying outward. Louder so the
+  // burst's "fire" character is unmistakable.
   const noise = makeNoiseBurst(c)
   const hp = c.createBiquadFilter()
   hp.type = 'highpass'
-  hp.frequency.value = 2200
+  hp.frequency.value = 2000
   hp.Q.value = 0.8
   const ng = c.createGain()
   ng.gain.setValueAtTime(0.0001, now)
-  ng.gain.exponentialRampToValueAtTime(0.06 * jitter(0.2), now + 0.006)
-  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.13)
+  ng.gain.exponentialRampToValueAtTime(0.12 * jitter(0.2), now + 0.006)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.15)
   noise.connect(hp).connect(ng).connect(out(c))
   noise.start(now)
-  noise.stop(now + 0.15)
+  noise.stop(now + 0.17)
+}
+
+// Burn status applied to a target — flame whoosh, "fire just curled
+// around something". Different from synthBurnIgnite (which is the
+// "lighting cells" cue, with more crackle) and from synthBurnBurst
+// (the "resolve" pop). This one is a singular wrap: short rising
+// noise sweep through a bandpass, a soft low whump for body, no
+// crackle layer. Lands clean on top of the per-particle trail
+// arriving at the target's frame.
+function synthBurnApply(): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+
+  // Bandpass-noise whoosh, climbing from ~500Hz to ~2.6kHz over 130ms
+  // — the "fwooph" of a flame jumping onto its victim. Louder peak +
+  // wider top so the cue clearly reads as flame, not just wind.
+  const noise = makeNoiseBurst(c)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.setValueAtTime(500 * jitter(0.1), now)
+  bp.frequency.exponentialRampToValueAtTime(2600 * jitter(0.1), now + 0.13)
+  bp.Q.value = 1.5
+  const ng = c.createGain()
+  ng.gain.setValueAtTime(0.0001, now)
+  ng.gain.exponentialRampToValueAtTime(0.17 * jitter(0.2), now + 0.025)
+  ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.2)
+  noise.connect(bp).connect(ng).connect(out(c))
+  noise.start(now)
+  noise.stop(now + 0.22)
+
+  // Low whump — the "weight" of the flame's impact. Single short sine
+  // that dies fast. Louder so the cue has body.
+  const sub = c.createOscillator()
+  sub.type = 'sine'
+  sub.frequency.setValueAtTime(110 * jitter(0.08), now)
+  sub.frequency.exponentialRampToValueAtTime(70 * jitter(0.08), now + 0.12)
+  const sg = c.createGain()
+  sg.gain.setValueAtTime(0.0001, now)
+  sg.gain.exponentialRampToValueAtTime(0.1, now + 0.014)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
+  sub.connect(sg).connect(out(c))
+  sub.start(now)
+  sub.stop(now + 0.18)
+
+  // 2 crackle pops on the way in — they're what makes the cue read as
+  // "fire" rather than a generic whoosh. Scattered in the first 90ms.
+  for (let i = 0; i < 2; i++) {
+    const offset = 0.02 + Math.random() * 0.07
+    const n2 = makeNoiseBurst(c)
+    const bp2 = c.createBiquadFilter()
+    bp2.type = 'bandpass'
+    bp2.frequency.value = 2400 + Math.random() * 1600
+    bp2.Q.value = 4
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, now + offset)
+    g.gain.exponentialRampToValueAtTime(0.06 * jitter(0.3), now + offset + 0.004)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.06)
+    n2.connect(bp2).connect(g).connect(out(c))
+    n2.start(now + offset)
+    n2.stop(now + offset + 0.08)
+  }
 }
 
 export function playBurnIgniteSfx(count = 1): void {
@@ -1950,6 +2033,78 @@ export function playBurnIgniteSfx(count = 1): void {
 export function playBurnBurstSfx(): void {
   if (muted) return
   synthBurnBurst()
+}
+
+export function playBurnApplySfx(): void {
+  if (muted) return
+  synthBurnApply()
+}
+
+// Burn DoT impact — the "hit" beat when a burn-tick damage event lands
+// on its target. Distinct from:
+//   - synthBurnApply (the whoosh at spawn time, "fire about to curl in")
+//   - synthBurnBurst (tile-clear pop, with a pitched chirp)
+// This one is just sizzle + low whump — fire-themed impact without
+// borrowing the generic playAttackSfx. Scales with damage amount.
+function synthBurnImpact(amount: number): void {
+  const c = getCtx()
+  if (!c) return
+  const now = c.currentTime
+  const I = intensity(amount)
+
+  // Low whump for the "thud" of the hit. Slightly louder than apply's
+  // whump because this IS the impact, not the lead-in.
+  const sub = c.createOscillator()
+  sub.type = 'sine'
+  sub.frequency.setValueAtTime(120 * jitter(0.08), now)
+  sub.frequency.exponentialRampToValueAtTime(60 * jitter(0.08), now + 0.1)
+  const sg = c.createGain()
+  sg.gain.setValueAtTime(0.0001, now)
+  sg.gain.exponentialRampToValueAtTime(0.14 * I, now + 0.01)
+  sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+  sub.connect(sg).connect(out(c))
+  sub.start(now)
+  sub.stop(now + 0.16)
+
+  // Mid-band sizzle: bandpassed noise that lingers ~150ms, mimicking
+  // skin/cloth catching. Wider Q than ignite's whoosh so it reads as
+  // texture, not movement.
+  const sizzle = makeNoiseBurst(c)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.setValueAtTime(1200 * jitter(0.1), now)
+  bp.frequency.exponentialRampToValueAtTime(600 * jitter(0.1), now + 0.15)
+  bp.Q.value = 1.4
+  const zg = c.createGain()
+  zg.gain.setValueAtTime(0.0001, now)
+  zg.gain.exponentialRampToValueAtTime(0.1 * jitter(0.2) * I, now + 0.012)
+  zg.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
+  sizzle.connect(bp).connect(zg).connect(out(c))
+  sizzle.start(now)
+  sizzle.stop(now + 0.2)
+
+  // 1-2 crackle pops to sell "fire damage" specifically. Few, quick.
+  const pops = amount >= 3 ? 2 : 1
+  for (let i = 0; i < pops; i++) {
+    const offset = 0.005 + Math.random() * 0.05
+    const n2 = makeNoiseBurst(c)
+    const bp2 = c.createBiquadFilter()
+    bp2.type = 'bandpass'
+    bp2.frequency.value = 2400 + Math.random() * 1400
+    bp2.Q.value = 5
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, now + offset)
+    g.gain.exponentialRampToValueAtTime(0.05 * jitter(0.3), now + offset + 0.003)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.05)
+    n2.connect(bp2).connect(g).connect(out(c))
+    n2.start(now + offset)
+    n2.stop(now + offset + 0.07)
+  }
+}
+
+export function playBurnImpactSfx(amount = 1): void {
+  if (muted) return
+  synthBurnImpact(amount)
 }
 
 // Wire events → SFX. Idempotent — calling install() twice is safe.
@@ -2027,14 +2182,25 @@ export function installSfxBindings(): void {
         // Player-attack damage commits per-match during the cascade, but the
         // visual hit lands later when the red gem trail reaches the enemy.
         // Delay the SFX to match — the AnimationController applies the same
-        // offset to the damage popup. Other damage sources (currently none,
-        // but future enemy reflect damage etc.) don't have travel time, so
-        // play immediately. Pass the amount so big hits sound heavier than
-        // small ones.
+        // offset to the damage popup. Other damage sources don't have
+        // travel time, so play immediately. Pass the amount so big hits
+        // sound heavier than small ones.
         //
         // Also stash blocked/amount so the block-absorbed/block-broken event
         // that follows (for enemy targets) can scale itself correctly.
         const amt = event.amount
+        // Status proc on an enemy (Burn etc.): per-status whoosh on
+        // spawn + per-status impact at trail arrival. Keeps the cue
+        // family coherent — burn damage sounds like burn, not a
+        // generic attack.
+        const procKind = statusKindFromDamageSource(event.source)
+        if (procKind && amt > 0) {
+          if (procKind === 'burn') {
+            playBurnApplySfx()
+            scheduleAtTrailArrival(() => playBurnImpactSfx(amt))
+          }
+          return
+        }
         if (event.source === 'player-attack') {
           lastEnemyBlocked = event.blocked
           lastEnemyUnblocked = event.amount
@@ -2060,18 +2226,28 @@ export function installSfxBindings(): void {
         }
         return
       }
-      case 'damage-taken':
-        // Mirror of damage-dealt for the player side. Without this, enemy
-        // hits on an unblocked player are silent — only the new shield
-        // SFX fired for block scenarios, making no-block hits feel mute.
-        // Stash both amounts so the upcoming block-absorbed/broken event
-        // can scale itself, then play the attack cue if any damage got
-        // through the shield. (If everything was blocked, the shield SFX
-        // does the talking on its own.)
+      case 'damage-taken': {
+        // Status proc on the player (Burn etc.): play the whoosh on
+        // spawn, the burn impact at trail arrival.
+        // AnimationController.spawnStatusProcTrail fires particles
+        // chip → HP at the same beat.
+        const procKind = statusKindFromDamageSource(event.source)
+        if (procKind && event.amount > 0) {
+          if (procKind === 'burn') {
+            playBurnApplySfx()
+            scheduleAtTrailArrival(() => playBurnImpactSfx(event.amount))
+          }
+          return
+        }
+        // Regular enemy-attack damage. Without this, unblocked hits on
+        // the player would be silent — the shield SFX only fires when
+        // block is in play. Stash both amounts so the upcoming
+        // block-absorbed/broken event can scale itself.
         lastPlayerBlocked = event.blocked
         lastPlayerUnblocked = event.amount
         if (event.amount > 0) playAttackSfx(event.amount)
         return
+      }
       case 'block-absorbed': {
         // Player target (enemy attacking): the shield-block visual fires
         // synchronously and the damage-taken SFX also plays immediately,
@@ -2116,7 +2292,7 @@ export function installSfxBindings(): void {
         playShuffleSfx()
         return
       case 'tile-burn-placed': {
-        // Bleeder lights cells. Particles fly enemy → cells and the
+        // Smolder lights cells. Particles fly enemy → cells and the
         // flame appears at arrival, so the ignite cue lands then too.
         const ct = event.cells.length
         scheduleAtTrailArrival(() => playBurnIgniteSfx(ct))
@@ -2128,6 +2304,23 @@ export function installSfxBindings(): void {
         // unsatisfying thwack.
         for (let i = 0; i < event.cells.length; i++) {
           window.setTimeout(playBurnBurstSfx, i * 35)
+        }
+        return
+      case 'status-applied':
+        // Burn arrival cue — short flame whoosh. Delayed via the same
+        // trail-arrival schedule so the sound lands with the particle
+        // hand-off and the status chip, not at swap commit.
+        // (Vulnerable/Weak applications are silent for now; can get
+        // their own timbres later.)
+        if (event.status.kind === 'burn') {
+          if (
+            event.source?.kind === 'enemy' ||
+            event.source?.kind === 'board-cells'
+          ) {
+            scheduleAtTrailArrival(playBurnApplySfx)
+          } else {
+            playBurnApplySfx()
+          }
         }
         return
       case 'extra-turn-granted':

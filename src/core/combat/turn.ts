@@ -145,13 +145,18 @@ export type PlayerPhaseBeginResult = {
 
 // Block from previous phase is zeroed — the wall either absorbed the enemy
 // hit or didn't, either way it's spent now. Statuses tick once here:
-// Burn deals damage (bypasses block — block is zero at this point anyway),
-// durations count down. If Burn kills the player, returns phase='game-over'.
+// Burn deals current stacks as damage (bypasses block — block is zero at
+// this point anyway), then every status decrements stacks by 1. If Burn
+// kills the player, returns phase='game-over'.
 export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
   const events: GameEvent[] = []
   const ticked = tickStatuses('player', player.statuses)
-  events.push(...ticked.events)
 
+  // Event order matters for the FX layer: emit `damage-taken` BEFORE the
+  // status-ticked / status-expired events. That way the chip → HP
+  // particle trail spawns while the status chip is still mounted in the
+  // UI; any chip-removing expiry plays after the trail is already in
+  // flight (snapshotted source position).
   let hp = player.hp
   if (ticked.burnDamage > 0 && hp > 0) {
     const before = hp
@@ -164,6 +169,7 @@ export function beginPlayerPhase(player: Player): PlayerPhaseBeginResult {
       source: 'burn',
     })
   }
+  events.push(...ticked.events)
 
   const phase: CombatPhase = hp <= 0 ? 'game-over' : 'player-acting'
   // Reinforce's one-shot carry-over: keep whatever block survived the

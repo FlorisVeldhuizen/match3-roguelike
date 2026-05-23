@@ -49,9 +49,13 @@ export function executeEnemyTurn(
     if (enemy.hp <= 0) continue
     if (nextPlayer.hp <= 0) break
 
-    // Status tick at start of this enemy's turn (02-scope §Tick granularity).
+    // Status tick at start of this enemy's turn (02-scope §Tick
+    // granularity). Mirror the player-side order: emit `damage-dealt`
+    // BEFORE the tick events so the chip → HP particle trail can
+    // snapshot the chip's position while it still exists; a final-
+    // tick expiry that removes the chip happens after the trail is
+    // already in flight.
     const ticked = tickStatuses(enemy.id, enemy.statuses)
-    events.push(...ticked.events)
     let workingEnemy: Enemy = { ...enemy, statuses: ticked.statuses }
     if (ticked.burnDamage > 0 && workingEnemy.hp > 0) {
       const before = workingEnemy.hp
@@ -69,6 +73,7 @@ export function executeEnemyTurn(
         events.push({ kind: 'enemy-killed', enemyId: workingEnemy.id })
       }
     }
+    events.push(...ticked.events)
 
     nextEnemies = nextEnemies.map((e) =>
       e.id === workingEnemy.id ? workingEnemy : e,
@@ -144,7 +149,7 @@ export function executeEnemyTurn(
         } else if (res.blockAbsorbed) {
           events.push({ kind: 'block-absorbed', targetId: 'player' })
         }
-        // Bleeder's onHitStatus rider: if the attack landed (any HP
+        // Smolder's onHitStatus rider: if the attack landed (any HP
         // damage), apply the configured status to the player. Status
         // riders only fire on real hits — fully-blocked attacks don't
         // tag the player (consistent with the "block matters" theme).
@@ -155,7 +160,6 @@ export function executeEnemyTurn(
           const newStatus = {
             kind: onHit.status,
             stacks: onHit.stacks,
-            duration: onHit.duration,
           }
           nextPlayer = {
             ...nextPlayer,
@@ -190,6 +194,7 @@ export function executeEnemyTurn(
           kind: 'tile-burn-placed',
           cells,
           enemyId: updatedEnemy.id,
+          duration,
         })
       }
     } else if (intent.kind === 'block' && updatedEnemy.block === 0) {

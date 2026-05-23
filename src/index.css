@@ -1685,6 +1685,33 @@ body.vignette-damage::before {
   font-family: 'Cinzel', serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+  /* One-shot scale-in on mount — fires when a status first lands (chip
+     joins the DOM). Number updates re-render the inner text without
+     unmounting the chip, so the animation doesn't replay on every
+     tick. Expire → reapply will replay it, which is the intent. */
+  animation: status-chip-enter 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform-origin: center;
+}
+
+@keyframes status-chip-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-chip {
+    animation: none;
+  }
 }
 
 .status-burn {
@@ -1967,7 +1994,7 @@ body.vignette-damage::before {
   color: var(--royal-2);
 }
 
-/* --- Burning tile overlay (Bleeder verb) ---
+/* --- Burning tile overlay (Smolder verb) ---
    Sits inside .board-mount alongside the Pixi canvas (which Pixi
    appendChild's). board-mount and the canvas share the same CSS box,
    so insetting by BOARD_PADDING / LOGICAL_SIZE = 8/528 lines the 8×8
@@ -1982,21 +2009,32 @@ body.vignette-damage::before {
   left: calc(8 / 528 * 100%);
   right: calc(8 / 528 * 100%);
   bottom: calc(8 / 528 * 100%);
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
+  /* No grid — flames absolute-position via inline left/top % so they
+     can transition smoothly when the gem they sit on swaps or falls. */
   pointer-events: none;
   z-index: 3;
 }
 
 .burning-cell {
-  position: relative;
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
   display: grid;
   place-items: center;
   font-size: clamp(1rem, 4.5vmin, 1.7rem);
   filter: drop-shadow(0 0 6px var(--ember-glow));
   animation: burning-pulse 1.3s ease-in-out infinite;
-  pointer-events: auto;
+  /* Slide with the gem during swap/gravity. 220ms ≈ the SWAP_MS
+     constant in BoardScene (200ms) plus a smidge to feel rooted to
+     the gem rather than racing it. */
+  transition:
+    left 220ms cubic-bezier(0.4, 0.0, 0.2, 1),
+    top 220ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  /* Click-through: the overlay must not block pointer events to the
+     Pixi canvas underneath, or burning tiles become unselectable.
+     The persistent Burn chip on the HUD owns the "what does this do"
+     tooltip; the flame is a board marker, not an interactive element. */
+  pointer-events: none;
 }
 
 /* Red wash behind the flame so the *whole cell* reads as "hot", not
@@ -2063,6 +2101,30 @@ body.vignette-damage::before {
   animation: burning-fizzle 620ms ease-in-out infinite;
 }
 
+/* Hover lift — matches the gem hover beat (Pixi scales the gem
+   underneath; here the flame and its wash get a parallel breath).
+   Multiplied onto the duration-driven --flame-scale so a fizzling
+   tile still reads small-but-alive when hovered. */
+.burning-cell.is-hovered .burning-flame {
+  transform: scale(calc(var(--flame-scale, 1) * 1.18));
+  filter: drop-shadow(0 0 10px rgba(255, 184, 110, 0.95));
+}
+
+.burning-cell.is-hovered::before {
+  opacity: 1;
+  transform: scale(1.12);
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 184, 110, 0.55) 0%,
+    rgba(238, 94, 87, 0.3) 50%,
+    rgba(238, 94, 87, 0) 80%
+  );
+  transition:
+    opacity 140ms ease,
+    transform 140ms cubic-bezier(0.2, 0.6, 0.2, 1),
+    background 140ms ease;
+}
+
 .burning-cell.is-fizzling::before {
   animation: burning-cell-glow-fizzle 620ms ease-in-out infinite;
 }
@@ -2109,7 +2171,9 @@ body.vignette-damage::before {
 /* Burst plays once when a burning tile is cleared by a match. The
    core flame scales up while four sparks fly outward + fade. */
 .burning-burst {
-  position: relative;
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -2246,14 +2310,17 @@ body.vignette-damage::before {
   }
 }
 
-/* Status rider on an attack intent badge — e.g. Bleeder's attack
-   carries +🔥. Sits flush against the amount with a faint ember tint
-   so the player reads "this attack also applies Burn" before it lands. */
+/* Status rider on an attack intent badge — e.g. Smolder's attack
+   carries a Burn icon. Faint divider rule + small leading gap so the
+   badge reads as "amount | rider" rather than two unrelated tokens.
+   Smaller than the amount so the number stays the headline. */
 .intent-rider {
-  margin-left: 0.18rem;
-  font-size: 0.78em;
+  margin-left: 0.35rem;
+  padding-left: 0.35rem;
+  border-left: 1px solid rgba(200, 163, 90, 0.35);
+  font-size: 0.72em;
+  line-height: 1;
   opacity: 0.95;
-  text-shadow: 0 0 6px var(--ember-glow);
 }
 
 .intent-rider.rider-burn {

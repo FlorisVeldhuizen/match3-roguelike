@@ -4,8 +4,8 @@ Status: **Phase F complete.** Working on Phase G next.
 
 > **Design update (2026-05-22):** *Enemies share the board* pillar added to `01-design.md`. Every identity enemy archetype now gets a **board verb** (column smash, color hex, row petrify, cluster shove, tile burn). Implications:
 > - **Brute** shipped in Phase E without a board verb. Retrofit "column smash" is queued — either as a small dedicated retrofit between F and G, or folded into Phase H2 alongside the other archetypes. Decision pending.
-> - **Phase H2** archetype work expands: each of Caster / Defender / Swarmer (and Bleeder, already in F) needs its board verb designed, telegraphed, and wired through `Cell.flags`. Skirmisher stays pure-stat as connective tissue.
-> - **Phase F's Bleeder** should ship with its tile-burn verb included, not as a follow-up — the verb *is* the archetype's identity now.
+> - **Phase H2** archetype work expands: each of Caster / Defender / Swarmer (and Smolder, already in F) needs its board verb designed, telegraphed, and wired through `Cell.flags`. Skirmisher stays pure-stat as connective tissue.
+> - **Phase F's Smolder** should ship with its tile-burn verb included, not as a follow-up — the verb *is* the archetype's identity now.
 > - **Phase J1 Corruptor** is unchanged in spec but reframed: it's the most extreme instance of the verb system, not a one-off mechanic.
 
 Ordered build phases. Each phase ends at a **runnable, demoable state** in the browser. No phase is "done" until you can open it and use it.
@@ -154,7 +154,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - Ultimate button (active at full charge)
 - **Pending-effects strip** next to phase indicator: shows icons for already-cast spells with deferred (end-of-phase) effects — visibility only, not a batching UI
 - Status icons on player + enemy frames with tooltip
-- Bleeder enemy archetype — direct Burn-on-hit *and* its **tile-burn board verb** (flags 1-2 cells as burning, matching them applies Burn). First non-Corruptor instance of the `Cell.flags` system in action; proves the verb pipeline before H2 builds on it
+- Smolder enemy archetype — direct Burn-on-hit *and* its **tile-burn board verb** (flags 1-2 cells as burning, matching them applies Burn). First non-Corruptor instance of the `Cell.flags` system in action; proves the verb pipeline before H2 builds on it
 - `core/board/flags.ts` — generic cell-flag read/write/tick helpers (Burn duration ticks, flag-clear on cascade-out, etc.) so each new verb in H2/J1 plugs in without re-implementing flag bookkeeping
 
 **Out of scope:** relics, map, shop, remaining enemies, multi-enemy fights.
@@ -165,7 +165,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - ✓ Riposte counter-attacks the next enemy attack for the **full incoming pre-block damage**; if the next enemy turn has no attack, Riposte expires unused at the end of that turn
 - ✓ Burn DoT visibly ticks down, deals damage at owner's turn start; re-apply stacks damage + refreshes duration
 - ✓ Vulnerable/Weak multiply damage correctly; re-apply refreshes duration only (multipliers don't stack)
-- ✓ Bleeder applies Burn on hit
+- ✓ Smolder applies Burn on hit
 - ✓ **Damage preview on hover:** hovering an enemy with a telegraphed `⚔ N` shows `N − block = X to HP`, with Vulnerable/Weak factored in
 - ✓ **Tests:** status apply/tick/expire unit tests; Bulwark end-of-phase resolution test (cumulative blue pool across extra turns is what's converted, block stat is zero that phase); damage-pipeline test (Vulnerable + Weak compose correctly; re-application rules respected)
 
@@ -234,7 +234,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - Default target = leftmost enemy at fight start
 - AOE damage: 5-line and T/L matches hit all enemies (one source of damage per enemy, applied through normal damage pipeline)
 - Map generation pulls from the full archetype pool (with weights — common archetypes early, harder ones later)
-- (Bleeder + tile-burn verb already implemented in Phase F.)
+- (Smolder + tile-burn verb already implemented in Phase F.)
 
 **Out of scope:** shop, rest, Corruptor curse, save/load.
 
@@ -374,7 +374,7 @@ Audio (sfx, music) is a non-goal for the slice — see `02-scope.md`. Not in thi
 A → B → C → D → E → F → G → H1 → H2 → I → J1 → J2 → K → L
 ```
 
-Linear after the H and J splits. F and G could swap if you want relics before statuses, but design-wise statuses first is easier (Bleeder is a useful test enemy for the relic system). H1 must precede H2 (multi-enemy combat needs the run-flow scaffolding); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
+Linear after the H and J splits. F and G could swap if you want relics before statuses, but design-wise statuses first is easier (Smolder is a useful test enemy for the relic system). H1 must precede H2 (multi-enemy combat needs the run-flow scaffolding); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
 
 ---
 

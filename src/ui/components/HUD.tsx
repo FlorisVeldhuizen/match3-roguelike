@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import {
+  applyStatusToList,
+  statusKindFromDamageSource,
+} from '../../core/combat/statuses'
 import { TRAIL_ARRIVAL_MS } from '../../timing'
-import type { CombatPhase, GemColor } from '../../types'
+import type { CombatPhase, GemColor, StatusInstance } from '../../types'
 import { StatusBar } from './StatusBar'
 import { PendingStrip, SpellTray } from './SpellTray'
 
@@ -19,7 +23,13 @@ export function HUD() {
   const player = useGameStore((s) => s.fight.player)
   const phase = useGameStore((s) => s.fight.phase)
   const rootSeed = useGameStore((s) => s.rootSeed)
-  const statuses = useGameStore((s) => s.fight.player.statuses)
+  // Status icons are animation-timed (driven by status-applied /
+  // status-ticked / status-expired events) so the chip lands when the
+  // particles arrive, not at swap commit. Mirrors the
+  // displayedHp/displayedBlock pattern below.
+  const [displayedStatuses, setDisplayedStatuses] = useState<StatusInstance[]>(
+    () => useGameStore.getState().fight.player.statuses,
+  )
   const [pulse, setPulse] = useState<Record<GemColor, number>>({
     red: 0,
     blue: 0,
@@ -103,21 +113,32 @@ export function HUD() {
           )
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'damage-taken') {
-        // Delta-based so this commutes with any still-in-flight heal /
-        // block trails. Engine has already absorbed `blocked` from the
-        // block stat; mirror that locally without reading the store.
-        setDisplayedHp((h) => Math.max(0, h - event.amount))
-        setStagedBlue((s) => Math.max(0, s - event.blocked))
-        if (event.amount > 0) {
-          setHpHit(true)
-          window.setTimeout(() => setHpHit(false), 420)
-          triggerShake(event.amount >= 5 ? 1.3 : 1.0, event.amount >= 5 ? 420 : 280)
-          document.body.classList.add('vignette-damage')
-          window.setTimeout(
-            () => document.body.classList.remove('vignette-damage'),
-            500,
-          )
+        // Status-proc damage (Burn etc.) is delayed so the HP drain +
+        // hit pulse land with the chip-to-HP particle trail.
+        // Everything else (enemy attacks, etc.) is immediate.
+        const proc = statusKindFromDamageSource(event.source)
+        const delay = proc && event.amount > 0 ? TRAIL_ARRIVAL_MS : 0
+        const amount = event.amount
+        const blocked = event.blocked
+        const apply = () => {
+          // Delta-based so this commutes with any still-in-flight heal /
+          // block trails. Engine has already absorbed `blocked` from the
+          // block stat; mirror that locally without reading the store.
+          setDisplayedHp((h) => Math.max(0, h - amount))
+          setStagedBlue((s) => Math.max(0, s - blocked))
+          if (amount > 0) {
+            setHpHit(true)
+            window.setTimeout(() => setHpHit(false), 420)
+            triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
+            document.body.classList.add('vignette-damage')
+            window.setTimeout(
+              () => document.body.classList.remove('vignette-damage'),
+              500,
+            )
+          }
         }
+        if (delay > 0) window.setTimeout(apply, delay)
+        else apply()
       } else if (event.kind === 'phase-changed') {
         // Block is per-phase: it expires the moment the next player
         // phase begins. beginPlayerPhase already cleared it on the
@@ -147,6 +168,32 @@ export function HUD() {
       } else if (event.kind === 'block-gained') {
         setBlockPulse(true)
         window.setTimeout(() => setBlockPulse(false), 500)
+      } else if (event.kind === 'status-applied' && event.target === 'player') {
+        // Delay the chip appearance to match the particle trail when
+        // the source is a caster or board cells — otherwise the icon
+        // pops the instant the store commits, ahead of the visible
+        // hand-off. Player-cast statuses (none yet) fire immediately.
+        const delay =
+          event.source?.kind === 'enemy' || event.source?.kind === 'board-cells'
+            ? TRAIL_ARRIVAL_MS
+            : 0
+        const incoming = event.status
+        window.setTimeout(() => {
+          setDisplayedStatuses((prev) => applyStatusToList(prev, incoming))
+        }, delay)
+      } else if (event.kind === 'status-ticked' && event.target === 'player') {
+        // StS pattern: stacks is the chip number AND the turns counter,
+        // and the tick decrements it. `event.remaining` is the new
+        // stacks value after the tick.
+        setDisplayedStatuses((prev) =>
+          prev.map((s) =>
+            s.kind === event.statusKind ? { ...s, stacks: event.remaining } : s,
+          ),
+        )
+      } else if (event.kind === 'status-expired' && event.target === 'player') {
+        setDisplayedStatuses((prev) =>
+          prev.filter((s) => s.kind !== event.statusKind),
+        )
       }
     })
     return unsub
@@ -167,6 +214,7 @@ export function HUD() {
       setDisplayedCharge(p.skillCharge)
       setStagedBlue(p.block)
       setBlockCommitted(p.block > 0)
+      setDisplayedStatuses(p.statuses)
     })
     // rootSeed intentionally captured once for initial baseline; the
     // subscription itself tracks subsequent transitions.
@@ -206,7 +254,7 @@ export function HUD() {
       <div className="hud-row">
         <span className="hud-phase">{PHASE_LABEL[phase]}</span>
         <PendingStrip />
-        <StatusBar statuses={statuses} className="player-statuses" />
+        <StatusBar statuses={displayedStatuses} className="player-statuses" />
       </div>
       <div className="hud-row">
         <div

@@ -46,7 +46,7 @@ Per *Enemies share the board* (`01-design.md`), identity archetypes have a **boa
 | **Caster** | Priority targeting | **Color hex** — marks one gem color as hexed for 2 turns; matching hexed gems applies 1 stack of Weak per cell (telegraphed: the player can see which color is about to become a trap) | Fragile, alternates hex with Weak/Vulnerable direct debuffs |
 | **Defender** | Breakthrough matters | **Petrify row** — locks one row from being matched for 2 turns (gems still cascade through; just can't be the anchor of a match) | Gains block each turn; petrify forces the player to route matches around the wall |
 | **Swarmer** | AOE + target switch | **Cluster shove** — slides a 2-cell run of one color across the board to clump with another (creates a match the player didn't plan; can be useful, can ruin a set-up — telegraphed enough to react) | Appears in groups of 2-3, weak individually |
-| **Bleeder** | Status fx threat | **Tile burn** — flags 1-2 cells as burning for 2 turns; matching a burning cell applies 1 stack of Burn per cell | Attacks also apply Burn directly — the verb amplifies, doesn't replace |
+| **Smolder** | Status fx threat | **Tile burn** — flags 1-2 cells as burning for 2 turns; matching a burning cell applies 1 stack of Burn per cell | Attacks also apply Burn directly — the verb amplifies, doesn't replace |
 
 **Architectural note:** every board verb reads/writes the existing `Cell.flags` bag (`cursed` is the prototype; add `petrified`, `hexed`, `burning`, `pending-smash` as needed). Match algorithm and cascade loop stay unchanged — verbs only affect generation, resolution, or matchability checks. See `03-architecture.md` §Cell.
 

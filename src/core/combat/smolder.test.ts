@@ -7,15 +7,15 @@ import type { Cell, Enemy, Player } from '../../types'
 
 beforeAll(() => {
   registerArchetype({
-    id: 'bleeder',
-    name: 'Bleeder',
+    id: 'smolder',
+    name: 'Smolder',
     maxHp: 18,
     pattern: ['attack', 'tile-burn', 'attack', 'attack'],
     attackRange: { min: 2, max: 4 },
     blockRange: { min: 0, max: 0 },
     tileBurnCount: 2,
     tileBurnDuration: 3,
-    onHitStatus: { kind: 'burn', stacks: 1, duration: 3 },
+    onHitStatus: { kind: 'burn', stacks: 2 },
   })
 })
 
@@ -32,10 +32,10 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   ...overrides,
 })
 
-const makeBleeder = (overrides: Partial<Enemy> = {}): Enemy => ({
-  id: 'bleeder-1',
-  name: 'Bleeder',
-  archetype: 'bleeder',
+const makeSmolder = (overrides: Partial<Enemy> = {}): Enemy => ({
+  id: 'smolder-1',
+  name: 'Smolder',
+  archetype: 'smolder',
   hp: 18,
   maxHp: 18,
   block: 0,
@@ -63,45 +63,45 @@ const mkBoard = (rows: string[]): Cell[][] => {
   )
 }
 
-describe('Bleeder attack — onHitStatus rider', () => {
+describe('Smolder attack — onHitStatus rider', () => {
   it('applies Burn to the player when the attack lands hp damage', () => {
     const player = makePlayer()
-    const bleeder = makeBleeder({ currentIntent: {
+    const smolder = makeSmolder({ currentIntent: {
         kind: 'attack',
         amount: 4,
-        onHit: { status: 'burn', stacks: 1, duration: 3 },
+        onHit: { status: 'burn', stacks: 2 },
       } })
-    const res = executeEnemyTurn(player, [bleeder], [], { seed: 1 })
+    const res = executeEnemyTurn(player, [smolder], [], { seed: 1 })
     expect(res.player.hp).toBe(36)
     const burn = res.player.statuses.find((s) => s.kind === 'burn')
-    expect(burn).toMatchObject({ kind: 'burn', stacks: 1, duration: 3 })
+    expect(burn).toMatchObject({ kind: 'burn', stacks: 2 })
     expect(res.events.some((e) => e.kind === 'status-applied')).toBe(true)
   })
 
   it('does NOT apply Burn when block fully absorbs the attack', () => {
     const player = makePlayer({ block: 10 })
-    const bleeder = makeBleeder({ currentIntent: {
+    const smolder = makeSmolder({ currentIntent: {
         kind: 'attack',
         amount: 4,
-        onHit: { status: 'burn', stacks: 1, duration: 3 },
+        onHit: { status: 'burn', stacks: 2 },
       } })
-    const res = executeEnemyTurn(player, [bleeder], [], { seed: 1 })
+    const res = executeEnemyTurn(player, [smolder], [], { seed: 1 })
     expect(res.player.hp).toBe(40)
     expect(res.player.statuses.find((s) => s.kind === 'burn')).toBeUndefined()
   })
 })
 
-describe('Bleeder tile-burn intent', () => {
+describe('Smolder tile-burn intent', () => {
   it('flags `count` previously-unflagged cells as burning on its tile-burn turn', () => {
     const board = mkBoard(['RBRB', 'BRBR', 'RBRB', 'BRBR'])
     const player = makePlayer()
-    const bleeder = makeBleeder({
+    const smolder = makeSmolder({
       currentIntent: { kind: 'tile-burn', count: 2 },
       // pattern index 0 here so the test does not depend on
       // archetype pattern advancement.
       nextIntentIndex: 0,
     })
-    const res = executeEnemyTurn(player, [bleeder], board, { seed: 1 })
+    const res = executeEnemyTurn(player, [smolder], board, { seed: 1 })
 
     const burningCount = res.board
       .flat()
@@ -112,7 +112,7 @@ describe('Bleeder tile-burn intent', () => {
     expect(placed).toBeTruthy()
     if (placed?.kind === 'tile-burn-placed') {
       expect(placed.cells).toHaveLength(2)
-      expect(placed.enemyId).toBe('bleeder-1')
+      expect(placed.enemyId).toBe('smolder-1')
     }
   })
 
@@ -125,10 +125,10 @@ describe('Bleeder tile-burn intent', () => {
       'burning',
       2,
     )
-    const bleeder = makeBleeder({
+    const smolder = makeSmolder({
       currentIntent: { kind: 'tile-burn', count: 2 },
     })
-    const res = executeEnemyTurn(makePlayer(), [bleeder], board, { seed: 7 })
+    const res = executeEnemyTurn(makePlayer(), [smolder], board, { seed: 7 })
 
     const placed = res.events.find((e) => e.kind === 'tile-burn-placed')
     if (placed?.kind !== 'tile-burn-placed') throw new Error('expected placed')

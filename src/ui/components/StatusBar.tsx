@@ -18,7 +18,7 @@ export function StatusBar({
     <div className={`status-bar${className ? ` ${className}` : ''}`} aria-label="Statuses">
       {statuses.map((s) => {
         const def = getStatusDef(s.kind)
-        const body = formatStatusTooltip(s.kind, s.stacks, s.duration)
+        const body = formatStatusTooltip(s.kind, s.stacks)
         return (
           <HoverTooltip
             key={s.kind}
@@ -27,12 +27,22 @@ export function StatusBar({
             body={body}
             ariaLabel={`${def.name} — ${body}`}
           >
-            <span className={`status-chip status-${s.kind}`}>
+            <span
+              className={`status-chip status-${s.kind}`}
+              // data-status-chip lets the FX layer find this exact chip
+              // when its status procs (e.g. Burn ticking) — particles
+              // fly chip → target, treating the chip as the attacker.
+              data-status-chip={s.kind}
+            >
               <span className="status-icon" aria-hidden>
                 {def.icon}
               </span>
+              {/* Single number per status (StS pattern). For Burn it's
+                  the next-tick damage AND turns-remaining (decays each
+                  tick). For Vulnerable/Weak it's just turns-remaining
+                  (the multiplier is binary). */}
               <span className="status-stacks" aria-hidden>
-                {s.kind === 'burn' ? s.stacks : s.duration}
+                {s.stacks}
               </span>
             </span>
           </HoverTooltip>

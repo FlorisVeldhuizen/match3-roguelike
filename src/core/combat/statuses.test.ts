@@ -7,76 +7,77 @@ import {
 } from './statuses'
 import type { StatusInstance } from '../../types'
 
-const burn = (stacks: number, duration: number): StatusInstance => ({
-  kind: 'burn',
-  stacks,
-  duration,
-})
-const vuln = (duration: number): StatusInstance => ({
+const burn = (stacks: number): StatusInstance => ({ kind: 'burn', stacks })
+const vuln = (stacks: number): StatusInstance => ({
   kind: 'vulnerable',
-  stacks: 1,
-  duration,
+  stacks,
 })
-const weak = (duration: number): StatusInstance => ({
-  kind: 'weak',
-  stacks: 1,
-  duration,
-})
+const weak = (stacks: number): StatusInstance => ({ kind: 'weak', stacks })
 
 describe('applyStatusToList', () => {
   it('adds a fresh status when none of that kind exists', () => {
-    const next = applyStatusToList([], burn(2, 3))
-    expect(next).toEqual([burn(2, 3)])
+    const next = applyStatusToList([], burn(2))
+    expect(next).toEqual([burn(2)])
   })
 
-  it('Burn stacks damage AND refreshes duration to the max of (old, new)', () => {
-    let list: StatusInstance[] = [burn(2, 3)]
-    list = applyStatusToList(list, burn(1, 4))
-    expect(list).toEqual([burn(3, 4)])
-    list = applyStatusToList(list, burn(2, 2))
-    // duration max(4, 2) = 4 (refresh keeps the longer one)
-    expect(list).toEqual([burn(5, 4)])
+  it('Burn re-application sums stacks (StS pattern — same number is dmg+turns)', () => {
+    let list: StatusInstance[] = [burn(2)]
+    list = applyStatusToList(list, burn(1))
+    expect(list).toEqual([burn(3)])
+    list = applyStatusToList(list, burn(2))
+    expect(list).toEqual([burn(5)])
   })
 
-  it('Vulnerable refreshes duration only — multiplier does NOT stack', () => {
+  it('Vulnerable re-application takes the longer remaining (refresh, no stack)', () => {
     let list: StatusInstance[] = [vuln(2)]
     list = applyStatusToList(list, vuln(5))
     expect(list).toEqual([vuln(5)])
-    // stacks clamped at 1 even if caller passes higher
-    list = applyStatusToList(list, { kind: 'vulnerable', stacks: 4, duration: 3 })
+    // Smaller incoming does not shorten an active stack.
+    list = applyStatusToList(list, vuln(1))
     expect(list).toEqual([vuln(5)])
   })
 
-  it('Weak refreshes duration only', () => {
+  it('Weak re-application takes the longer remaining', () => {
     let list: StatusInstance[] = [weak(2)]
     list = applyStatusToList(list, weak(1))
-    // max(2, 1) = 2
     expect(list).toEqual([weak(2)])
   })
 })
 
 describe('tickStatuses', () => {
-  it('decrements duration, emits ticked events while remaining > 0', () => {
-    const res = tickStatuses('player', [burn(2, 3), vuln(2)])
-    expect(res.statuses).toEqual([burn(2, 2), vuln(1)])
-    expect(res.burnDamage).toBe(2)
+  it('Burn deals stacks dmg, then stacks decrements; vuln/weak just decay', () => {
+    const res = tickStatuses('player', [burn(2), vuln(2)])
+    expect(res.statuses).toEqual([burn(1), vuln(1)])
+    expect(res.burnDamage).toBe(2) // captured BEFORE decrement
     const ticked = res.events.filter((e) => e.kind === 'status-ticked')
     expect(ticked).toHaveLength(2)
   })
 
-  it('expires statuses whose duration was 1, emits status-expired', () => {
-    const res = tickStatuses('player', [burn(3, 1), vuln(1)])
+  it('expires statuses whose stacks was 1, emits status-expired', () => {
+    const res = tickStatuses('player', [burn(1), vuln(1)])
     expect(res.statuses).toEqual([])
     // burn still deals its damage on the expiring tick
-    expect(res.burnDamage).toBe(3)
+    expect(res.burnDamage).toBe(1)
     const expired = res.events.filter((e) => e.kind === 'status-expired')
     expect(expired).toHaveLength(2)
   })
 
-  it('sums burn stacks across multiple Burn instances (defense against future stacking bugs)', () => {
-    const res = tickStatuses('enemy-1', [burn(2, 2), burn(3, 5)])
-    // there should only be one Burn instance per owner under normal apply
-    // rules, but tick must still report the total deterministically.
+  it('Burn 3 ticks over 3 turns: 3 → 2 → 1 → expired (6 total dmg)', () => {
+    let statuses: StatusInstance[] = [burn(3)]
+    let total = 0
+    for (let i = 0; i < 3; i++) {
+      const res = tickStatuses('player', statuses)
+      total += res.burnDamage
+      statuses = res.statuses
+    }
+    expect(total).toBe(6) // 3 + 2 + 1
+    expect(statuses).toEqual([])
+  })
+
+  it('sums burn stacks across multiple Burn instances (defensive)', () => {
+    const res = tickStatuses('enemy-1', [burn(2), burn(3)])
+    // Normally applyStatusToList merges burn into one; tick handles
+    // multiples defensively anyway.
     expect(res.burnDamage).toBe(5)
   })
 })
@@ -108,7 +109,7 @@ describe('composeDamage', () => {
 
 describe('hasStatus', () => {
   it('is true iff the kind is present', () => {
-    expect(hasStatus([burn(1, 1)], 'burn')).toBe(true)
-    expect(hasStatus([burn(1, 1)], 'vulnerable')).toBe(false)
+    expect(hasStatus([burn(1)], 'burn')).toBe(true)
+    expect(hasStatus([burn(1)], 'vulnerable')).toBe(false)
   })
 })

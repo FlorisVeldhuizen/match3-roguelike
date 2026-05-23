@@ -11,8 +11,12 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
-import type { Enemy, Intent, Player } from '../../types'
-import { composeDamage } from '../../core/combat/statuses'
+import type { Enemy, Intent, Player, StatusInstance } from '../../types'
+import {
+  applyStatusToList,
+  composeDamage,
+  statusKindFromDamageSource,
+} from '../../core/combat/statuses'
 import { getStatusDef } from '../../content/statuses'
 import { StatusBar } from './StatusBar'
 
@@ -46,11 +50,11 @@ function intentDescription(intent: Intent): string {
     const base = `Will hit you for ${intent.amount} next turn.`
     if (!onHit) return base
     const def = getStatusDef(onHit.status)
-    return `${base} If it lands, you also gain ${onHit.stacks} ${def.name} for ${onHit.duration} turns.`
+    return `${base} If it lands, you also gain ${onHit.stacks} ${def.name} (decays by 1 each turn).`
   }
   if (intent.kind === 'block')
     return `Armored for ${intent.amount} — your attacks chip through this first.`
-  return `Next turn, sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire. Matching a burning tile gives you Burn — one stack per tile in the match.`
+  return `Next turn, sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire. Match a burning tile and you take Burn — bigger matches mean longer, fiercer burns.`
 }
 
 export function EnemyFrame() {
@@ -99,6 +103,18 @@ export function EnemyFrame() {
     return out
   })
 
+  // Per-enemy status chips, animation-timed. Same store/animation race
+  // as the player side — if we read enemy.statuses straight from the
+  // store, a status applied at swap commit pops the icon before its
+  // particles have even left the caster.
+  const [displayedStatuses, setDisplayedStatuses] = useState<
+    Record<string, StatusInstance[]>
+  >(() => {
+    const out: Record<string, StatusInstance[]> = {}
+    for (const e of enemies) out[e.id] = e.statuses
+    return out
+  })
+
   const [flashing, setFlashing] = useState<Record<string, number>>({})
   // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
   // Cleared by id so the pulse stops if the player switches targets mid-phase.
@@ -124,11 +140,11 @@ export function EnemyFrame() {
         const id = event.targetId
         const amount = event.amount
         const isPlayerAttack = event.source === 'player-attack'
-        // Player-attack hits commit per-match; the matching red trail
-        // takes TRAIL_ARRIVAL_MS to land, so we delay the bar drain + hit
-        // flash until it arrives. Other damage sources (future DoTs, etc.)
-        // are not trail-driven — apply instantly.
-        const delay = isPlayerAttack ? TRAIL_ARRIVAL_MS : 0
+        const procKind = statusKindFromDamageSource(event.source)
+        // Both player-attack hits (red gem trail) and status-proc hits
+        // (chip → enemy trail) need to delay the bar drain so it lands
+        // when the particles arrive. Everything else is immediate.
+        const delay = isPlayerAttack || procKind ? TRAIL_ARRIVAL_MS : 0
         window.setTimeout(() => {
           setDisplayedHp((prev) => {
             const before = prev[id] ?? 0
@@ -201,6 +217,42 @@ export function EnemyFrame() {
           ...prev,
           [event.enemyId]: (prev[event.enemyId] ?? 0) + 1,
         }))
+      } else if (event.kind === 'status-applied' && event.target !== 'player') {
+        // Delay chip arrival to match the particle trail when the
+        // caster is the player or board cells; player-cast targeting
+        // an enemy fires the trail from data-player-hud → enemy frame,
+        // same timing as enemy → player.
+        const enemyId = event.target
+        const delay =
+          event.source?.kind === 'player' || event.source?.kind === 'board-cells'
+            ? TRAIL_ARRIVAL_MS
+            : 0
+        const incoming = event.status
+        window.setTimeout(() => {
+          setDisplayedStatuses((prev) => ({
+            ...prev,
+            [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
+          }))
+        }, delay)
+      } else if (event.kind === 'status-ticked' && event.target !== 'player') {
+        // event.remaining is the new stacks after the tick (StS pattern).
+        const enemyId = event.target
+        setDisplayedStatuses((prev) => ({
+          ...prev,
+          [enemyId]: (prev[enemyId] ?? []).map((s) =>
+            s.kind === event.statusKind
+              ? { ...s, stacks: event.remaining }
+              : s,
+          ),
+        }))
+      } else if (event.kind === 'status-expired' && event.target !== 'player') {
+        const enemyId = event.target
+        setDisplayedStatuses((prev) => ({
+          ...prev,
+          [enemyId]: (prev[enemyId] ?? []).filter(
+            (s) => s.kind !== event.statusKind,
+          ),
+        }))
       }
     })
     return unsub
@@ -216,12 +268,15 @@ export function EnemyFrame() {
       prevSeed = s.rootSeed
       const freshHp: Record<string, number> = {}
       const freshBlock: Record<string, number> = {}
+      const freshStatuses: Record<string, StatusInstance[]> = {}
       for (const e of s.fight.enemies) {
         freshHp[e.id] = e.hp
         freshBlock[e.id] = e.block
+        freshStatuses[e.id] = e.statuses
       }
       setDisplayedHp(freshHp)
       setDisplayedBlock(freshBlock)
+      setDisplayedStatuses(freshStatuses)
     })
   }, [rootSeed])
 
@@ -286,7 +341,7 @@ export function EnemyFrame() {
             </div>
             <div className="enemy-name">{enemy.name}</div>
             <StatusBar
-              statuses={enemy.statuses}
+              statuses={displayedStatuses[enemy.id] ?? enemy.statuses}
               className="enemy-statuses"
             />
             {/* Always mounted so the slot reserves vertical space — toggling
@@ -434,7 +489,7 @@ function IntentBadge({
             className={`intent-rider rider-${intent.onHit.status}`}
             aria-hidden
           >
-            +{getStatusDef(intent.onHit.status).icon}
+            {getStatusDef(intent.onHit.status).icon}
           </span>
         )}
       </div>

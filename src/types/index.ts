@@ -42,12 +42,15 @@ export type DamageSource =
 
 export type StatusKind = 'burn' | 'vulnerable' | 'weak'
 
-// Every status shares the same shape (02-scope §Status effects). Burn uses
-// `stacks` as per-tick damage; Vulnerable/Weak are binary (stacks always 1).
+// One number per status (Slay-the-Spire pattern). `stacks` is both
+// "magnitude" and "turns left" — every tick decrements stacks by 1, and
+// for Burn the tick also deals damage equal to current stacks. So a
+// Burn 3 deals 3 → 2 → 1 → expires (6 damage over 3 turns). Vulnerable
+// and Weak don't tick damage; their multiplier is active as long as
+// stacks > 0.
 export type StatusInstance = {
   kind: StatusKind
   stacks: number
-  duration: number
 }
 
 export type SpellId = 'bulwark' | 'reinforce'
@@ -92,7 +95,7 @@ export type GameEvent =
       target: 'player' | string
       status: StatusInstance
       // Visual hint for the FX layer — where particles should fly *from*.
-      // Engine logic doesn't read this. `enemy` for Bleeder-on-hit style
+      // Engine logic doesn't read this. `enemy` for Smolder-on-hit style
       // (caster is the acting enemy), `board-cells` for a tile-burn match
       // that bounces Burn back at the player, `player` for player-applied
       // statuses (none yet, but reserved for relics).
@@ -111,10 +114,19 @@ export type GameEvent =
   | { kind: 'spell-cast'; spellId: PendingSpellId }
   | { kind: 'pending-effect-resolved'; spellId: PendingSpellId }
   | { kind: 'riposte-counter'; targetId: string; amount: number }
-  | { kind: 'tile-burn-placed'; cells: Pos[]; enemyId: string }
+  | {
+      kind: 'tile-burn-placed'
+      cells: Pos[]
+      enemyId: string
+      // How many player phases the tiles will stay burning. The
+      // BurningOverlay reads this directly instead of probing the
+      // store, which avoids picking up a wrong number when an
+      // earlier flame is already at a lower remaining count.
+      duration: number
+    }
   // Emitted when a match clears one or more cells whose `burning` flag was
   // active. Total burn stacks = number of burning cells in the cleared set
-  // (one stack per cell per match, per 02-scope §Enemies/Bleeder).
+  // (one stack per cell per match, per 02-scope §Enemies/Smolder).
   | { kind: 'tile-burn-triggered'; cells: Pos[]; stacks: number }
   | { kind: 'cell-flag-ticked'; positions: Pos[]; flag: keyof CellFlags }
   | { kind: 'block-gained'; amount: number }
@@ -133,6 +145,11 @@ export type GameEvent =
   | { kind: 'turn-ended' }
   | { kind: 'phase-changed'; phase: CombatPhase }
   | { kind: 'screen-shake'; magnitude: number }
+  // UI-only signal: the player's cursor is over a board cell (or
+  // null = pointer left the board). Emitted by BoardScene when its
+  // internal hoveredCell transitions. BurningOverlay listens to react
+  // its flames in sync with the gem hover beat.
+  | { kind: 'board-hover'; cell: Pos | null }
 
 export type CombatPhase =
   | 'player-acting'
@@ -142,13 +159,12 @@ export type CombatPhase =
 
 export type IntentKind = 'attack' | 'block' | 'tile-burn'
 
-// Optional status rider carried on attack intents. Bleeder uses this
+// Optional status rider carried on attack intents. Smolder uses this
 // to apply Burn on hit. Surfaced on the intent badge so the player
 // sees the rider before the attack lands.
 export type IntentOnHit = {
   status: StatusKind
   stacks: number
-  duration: number
 }
 
 export type Intent =
@@ -156,7 +172,7 @@ export type Intent =
   | { kind: 'block'; amount: number }
   | { kind: 'tile-burn'; count: number }
 
-export type EnemyArchetype = 'brute' | 'bleeder'
+export type EnemyArchetype = 'brute' | 'smolder'
 
 export type PhasePools = {
   red: number

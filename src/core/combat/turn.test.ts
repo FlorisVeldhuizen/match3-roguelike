@@ -147,4 +147,41 @@ describe('beginPlayerPhase', () => {
     })
     expect(next.phase).toBe('player-acting')
   })
+
+  // Locks the FX-pipeline contract: damage-taken (burn proc) must come
+  // BEFORE status-ticked / status-expired so the chip → HP particle
+  // trail can snapshot the chip's position while it's still mounted.
+  // If this order regresses, the chip will disappear before the
+  // particles spawn from it.
+  it('emits damage-taken before status-ticked/expired on burn proc', () => {
+    const p = makePlayer({
+      hp: 40,
+      // Burn 2 → tick deals 2, stacks decays to 1 (still active).
+      statuses: [{ kind: 'burn', stacks: 2 }],
+    })
+    const result = beginPlayerPhase(p)
+    const dtIdx = result.events.findIndex(
+      (e) => e.kind === 'damage-taken' && e.source === 'burn',
+    )
+    const tickedIdx = result.events.findIndex((e) => e.kind === 'status-ticked')
+    expect(dtIdx).toBeGreaterThanOrEqual(0)
+    expect(tickedIdx).toBeGreaterThanOrEqual(0)
+    expect(dtIdx).toBeLessThan(tickedIdx)
+  })
+
+  it('emits damage-taken before status-expired on burn final tick', () => {
+    const p = makePlayer({
+      hp: 40,
+      // Burn 1 → tick deals 1, stacks decays to 0 → expires.
+      statuses: [{ kind: 'burn', stacks: 1 }],
+    })
+    const result = beginPlayerPhase(p)
+    const dtIdx = result.events.findIndex(
+      (e) => e.kind === 'damage-taken' && e.source === 'burn',
+    )
+    const expiredIdx = result.events.findIndex((e) => e.kind === 'status-expired')
+    expect(dtIdx).toBeGreaterThanOrEqual(0)
+    expect(expiredIdx).toBeGreaterThanOrEqual(0)
+    expect(dtIdx).toBeLessThan(expiredIdx)
+  })
 })

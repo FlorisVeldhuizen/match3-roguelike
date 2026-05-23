@@ -1,4 +1,24 @@
-import type { StatusKind } from '../types'
+import type { StatusInstance, StatusKind } from '../types'
+import { registerStatusTemplate } from '../core/combat/statuses'
+
+// Canonical default magnitudes for each status — "how big is a fresh
+// Burn / Vulnerable / Weak". With the StS pattern (one number), stacks
+// is the only field: it decays by 1 each tick. Smolder's onHit rider
+// and any future relic that applies a status spread from these
+// templates, overriding stacks where the magnitude differs.
+export const STATUS_TEMPLATES: Record<StatusKind, StatusInstance> = {
+  // Burn 2 → ticks 2, then 1 (3 damage total over 2 turns).
+  burn: { kind: 'burn', stacks: 2 },
+  // Vulnerable / Weak 2 → multiplier active for 2 turns.
+  vulnerable: { kind: 'vulnerable', stacks: 2 },
+  weak: { kind: 'weak', stacks: 2 },
+}
+
+// Side-effect registration at module load (main.tsx imports this file
+// at bootstrap, same pattern as archetypes/spells).
+for (const t of Object.values(STATUS_TEMPLATES)) {
+  registerStatusTemplate(t)
+}
 
 // Display layer for the 3 locked statuses (02-scope). Apply/tick logic
 // lives in core/combat/statuses.ts — this file is just metadata the HUD
@@ -9,8 +29,8 @@ export type StatusDef = {
   id: StatusKind
   name: string
   icon: string
-  // Short summary for tooltips. `{stacks}` / `{duration}` placeholders
-  // are filled by the HUD using the live instance.
+  // Short summary for tooltips. `{stacks}` placeholder is filled by
+  // the HUD using the live instance.
   tooltip: string
 }
 
@@ -20,21 +40,21 @@ const defs: Record<StatusKind, StatusDef> = {
     name: 'Burn',
     icon: '🔥',
     tooltip:
-      'Takes {stacks} damage at the start of each turn. {duration} turns left.',
+      'Takes {stacks} damage at the start of each turn, then weakens by 1.',
   },
   vulnerable: {
     id: 'vulnerable',
     name: 'Vulnerable',
     icon: '💢',
     tooltip:
-      'Takes 50% extra damage from attacks. {duration} turns left.',
+      'Takes 50% extra damage from attacks. {stacks} turns left.',
   },
   weak: {
     id: 'weak',
     name: 'Weak',
     icon: '🪶',
     tooltip:
-      'Attacks deal 50% less damage. {duration} turns left.',
+      'Attacks deal 50% less damage. {stacks} turns left.',
   },
 }
 
@@ -42,12 +62,6 @@ export function getStatusDef(kind: StatusKind): StatusDef {
   return defs[kind]
 }
 
-export function formatStatusTooltip(
-  kind: StatusKind,
-  stacks: number,
-  duration: number,
-): string {
-  return defs[kind].tooltip
-    .replace('{stacks}', String(stacks))
-    .replace('{duration}', String(duration))
+export function formatStatusTooltip(kind: StatusKind, stacks: number): string {
+  return defs[kind].tooltip.replace('{stacks}', String(stacks))
 }

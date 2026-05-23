@@ -8,7 +8,7 @@ import type { Pos } from '../../types'
 // that state commits at swap time (before the cascade animates), which
 // would yank the flame off-screen before the gem itself even clears.
 // Instead we drive the displayed flames off animation-timed events:
-//   - tile-burn-placed:   add flames at the listed cells (Bleeder's verb).
+//   - tile-burn-placed:   add flames at the listed cells (Smolder's verb).
 //   - tile-burn-triggered: spawn a burst at the cleared cells, then drop
 //                          them from the displayed set after the burst.
 //   - cell-flag-ticked / 'burning': decrement the visible countdown so
@@ -35,6 +35,11 @@ export function BurningOverlay() {
     initialFlamesFromStore(),
   )
   const [bursts, setBursts] = useState<Burst[]>([])
+  // Track the current board-hover cell so flames can react like gems
+  // do under the cursor. BoardScene emits board-hover on cell-cross
+  // transitions so this state only churns when the player crosses a
+  // cell boundary, not on every mousemove pixel.
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const burstIdRef = useRef(0)
 
   // Resync on restart. Subscribe handler is on the "external system
@@ -53,8 +58,8 @@ export function BurningOverlay() {
   useEffect(() => {
     return subscribeGameEvents((event) => {
       if (event.kind === 'tile-burn-placed') {
-        const burning = burnDurationFromStore()
         const cells = event.cells
+        const duration = event.duration
         // Delay flame appearance to the trail-arrival beat — the
         // AnimationController spawns ember particles from the enemy
         // to each cell, and the flame should "ignite" when those
@@ -63,7 +68,7 @@ export function BurningOverlay() {
           setFlames((prev) => {
             const next = new Map(prev)
             for (const c of cells) {
-              next.set(keyOf(c), { x: c.x, y: c.y, remaining: burning })
+              next.set(keyOf(c), { x: c.x, y: c.y, remaining: duration })
             }
             return next
           })
@@ -100,6 +105,17 @@ export function BurningOverlay() {
           }
           return next
         })
+      } else if (event.kind === 'swap') {
+        // Engine swaps cell references on a swap; the burning flag
+        // travels with the cell. Mirror that in the overlay so the
+        // flame slides with the gem (rather than staying glued to the
+        // original cell). Invalid swaps emit `swap-reverted` after,
+        // which we undo below.
+        setFlames((prev) => swapFlames(prev, event.from, event.to))
+      } else if (event.kind === 'swap-reverted') {
+        // The swap didn't form a match — engine reverted. Swap the
+        // overlay state back so the flame returns to its source.
+        setFlames((prev) => swapFlames(prev, event.from, event.to))
       } else if (event.kind === 'gems-fell') {
         // Gravity preserves Cell identity (gemColor + flags fall
         // together — see core/board/gravity.ts). The overlay tracks
@@ -134,15 +150,11 @@ export function BurningOverlay() {
           }
           return changed ? next : prev
         })
-      } else if (event.kind === 'cascade-complete') {
-        // Safety net: after a full cascade resolves, re-sync from the
-        // committed board. Catches any drift (e.g. a flag we missed
-        // moving, or a reshuffle from a deadlocked board) without
-        // forcing the overlay to mirror store state during play.
-        setFlames(initialFlamesFromStore())
       } else if (event.kind === 'board-shuffled') {
         // Reshuffle wipes all flags.
         setFlames(new Map())
+      } else if (event.kind === 'board-hover') {
+        setHoveredKey(event.cell ? keyOf(event.cell) : null)
       }
     })
   }, [])
@@ -157,17 +169,21 @@ export function BurningOverlay() {
         // so the player gets a clear "about to wink out" tell.
         const fizzling = f.remaining <= 1
         const scale = fizzling ? 0.85 : Math.min(1, 0.55 + 0.225 * f.remaining)
+        const k = keyOf(f)
+        const hovered = hoveredKey === k
         return (
           <span
-            key={keyOf(f)}
-            className={`burning-cell${fizzling ? ' is-fizzling' : ''}`}
+            key={k}
+            className={`burning-cell${fizzling ? ' is-fizzling' : ''}${hovered ? ' is-hovered' : ''}`}
             style={{
-              gridColumn: f.x + 1,
-              gridRow: f.y + 1,
+              // Absolute %-positioning lets the flame tween smoothly
+              // when its (x, y) changes (swap, gravity). Grid
+              // positions can't transition.
+              left: `${f.x * 12.5}%`,
+              top: `${f.y * 12.5}%`,
               ['--flame-scale' as string]: scale.toFixed(3),
             }}
             data-remaining={f.remaining}
-            title={`Burning — ${f.remaining} turn${f.remaining === 1 ? '' : 's'} left. Matching this tile gives you Burn.`}
           >
             <span className="burning-flame">🔥</span>
           </span>
@@ -177,7 +193,10 @@ export function BurningOverlay() {
         <span
           key={`burst-${b.id}`}
           className="burning-burst"
-          style={{ gridColumn: b.x + 1, gridRow: b.y + 1 }}
+          style={{
+            left: `${b.x * 12.5}%`,
+            top: `${b.y * 12.5}%`,
+          }}
         >
           <span className="burst-core">🔥</span>
           <span className="burst-spark spark-1">✦</span>
@@ -188,6 +207,27 @@ export function BurningOverlay() {
       ))}
     </div>
   )
+}
+
+// Swap the flames sitting at two positions (either may be empty — in
+// which case the present flame just relocates). Pure: returns a new
+// Map if anything changed, otherwise the original ref.
+function swapFlames(
+  prev: Map<string, Flame>,
+  from: Pos,
+  to: Pos,
+): Map<string, Flame> {
+  const fromK = `${from.x},${from.y}`
+  const toK = `${to.x},${to.y}`
+  const fFlame = prev.get(fromK)
+  const tFlame = prev.get(toK)
+  if (!fFlame && !tFlame) return prev
+  const next = new Map(prev)
+  next.delete(fromK)
+  next.delete(toK)
+  if (fFlame) next.set(toK, { ...fFlame, x: to.x, y: to.y })
+  if (tFlame) next.set(fromK, { ...tFlame, x: from.x, y: from.y })
+  return next
 }
 
 function initialFlamesFromStore(): Map<string, Flame> {
@@ -202,21 +242,4 @@ function initialFlamesFromStore(): Map<string, Flame> {
     }
   }
   return out
-}
-
-// Default duration for a freshly-placed burning flag. Read from the
-// store's current board state of the *last placed* cell if available;
-// otherwise fall back to 2 (matches Bleeder content). This avoids
-// hardcoding the duration in two places.
-function burnDurationFromStore(): number {
-  const s = useGameStore.getState()
-  for (let y = 0; y < s.board.cells.length; y++) {
-    const row = s.board.cells[y]
-    if (!row) continue
-    for (let x = 0; x < row.length; x++) {
-      const b = row[x]?.flags?.burning
-      if (b && b > 0) return b
-    }
-  }
-  return 2
 }

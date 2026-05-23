@@ -4,6 +4,7 @@ import { tweenSwap } from './animations/swap'
 import { tweenClear } from './animations/clear'
 import { tweenDrop } from './animations/drop'
 import { emitGameEvent } from '../core/events/emitter'
+import { statusKindFromDamageSource } from '../core/combat/statuses'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../timing'
 import {
   elementCenter,
@@ -114,10 +115,44 @@ const VISUAL = {
   weakPale: 0xc9b896,
 } as const
 
-const STATUS_HEX: Record<'burn' | 'vulnerable' | 'weak', number> = {
-  burn: VISUAL.burnEmber,
-  vulnerable: VISUAL.vulnerableOrange,
-  weak: VISUAL.weakPale,
+// Multi-hue palette for flame trails — deep red base, ember bright,
+// orange mid, hot yellow tip. spawnTrail picks one per particle, so a
+// flock of 8 reads as a flickering fire rather than uniform red dots.
+const FLAME_PALETTE: readonly number[] = [
+  0xc4423c, // ember-1: deep red
+  0xee5e57, // ember-2: bright ember
+  0xff9034, // hot orange
+  0xffc15c, // amber
+] as const
+// Bright molten core (replaces the default pearl white) so the bright
+// center of each spark reads as fire, not a sparkle.
+const FLAME_CORE_HEX = 0xffe39a
+
+// Per-status palette + core for the "status proc" particle trail
+// (chip → target when a status effect deals damage). Burn uses the
+// flame palette; Vulnerable/Weak are placeholders for when they get
+// their own tick procs. Adding a new status DoT just means adding a
+// row here + the DamageSource → StatusKind mapping in
+// core/combat/statuses.ts.
+type StatusTrailLook = { palette: readonly number[]; core: number }
+const STATUS_TRAIL: Record<'burn' | 'vulnerable' | 'weak', StatusTrailLook> = {
+  burn: { palette: FLAME_PALETTE, core: FLAME_CORE_HEX },
+  vulnerable: { palette: [VISUAL.vulnerableOrange], core: 0xffffff },
+  weak: { palette: [VISUAL.weakPale], core: 0xffffff },
+}
+
+// Particle count scaled to perceived impact (stacks applied, damage
+// dealt, etc.). Mirrors the gem-pool trail's "feel proportional" beat:
+// 1-unit hits look like a flicker, big hits look heavy. Capped at 8 so
+// huge bursts don't blow past the readability budget.
+//
+//   magnitude 1 → 4 particles
+//   magnitude 2 → 5
+//   magnitude 3 → 6
+//   magnitude 4 → 7
+//   magnitude 5+ → 8 (cap)
+function particleCountForImpact(magnitude: number): number {
+  return Math.max(3, Math.min(8, 3 + Math.max(1, magnitude)))
 }
 
 // Darker "stored pool" palette — matches the HUD pool backgrounds so a
@@ -215,6 +250,12 @@ export class AnimationController {
   private overlay: OverlayScene | null = null
   private playing: Promise<void> = Promise.resolve()
   private busy = false
+  // Set when a status-proc damage event plays (Burn tick etc.).
+  // The HP drain it triggers is delayed by TRAIL_ARRIVAL_MS, so a
+  // following phase-changed → game-over needs to wait for the drain
+  // to complete; otherwise the defeat overlay covers a still-full
+  // HP bar. Cleared on the next phase-changed regardless of outcome.
+  private pendingProcDelay = false
 
   // Per-cascade-step tracking, used to colorise particle bursts and pick
   // trail source cells. Cleared on each cascade-start.
@@ -370,8 +411,15 @@ export class AnimationController {
           this.spawnPoolArrivalPopup(event.color, event.amount)
         }
         return
-      case 'damage-dealt':
-        if (event.source === 'player-attack') {
+      case 'damage-dealt': {
+        // Status-effect tick proc (e.g. Burn on an enemy): treat the
+        // status chip as the attacker — particles fly chip → enemy
+        // frame, damage popup arrives with them.
+        const procKind = statusKindFromDamageSource(event.source)
+        if (procKind && event.amount > 0) {
+          this.spawnStatusProcTrail(event.targetId, procKind, event.amount)
+          this.scheduleDelayedDamagePopup(event.targetId, event.amount)
+        } else if (event.source === 'player-attack') {
           // Per-match commit. Delay the popup so it lands at the same
           // moment the red gem trail arrives at the enemy.
           this.scheduleDelayedDamagePopup(event.targetId, event.amount)
@@ -380,13 +428,28 @@ export class AnimationController {
         }
         await wait(BEAT.damageDealt)
         return
+      }
       case 'healed':
         // Per-match commit. Delay the popup to sync with the green
         // trail's arrival at the HP bar.
         this.scheduleDelayedHealPopup(event.amount)
         await wait(BEAT.healed)
         return
-      case 'damage-taken':
+      case 'damage-taken': {
+        // Status-effect tick proc on the player (Burn etc.): chip →
+        // HP particle trail + delayed popup. Whoosh SFX fires on the
+        // event play; HP drain is delayed by the trail's arrival in
+        // HUD.tsx. See statusKindFromDamageSource for the routing.
+        const procKind = statusKindFromDamageSource(event.source)
+        if (procKind && event.amount > 0) {
+          this.spawnStatusProcTrail('player', procKind, event.amount)
+          this.scheduleDelayedPlayerDamagePopup(event.amount)
+          // Mark so a following game-over phase-changed waits for the
+          // delayed HP drain to land before revealing the overlay.
+          this.pendingProcDelay = true
+          await wait(BEAT.damageTaken)
+          return
+        }
         if (event.amount > 0) {
           const pause = hitPauseMs(event.amount)
           if (pause > 0) await wait(pause)
@@ -397,6 +460,7 @@ export class AnimationController {
           await wait(BEAT.blockedHit)
         }
         return
+      }
       case 'enemy-block-gained':
         this.spawnEnemyBlockPopup(event.enemyId, event.amount)
         await wait(BEAT.enemyBlockGained)
@@ -421,9 +485,18 @@ export class AnimationController {
       case 'intent-telegraphed':
         await wait(BEAT.intentTelegraphed)
         return
-      case 'phase-changed':
+      case 'phase-changed': {
+        // Game-over after a status-proc DoT (Burn tick to 0 HP) must
+        // wait for the delayed HP drain to play out — the overlay
+        // covers everything once it appears, so the bar drop is the
+        // last beat the player sees of the fight.
+        if (event.phase === 'game-over' && this.pendingProcDelay) {
+          await wait(TRAIL_ARRIVAL_MS + 220)
+        }
+        this.pendingProcDelay = false
         await wait(phaseBeat(event.phase))
         return
+      }
       case 'status-applied':
         this.spawnStatusTrail(event)
         return
@@ -432,8 +505,13 @@ export class AnimationController {
         // affected cell from the casting enemy's frame to that cell's
         // screen center. Future verbs (Caster hex, Defender petrify,
         // Swarmer shove) plug into this same pattern with their own
-        // event kind + color.
-        this.spawnVerbToCellsTrail(event.enemyId, event.cells, VISUAL.burnEmber)
+        // palette + core hex.
+        this.spawnVerbToCellsTrail(
+          event.enemyId,
+          event.cells,
+          FLAME_PALETTE,
+          FLAME_CORE_HEX,
+        )
         return
       case 'extra-turn-granted':
         this.spawnExtraTurnBannerBurst()
@@ -968,14 +1046,54 @@ export class AnimationController {
   }
 
   // Particle trail from an enemy → each affected board cell. Used by
-  // Bleeder's tile-burn and by future board-verb casts. The cells are
+  // Smolder's tile-burn and by future board-verb casts. The cells are
   // snapshot once at fire time — if a cell shifts via gravity, the
   // trail still lands at its original screen position, which matches
   // where the flame/flag appears on the board.
+  // Status-effect "proc" trail: the status chip behaves like an attacker
+  // and throws particles at its host. Used for any DoT damage source
+  // (Burn now; future Poison / Bleed slot in via STATUS_TRAIL + the
+  // statusKindFromDamageSource mapping). `target` is 'player' or an
+  // enemy id; the chip is found via `data-status-chip` + the target's
+  // parent frame ([data-player-hud] / [data-enemy-id]).
+  private spawnStatusProcTrail(
+    target: 'player' | string,
+    kind: 'burn' | 'vulnerable' | 'weak',
+    amount: number,
+  ): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const parentSel =
+      target === 'player'
+        ? '[data-player-hud]'
+        : `[data-enemy-id="${target}"]`
+    const chip = this.findEl(`${parentSel} [data-status-chip="${kind}"]`)
+    const parentEl = this.findEl(parentSel)
+    const from = chip ? elementCenter(chip) : null
+    if (!from) return
+    // Lock the destination at spawn so an HP-bar reflow (drain
+    // shrinking the fill) doesn't redirect particles mid-flight.
+    const lockedTarget = parentEl ? elementCenter(parentEl) : null
+    if (!lockedTarget) return
+    const attractor: Attractor = () => lockedTarget
+    const look = STATUS_TRAIL[kind]
+    const count = particleCountForImpact(amount)
+    overlay.spawnTrail(from, attractor, look.palette, count, look.core)
+  }
+
+  // Delayed player damage popup — fires at trail-arrival time so the
+  // popup lands with the chip-to-HP particles, mirroring the per-match
+  // damage-dealt path for enemy targets.
+  private scheduleDelayedPlayerDamagePopup(amount: number): void {
+    if (amount <= 0) return
+    scheduleAtTrailArrival(() => this.spawnPlayerDamagePopup(amount))
+  }
+
   private spawnVerbToCellsTrail(
     enemyId: string,
     cells: readonly Pos[],
-    hex: number,
+    palette: number | readonly number[],
+    innerHex?: number,
   ): void {
     const overlay = this.overlay
     if (!overlay) return
@@ -988,7 +1106,10 @@ export class AnimationController {
       // Snapshotted destination — verb-cell trails don't track DOM
       // reflow because the cells aren't DOM nodes; they're Pixi-space.
       const attractor: Attractor = () => dest
-      overlay.spawnTrail(from, attractor, hex, 5)
+      // 5 particles per cell — flock reads as fire without overwhelming
+      // a multi-tile cast (4 cells × 5 = 20 still feels substantial
+      // without dominating the per-match cues that follow).
+      overlay.spawnTrail(from, attractor, palette, 5, innerHex)
     }
   }
 
@@ -1027,19 +1148,32 @@ export class AnimationController {
     if (!from) return
 
     const target = event.target
-    const attractor: Attractor = () => {
-      if (target === 'player') {
-        const el = this.findEl('[data-player-hud]')
-        return el ? elementCenter(el) : null
-      }
-      const el = this.findEl(`[data-enemy-id="${target}"]`)
-      return el ? elementCenter(el) : null
-    }
+    const statusKind = event.status.kind
+    const parentSel =
+      target === 'player'
+        ? '[data-player-hud]'
+        : `[data-enemy-id="${target}"]`
+    // Resolve the destination ONCE at spawn time and lock it. Aim at
+    // the chip if it's already mounted; otherwise the parent frame.
+    // The previous per-frame attractor would redirect in-flight
+    // particles the moment the chip mounted (HUD delays the insert by
+    // TRAIL_ARRIVAL_MS), which read as a jarring mid-arc swerve.
+    const chipEl = this.findEl(
+      `${parentSel} [data-status-chip="${statusKind}"]`,
+    )
+    const parentEl = this.findEl(parentSel)
+    const lockedTarget =
+      (chipEl ? elementCenter(chipEl) : null) ??
+      (parentEl ? elementCenter(parentEl) : null)
+    if (!lockedTarget) return
+    const attractor: Attractor = () => lockedTarget
 
-    const hex = STATUS_HEX[event.status.kind]
-    // 6 particles — slightly heavier than the pool-trail's 5 so the
-    // status hand-off reads as a distinct beat from a regular match.
-    overlay.spawnTrail(from, attractor, hex, 6)
+    // Per-status palette + molten core, matching the proc trail's look.
+    // Particle count scales with magnitude (apply uses `stacks` —
+    // 1-stack hits look light, 3-stack matches feel heavier).
+    const look = STATUS_TRAIL[statusKind]
+    const count = particleCountForImpact(event.status.stacks)
+    overlay.spawnTrail(from, attractor, look.palette, count, look.core)
   }
 
   private spawnDamagePopup(enemyId: string, amount: number): void {

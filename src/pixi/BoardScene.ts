@@ -12,6 +12,7 @@ import { type GemColor, GEM_COLORS, type Pos } from '../types'
 import { createBoardInteraction } from './input'
 import { AnimationController } from './AnimationController'
 import { BoardEffects } from './BoardEffects'
+import { emitGameEvent } from '../core/events/emitter'
 
 const CELL_SIZE = 64
 const GEM_SIZE = 54
@@ -924,6 +925,11 @@ export class BoardScene {
       halo.y = y
       halo.visible = true
     }
+    // Broadcast to React overlays (e.g. BurningOverlay) so they can
+    // react in sync with the gem hover beat. Fires only on cell-cross
+    // transitions — the guard at the top of this method dedupes
+    // same-cell mousemoves.
+    emitGameEvent({ kind: 'board-hover', cell })
   }
 
   private setPressed(pressed: boolean): void {

@@ -266,23 +266,42 @@ export class OverlayScene {
   // life expires, then disappears. The destination is re-sampled per-frame
   // so DOM reflows (scroll, resize) don't strand particles, but the curve
   // shape is locked at spawn for stable motion.
+  // colorOrHex:
+  //   - GemColor: look up the gem palette
+  //   - number: one hex, every particle the same (default trail behavior)
+  //   - number[]: per-particle palette — each head + its tail picks one
+  //     hex at random. Used for verb trails that want a multi-color glow
+  //     (e.g. Smolder's ember red + orange + yellow for "flame-y" feel).
+  //
+  // innerHex sets the bright core. Defaults to white so existing callers
+  // (gem pools, status hand-offs) keep their bright light-source dot.
+  // Flame verbs pass a hot yellow so the core reads as molten, not pearl.
   spawnTrail(
     from: ScreenPoint,
     attractor: Attractor,
-    colorOrHex: GemColor | number,
+    colorOrHex: GemColor | number | readonly number[],
     count = 5,
+    innerHex = 0xffffff,
   ): void {
     const layer = this.layer
     if (!layer) return
-    // Snapshot the destination once to compute a sensible curve shape.
-    // If the DOM target isn't there yet, skip the whole batch.
     const initialEnd = attractor()
     if (!initialEnd) return
-    const hex =
-      typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
+    const palette: readonly number[] = Array.isArray(colorOrHex)
+      ? colorOrHex
+      : [
+          typeof colorOrHex === 'number'
+            ? colorOrHex
+            : COLOR_HEX[colorOrHex as GemColor],
+        ]
+    const pick = (): number => {
+      const idx = Math.floor(Math.random() * palette.length)
+      return palette[idx] ?? palette[0] ?? 0xffffff
+    }
     for (let i = 0; i < count; i++) {
       const start = jitterPoint(from, 5)
       const control = randomBezierControl(start, initialEnd)
+      const hex = pick()
       // Head = bright light-source dot. Tail = empty Graphics, redrawn
       // every frame from position history to streak behind the head.
       // Tail is added FIRST so the head renders on top.
@@ -291,13 +310,11 @@ export class OverlayScene {
       layer.addChild(tail)
       const head = new Graphics()
       head.circle(0, 0, 4).fill({ color: hex, alpha: 0.45 })
-      head.circle(0, 0, 2.4).fill({ color: 0xffffff, alpha: 1 })
+      head.circle(0, 0, 2.4).fill({ color: innerHex, alpha: 1 })
       head.x = start.x
       head.y = start.y
       head.alpha = 0
       layer.addChild(head)
-      // Staggered life so the particles arrive in a tight cluster, not all
-      // at the same frame.
       const life = 620 + i * 55
       this.effects.push({
         kind: 'bezier',

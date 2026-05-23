@@ -32,7 +32,11 @@ import {
   type UltimateId,
 } from '../../types'
 import { getArchetype } from '../combat/archetypeRegistry'
-import { applyStatusToList, composeDamage } from '../combat/statuses'
+import {
+  applyStatusToList,
+  composeDamage,
+  getStatusTemplate,
+} from '../combat/statuses'
 import { getSpell, getUltimate } from '../combat/spellRegistry'
 import { tickFlagDuration } from '../board/flags'
 
@@ -72,10 +76,10 @@ function freshPlayer(): Player {
 }
 
 function freshFight(enemyRng: RngState): { fight: FightState; rng: RngState } {
-  // Phase F ships two archetypes (Brute, Bleeder). Pick from rng.enemy
+  // Phase F ships two archetypes (Brute, Smolder). Pick from rng.enemy
   // so a given seed reproduces the same opponent across restarts.
   // H1's map will replace this with archetype assignment per node.
-  const candidates: EnemyArchetype[] = ['brute', 'bleeder']
+  const candidates: EnemyArchetype[] = ['brute', 'smolder']
   const [archIdx, rngAfterPick] = nextInt(enemyRng, candidates.length)
   const archetype = candidates[archIdx] ?? 'brute'
   const def = getArchetype(archetype)
@@ -186,14 +190,22 @@ export const useGameStore = create<GameStore>()(
       for (const ev of decoratedSwap) {
         damageHealStream.push(ev)
         // Cascade cleared cells with the `burning` flag → apply Burn to
-        // the player. Each cleared burning cell is one Burn stack
-        // (02-scope §Bleeder verb). Re-application stacks damage +
-        // refreshes duration via applyStatusToList.
+        // the player. Each cleared burning cell contributes a Burn
+        // stack (02-scope §Smolder verb). Re-application accumulates
+        // via applyStatusToList — stacks doubles as turns-remaining in
+        // the StS model, so adding more makes the burn both heavier
+        // and longer.
         if (ev.kind === 'tile-burn-triggered') {
+          // Apply Burn to the player. With the StS pattern, stacks
+          // doubles as "turns left" so total damage = stacks*(stacks+1)/2.
+          // +1 per cell over ev.stacks keeps the single-tile case
+          // meaningful (1 cell → Burn 2 → 3 dmg total), matching the
+          // old (1 stack × 3 turns) impact. Multi-tile matches scale
+          // up sharply via the triangle-number curve — 4 cells → Burn 5
+          // → 15 dmg total — which feels right for a costly cluster.
           const incoming = {
-            kind: 'burn' as const,
-            stacks: ev.stacks,
-            duration: 3,
+            ...getStatusTemplate('burn'),
+            stacks: ev.stacks + 1,
           }
           player = {
             ...player,

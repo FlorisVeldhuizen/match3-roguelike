@@ -152,7 +152,7 @@ export function resolveSwap(
     const clearSet = expandClears(board, matches)
     const clearedCells: Pos[] = []
     // Burning cells cleared this step → each applies 1 stack of Burn to
-    // the player (02-scope §Bleeder verb). Sum during the same walk to
+    // the player (02-scope §Smolder verb). Sum during the same walk to
     // avoid a second pass.
     const burningCleared: Pos[] = []
     const cleared: (Cell | null)[][] = board.map((row, y) =>

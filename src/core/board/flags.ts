@@ -2,7 +2,7 @@ import type { Cell, CellFlags, GameEvent, Pos } from '../../types'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
 // Generic read/write/tick layer over `Cell.flags`. Phase F only uses the
-// `burning` flag (Bleeder's tile-burn verb), but the helpers stay flag-
+// `burning` flag (Smolder's tile-burn verb), but the helpers stay flag-
 // agnostic so Caster's hex, Defender's petrify, Swarmer's pending-shove,
 // and J1's cursed all plug in via the same calls.
 
@@ -92,7 +92,7 @@ export function tickFlagDuration(
   return { board: anyChange ? out : (board as Cell[][]), events }
 }
 
-// Pick N cells from `rng` that don't already carry `flag` (Bleeder won't
+// Pick N cells from `rng` that don't already carry `flag` (Smolder won't
 // re-burn cells that are already burning). Returns positions; caller
 // applies the flag. If fewer than N unflagged cells exist, returns what
 // it could find.
