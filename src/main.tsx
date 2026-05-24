@@ -38,6 +38,12 @@ const scene = new BoardScene(mountEl)
 scene.setOverlay(overlay)
 void Promise.all([overlay.init(), scene.init()])
 
+// React layer needs to call clearAll() when the player leaves the fight
+// scene (runPhase transitions away from 'fight'). Stash on window for
+// the App-level useEffect to reach it without re-plumbing the scene
+// through React context. The handle stays alive for the app lifetime.
+;(window as unknown as { __overlay?: OverlayScene }).__overlay = overlay
+
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     scene.destroy()

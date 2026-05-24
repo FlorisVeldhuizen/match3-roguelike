@@ -209,6 +209,13 @@ export type GameEvent =
   // internal hoveredCell transitions. BurningOverlay listens to react
   // its flames in sync with the gem hover beat.
   | { kind: 'board-hover'; cell: Pos | null }
+  // Emitted by BoardScene.performSwap once the AC has fully drained its
+  // event queue AND a short cushion has elapsed for trailing FX (damage
+  // popups drifting, kill pulses, cascade-complete chimes). Terminal-
+  // state modals (victory / reward / game-over) listen for this so they
+  // mount on a settled scene regardless of cascade length — long chains
+  // get the full ride, short kills get a tight reveal.
+  | { kind: 'gameplay-settled' }
 
 export type CombatPhase =
   | 'player-acting'

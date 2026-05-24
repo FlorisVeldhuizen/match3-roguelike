@@ -445,6 +445,61 @@ export class AnimationController {
     return next
   }
 
+  // End-of-fight flourish: every remaining sprite falls off the bottom
+  // of the board. Used as a clean transition into the victory/game-over
+  // modal — the board "clears" in service of the result beat instead of
+  // just freezing in place. Per-column shuffled delay gives it a
+  // waterfall feel; runs through the same chained `playing` promise so
+  // back-to-back calls serialize and don't tangle with a play() in
+  // flight. Caller is responsible for checking prefers-reduced-motion;
+  // this method always runs the tweens.
+  async sweepBoard(): Promise<void> {
+    const prev = this.playing
+    const next = (async () => {
+      await prev
+      this.busy = true
+      try {
+        const height = this.sprites.length
+        const width = this.sprites[0]?.length ?? 0
+        const columnOrder = shuffledColumnOrder(width)
+        // Fall distance: each sprite drops past the bottom of the
+        // board. Distance = (height - y) cells + 1 buffer so it
+        // visibly exits before the tween ends.
+        const promises: Promise<void>[] = []
+        for (let x = 0; x < width; x++) {
+          const columnDelay =
+            (columnOrder[x] ?? 0) * INITIAL_FILL_COLUMN_STEP_MS
+          for (let y = 0; y < height; y++) {
+            const sprite = this.sprites[y]?.[x]
+            if (!sprite) continue
+            // Clear the slot so a follow-up fight rebuild starts clean
+            // (BoardScene's fightCounter watcher will repopulate).
+            this.setSprite({ x, y }, null)
+            const start = this.geometry.cellCenter(x, y)
+            const distance = height - y + 1
+            const targetY = start.y + this.geometry.cellSize * distance
+            const fallMs = Math.max(
+              DROP_MIN_FALL_MS,
+              DROP_PER_CELL_MS * distance,
+            )
+            const delay = columnDelay + dropJitterMs(x, y)
+            const tween = () =>
+              tweenDrop(sprite, start.x, targetY, fallMs).then(() => {
+                // Once off-screen, free the sprite — no further use.
+                sprite.destroy()
+              })
+            promises.push(delay > 0 ? wait(delay).then(tween) : tween())
+          }
+        }
+        await Promise.all(promises)
+      } finally {
+        this.busy = false
+      }
+    })()
+    this.playing = next
+    return next
+  }
+
   async play(events: GameEvent[]): Promise<void> {
     // Chain onto any in-flight playback so concurrent calls serialize cleanly.
     const prev = this.playing

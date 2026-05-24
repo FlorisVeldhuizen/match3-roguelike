@@ -197,6 +197,17 @@ export class OverlayScene {
     this.effects = []
   }
 
+  // Drop all in-flight effects. Called when the player enters the map
+  // so any straggler particles / floating text don't carry into the
+  // next fight. Scene stays mounted — reusable next encounter.
+  clearAll(): void {
+    for (const e of this.effects) {
+      e.view.destroy({ children: true })
+      if (e.kind === 'bezier') e.tail.destroy({ children: true })
+    }
+    this.effects = []
+  }
+
   // Outward radial burst at (x,y). Color accepts either a GemColor name (uses
   // the shared palette) or an explicit hex value (for one-offs like the
   // cascade pop). Opts let callers tune size/speed/life without forking the

@@ -3,50 +3,29 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { tryGetRelic } from '../../core/relics/registry'
 
-// Settle delay — see VictoryOverlay for the rationale. The phase-changed
-// event lands at the END of the AC queue, but kill-pulse + damage-popup
-// drift continue on real-time timers. Wait for the visual to finish
-// before mounting the reward modal.
-const REWARD_SETTLE_DELAY_MS = 900
-
-// Post-fight 3-pick modal. Gated on the animation-timed phase-changed
-// → 'victory' event so it waits for the kill cascade + damage drains
-// to play out (same pattern as VictoryOverlay). On click, dispatches
-// acquireRelic and the store transitions to a fresh fight.
+// Post-fight 3-pick modal. Gated on the `gameplay-settled` event
+// (emitted by BoardScene after the AC drains + cushion) so it adapts
+// to cascade length — long chains play out fully, short kills reveal
+// promptly. On click, dispatches acquireRelic and the store transitions
+// to a fresh fight.
 export function RewardScreen() {
   const pendingReward = useGameStore((s) => s.pendingReward)
   const runPhase = useGameStore((s) => s.runPhase)
-  const phase = useGameStore((s) => s.fight.phase)
-  const [reveal, setReveal] = useState(phase === 'victory')
+  const [reveal, setReveal] = useState(false)
 
   useEffect(() => {
-    let timer: number | null = null
     const unsub = subscribeGameEvents((event) => {
-      if (event.kind === 'phase-changed') {
-        if (timer != null) {
-          window.clearTimeout(timer)
-          timer = null
-        }
-        if (event.phase === 'victory') {
-          timer = window.setTimeout(
-            () => setReveal(true),
-            REWARD_SETTLE_DELAY_MS,
-          )
-        } else {
-          setReveal(false)
-        }
+      if (event.kind !== 'gameplay-settled') return
+      if (useGameStore.getState().fight.phase === 'victory') {
+        setReveal(true)
       }
     })
-    return () => {
-      unsub()
-      if (timer != null) window.clearTimeout(timer)
-    }
+    return unsub
   }, [])
 
   if (!reveal) return null
-  // H1: only mount during the reward run-phase. Boss-fight victory now
-  // routes to VictoryOverlay (run cleared), and the player might still
-  // be in the 'fight' runPhase mid-cascade when the kill event fires.
+  // Boss-fight victory routes to VictoryOverlay instead; this modal is
+  // only valid for the post-fight 'reward' runPhase.
   if (runPhase !== 'reward') return null
   if (pendingReward == null) return null
 

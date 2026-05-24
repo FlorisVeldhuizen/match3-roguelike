@@ -189,10 +189,30 @@ function randomShimmerInterval(): number {
   )
 }
 
+// Read once per call — cheap, and respects the user's accessibility
+// preference if they toggle it mid-session.
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+// Cushion between the end of all combat animation (AC drain + optional
+// end-of-fight sweep) and the `gameplay-settled` event. The sweep
+// already absorbs ~870ms of trailing-FX time (damage popups drift
+// 1070ms past damage-dealt; sweep runs alongside that). The cushion
+// covers the final ~200ms tail so the modal lands cleanly on a settled
+// scene with a small breathing beat — not right on the frame the last
+// popup faded.
+const GAMEPLAY_SETTLED_CUSHION_MS = 350
+
 export class BoardScene {
   private readonly mountEl: HTMLElement
   private app: Application | null = null
   private animator: AnimationController | null = null
+  // Timer for emitting `gameplay-settled` after the AC drains. Held on
+  // the instance so a follow-up swap (which shouldn't be possible while
+  // animating, but defensively) can cancel a stale settle.
+  private gameplaySettledTimer: number | null = null
   private selectionRing: Graphics | null = null
   private ghostRing: Graphics | null = null
   // Keyboard cursor: persists across uses so arrow keys resume from the
@@ -778,6 +798,14 @@ export class BoardScene {
 
     const onPointerDown = (ev: PointerEvent) => {
       this.resetNudgeIdle()
+      // Gate ALL pointer interaction on the player-acting phase. Without
+      // this, press/lift visuals still fire during victory / game-over /
+      // enemy-acting / non-fight runPhases — the click handler later
+      // refuses the swap, but the player has already "felt" a response
+      // (gem lift, selection ring) and reads it as "I can still move."
+      const storeState = useGameStore.getState()
+      if (storeState.fight.phase !== 'player-acting') return
+      if (storeState.runPhase !== 'fight') return
       // Safety net: every drag starts with a fresh rect. The ResizeObserver
       // path covers the common cases (sibling growth, parent resize), but
       // one extra getBoundingClientRect at drag-start is cheap and means
@@ -821,8 +849,16 @@ export class BoardScene {
         return
       }
       // No active drag → hover-track. Animations suppress hover so the
-      // scale lift doesn't fight drop/swap tweens.
-      if (this.animator?.isAnimating) {
+      // scale lift doesn't fight drop/swap tweens. Same suppression for
+      // non-player-acting phases (victory, game-over, enemy-acting) —
+      // the board is unactionable, so the hover lift shouldn't suggest
+      // otherwise.
+      const storeState = useGameStore.getState()
+      const interactable =
+        !this.animator?.isAnimating &&
+        storeState.fight.phase === 'player-acting' &&
+        storeState.runPhase === 'fight'
+      if (!interactable) {
         this.setHover(null)
         return
       }
@@ -1006,6 +1042,27 @@ export class BoardScene {
     this.setHover(null)
     const result = useGameStore.getState().attemptSwap(from, to)
     await animator.play(result.events)
+    // If this swap ended the fight, sweep the board: every remaining gem
+    // falls off the bottom. The sweep doubles as natural pacing into the
+    // terminal-state modal — trailing FX (damage popup drift, kill pulse)
+    // play out alongside it instead of needing a fixed cushion. Skipped
+    // when the user prefers reduced motion: no big falling animation.
+    const fightPhase = useGameStore.getState().fight.phase
+    const fightEnded = fightPhase === 'victory' || fightPhase === 'game-over'
+    if (fightEnded && !prefersReducedMotion()) {
+      // Fire-and-forget: the sweep runs concurrently with the cushion
+      // and the modal reveal. The player sees the board emptying *as*
+      // the win/loss screen lands — better pacing than making the modal
+      // wait for every last gem to disappear off-screen.
+      void animator.sweepBoard()
+    }
+    if (this.gameplaySettledTimer != null) {
+      window.clearTimeout(this.gameplaySettledTimer)
+    }
+    this.gameplaySettledTimer = window.setTimeout(() => {
+      this.gameplaySettledTimer = null
+      emitGameEvent({ kind: 'gameplay-settled' })
+    }, GAMEPLAY_SETTLED_CUSHION_MS)
   }
 
   // Soft glow halo: concentric white circles with stepped alpha fake a

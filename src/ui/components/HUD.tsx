@@ -61,7 +61,11 @@ export function HUD() {
   })
   const shakeTimerRef = useRef<number | null>(null)
   const triggerShake = (magnitude: number, durationMs: number) => {
-    const el = document.querySelector('.game') as HTMLElement | null
+    // Target .game-scene (enemies + board) so the shake doesn't drag
+    // the HUD / spell tray / modals around. The scene wrapper sits
+    // inside .game and only contains the combat visuals — that's
+    // what should react to impact.
+    const el = document.querySelector('.game-scene') as HTMLElement | null
     if (!el) return
     if (shakeTimerRef.current !== null) {
       window.clearTimeout(shakeTimerRef.current)
@@ -368,7 +372,7 @@ export function HUD() {
       if (shakeTimerRef.current !== null) {
         window.clearTimeout(shakeTimerRef.current)
       }
-      const el = document.querySelector('.game')
+      const el = document.querySelector('.game-scene')
       el?.classList.remove('shake')
     }
   }, [])
