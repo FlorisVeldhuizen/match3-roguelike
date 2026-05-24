@@ -213,6 +213,7 @@ export function executeEnemyTurn(
           amount: actualHpDamage,
           blocked: res.blocked,
           source: 'enemy-attack',
+          attackerId: updatedEnemy.id,
           ...(willApplyRider ? { onHitRider: willApplyRider } : {}),
         })
         if (res.blockBroken) {

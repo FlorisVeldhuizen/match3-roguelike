@@ -17,7 +17,7 @@ const makePlayer = (relics: RelicInstance[]): Player => ({
   hp: 40,
   maxHp: 40,
   block: 0,
-  mana: 0,
+  mana: { red: 0, blue: 0, green: 0, yellow: 0 },
   skillCharge: 0,
   phasePools: { red: 0, blue: 0, green: 0 },
   statuses: [],

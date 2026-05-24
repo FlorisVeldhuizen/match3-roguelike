@@ -558,6 +558,15 @@ export class BoardScene {
     this.ghostRing = null
     this.hoverHalo = null
     this.animator = null
+    // Nudge holds raw Sprite refs that we just destroyed above. Drop them
+    // before tickNudge runs again, or restoreNudgeSprites() will deref
+    // `.scale` on a destroyed sprite (null in Pixi v8) and throw.
+    this.nudgePulsingSprites = []
+    this.nudgePair = null
+    this.nudgeIdleMs = 0
+    this.nudgeAttackElapsedMs = 0
+    this.nudgePulseElapsedMs = 0
+    this.nudgeIsReleasing = false
 
     // Pixi Assets caches textures, so this resolves synchronously after
     // the first load.

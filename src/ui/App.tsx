@@ -1,4 +1,5 @@
 import { HUD } from './components/HUD'
+import { SpellTray } from './components/SpellTray'
 import { EnemyFrame } from './components/EnemyFrame'
 import { VictoryOverlay } from './components/VictoryOverlay'
 import { GameOverOverlay } from './components/GameOverOverlay'
@@ -51,7 +52,13 @@ export function App() {
             <BlessedOverlay />
           </div>
         </section>
+        {/* HUD (state + resources) sits below the board. Spells below
+            the HUD. The "above-board" placement we tried earlier didn't
+            earn its complexity — moving everything to the bottom is
+            more familiar and now feels uncrowded thanks to the lighter
+            pips, capped HP-bar width, and inline statuses. */}
         <HUD />
+        <SpellTray />
         {/* Run-cleared and reward screens conditionally mount. Keeping
             them always-mounted means `reveal` (the phase-changed gate)
             accumulates true across fights, so the next runPhase transition

@@ -5,8 +5,47 @@ import {
   listSpells,
   listUltimates,
 } from '../../core/combat/spellRegistry'
+import { canAffordSpell } from '../../core/combat/mana'
 import { emitGameEvent } from '../../core/events/emitter'
+import type { ManaCost } from '../../types'
 import { HoverTooltip } from './HoverTooltip'
+
+// Human-readable cost summary, e.g. "3 blue", "2 red, 1 yellow". Used in
+// tooltips so the player knows the colour break-down at a glance.
+function describeCost(cost: ManaCost): string {
+  const parts: string[] = []
+  if (cost.red) parts.push(`${cost.red} red`)
+  if (cost.blue) parts.push(`${cost.blue} blue`)
+  if (cost.green) parts.push(`${cost.green} green`)
+  if (cost.yellow) parts.push(`${cost.yellow} yellow`)
+  return parts.join(', ') || '0'
+}
+
+// Colour-coded mana pips on a spell button. One pip per colour in the
+// cost, with the count next to it. Bulwark `{ blue: 3 }` → a single blue
+// dot + "3". Multi-colour costs (future content) render multiple pips
+// in canonical R/B/G/Y order so the layout is stable.
+function ManaCostBadges({ cost }: { cost: ManaCost }) {
+  const entries: { color: 'red' | 'blue' | 'green' | 'yellow'; amount: number }[] =
+    []
+  if (cost.red) entries.push({ color: 'red', amount: cost.red })
+  if (cost.blue) entries.push({ color: 'blue', amount: cost.blue })
+  if (cost.green) entries.push({ color: 'green', amount: cost.green })
+  if (cost.yellow) entries.push({ color: 'yellow', amount: cost.yellow })
+  if (entries.length === 0) {
+    return <span className="spell-cost spell-cost-free">free</span>
+  }
+  return (
+    <span className="spell-cost spell-cost-pips" aria-hidden>
+      {entries.map((e) => (
+        <span key={e.color} className={`spell-cost-pip pip-${e.color}`}>
+          <span className="spell-cost-dot" data-color={e.color} aria-hidden />
+          <span className="spell-cost-amount">{e.amount}</span>
+        </span>
+      ))}
+    </span>
+  )
+}
 
 // CSS flash duration on cast. Matches the spell-btn.just-cast keyframe
 // in index.css. Anything that "released" was kept inside one beat to
@@ -50,27 +89,28 @@ export function SpellTray() {
     <div className="spell-tray" aria-label="Spells">
       {listSpells().map((def) => {
         const queued = pending.includes(def.id)
-        const canPay = mana >= def.manaCost
+        const canPay = canAffordSpell(mana, def.cost)
         const blocked = !onPlayerPhase || !canPay || queued
+        const costSummary = describeCost(def.cost)
         const reason = queued
           ? 'Already cast this turn.'
           : !onPlayerPhase
             ? "Wait for your turn."
             : !canPay
-              ? `Not enough mana — needs ${def.manaCost}, you have ${mana}.`
+              ? `Not enough mana — needs ${costSummary}.`
               : null
         return (
           <HoverTooltip
             key={def.id}
             variant="spell"
-            title={`${def.name} — ${def.manaCost} mana`}
+            title={`${def.name} — ${costSummary} mana`}
             body={
               <>
                 <div>{def.description}</div>
                 {reason && <div className="hover-tooltip-reason">{reason}</div>}
               </>
             }
-            ariaLabel={`${def.name}, costs ${def.manaCost} mana`}
+            ariaLabel={`${def.name}, costs ${costSummary} mana`}
           >
             <button
               type="button"
@@ -92,9 +132,7 @@ export function SpellTray() {
                 {def.icon}
               </span>
               <span className="spell-label">{def.name}</span>
-              <span className="spell-cost" aria-hidden>
-                {def.manaCost}
-              </span>
+              <ManaCostBadges cost={def.cost} />
             </button>
           </HoverTooltip>
         )
@@ -139,8 +177,16 @@ export function SpellTray() {
                 {def.icon}
               </span>
               <span className="spell-label">{def.name}</span>
-              <span className="spell-cost" aria-hidden>
-                {def.chargeCost}⚡
+              {/* Ultimate cost uses the purple gem pip (same visual
+                  language as the charge chip in the HUD) instead of a
+                  loose ⚡. Players were reading the ⚡ on Riposte's
+                  card and the purple gem in the HUD as two separate
+                  resources — now they match. */}
+              <span className="spell-cost spell-cost-pips" aria-hidden>
+                <span className="spell-cost-pip pip-purple">
+                  <span className="spell-cost-dot" data-color="purple" aria-hidden />
+                  <span className="spell-cost-amount">{def.chargeCost}</span>
+                </span>
               </span>
             </button>
           </HoverTooltip>

@@ -1323,10 +1323,26 @@ export class AnimationController {
     if (!source) return
     const from = this.cellScreenCenter(source)
     if (!from) return
-    const attractor: Attractor = () => {
+
+    // H3: each pool-gained match fires TWO trails from the source cell —
+    // a primary flock to the immediate-effect target (enemy / block /
+    // HP / charge) and a smaller secondary flock to the colour mana
+    // chip. The split lets the player see both "this is happening now"
+    // (effect) and "this is being saved" (mana) without losing either
+    // visual story. Yellow and purple skip the secondary — yellow's
+    // effect target IS the mana chip, and purple has no mana chip.
+    const effectAttractor: Attractor = () => {
       const el = this.findEl(`[data-pool-target="${color}"]`)
       return el ? elementCenter(el) : null
     }
+    const hasSecondary = color !== 'purple' && color !== 'yellow'
+    const manaAttractor: Attractor | null = hasSecondary
+      ? () => {
+          const el = this.findEl(`[data-mana-target="${color}"]`)
+          return el ? elementCenter(el) : null
+        }
+      : null
+
     if (blessed) {
       // Blessed trail = the same flock as a normal pool trail (5
       // particles, gem-color dominant) with a light gold accent: one
@@ -1340,9 +1356,15 @@ export class AnimationController {
         POOL_TRAIL_HEX[color],
         0xfacc15,
       ]
-      overlay.spawnTrail(from, attractor, palette, 5, BLESSED_CORE_HEX)
+      overlay.spawnTrail(from, effectAttractor, palette, 5, BLESSED_CORE_HEX)
+      if (manaAttractor) {
+        overlay.spawnTrail(from, manaAttractor, palette, 3, BLESSED_CORE_HEX)
+      }
     } else {
-      overlay.spawnTrail(from, attractor, color, 5)
+      overlay.spawnTrail(from, effectAttractor, color, 5)
+      if (manaAttractor) {
+        overlay.spawnTrail(from, manaAttractor, color, 3)
+      }
     }
   }
 

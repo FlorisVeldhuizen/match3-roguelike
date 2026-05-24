@@ -14,7 +14,7 @@ const bulwark: SpellDef = {
   id: 'bulwark',
   name: 'Bulwark',
   icon: '🗡',
-  manaCost: 3,
+  cost: { blue: 3 },
   description:
     "When your turn ends, your armor strikes the enemy for half its value. You'll have no armor this turn.",
   pendingLabel: 'queued',
@@ -26,7 +26,7 @@ const reinforce: SpellDef = {
   id: 'reinforce',
   name: 'Reinforce',
   icon: '🛡',
-  manaCost: 4,
+  cost: { blue: 4 },
   description:
     "Doubles your armor when your turn ends and carries it over into next turn instead of letting it evaporate.",
   pendingLabel: 'queued',

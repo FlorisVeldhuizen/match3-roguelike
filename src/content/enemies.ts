@@ -39,6 +39,22 @@ const smolder: ArchetypeDef = {
   onHitStatus: { ...STATUS_TEMPLATES.burn },
 }
 
+// Skirmisher: H2a connective-tissue archetype — low HP, attacks every
+// turn for a small bite, no board verb (02-scope §Enemies "pure stat /
+// keeps the early curve gentle"). Length-1 pattern means every turn
+// rolls an attack, no block phase. Stats fit the early-tier band
+// (HP 10-12 → softer than Brute's 20; damage 2-3 → meaningful chip
+// damage when stacked with a Brute or Smolder).
+const skirmisher: ArchetypeDef = {
+  id: 'skirmisher',
+  name: 'Skirmisher',
+  maxHp: 11,
+  pattern: ['attack'],
+  attackRange: { min: 2, max: 3 },
+  blockRange: { min: 0, max: 0 },
+}
+
 // Side-effect registration: bootstrap imports this file once from main.tsx.
 registerArchetype(brute)
 registerArchetype(smolder)
+registerArchetype(skirmisher)

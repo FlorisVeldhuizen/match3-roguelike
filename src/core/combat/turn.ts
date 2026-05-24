@@ -1,25 +1,35 @@
-import type {
-  CombatPhase,
-  Enemy,
-  GameEvent,
-  Player,
+import {
+  MANA_CAPS,
+  type CombatPhase,
+  type Enemy,
+  type GameEvent,
+  type Player,
 } from '../../types'
 import type { PoolDeltas } from './pools'
 import { applyDamage } from './damage'
 import { composeDamage, tickStatuses } from './statuses'
 import { interceptFatalDamage, snapshotOf } from '../relics/engine'
 
-// Yellow → mana, purple → skill charge credit immediately.
-// Red/blue/green accumulate in phasePools and resolve at end of player phase.
+// H3: multi-color mana economy. Each colour delta accumulates BOTH into
+// its immediate-effect track (red/blue/green → phasePools, purple →
+// skillCharge) AND into the colour mana pool (per-cap). Yellow no
+// longer flows into a single generic mana counter; it becomes wild
+// mana in the colour pool. Purple does not contribute to mana.
 export function applyPoolDeltas(player: Player, deltas: PoolDeltas): Player {
+  const m = player.mana
   return {
     ...player,
-    mana: player.mana + deltas.yellow,
     skillCharge: player.skillCharge + deltas.purple,
     phasePools: {
       red: player.phasePools.red + deltas.red,
       blue: player.phasePools.blue + deltas.blue,
       green: player.phasePools.green + deltas.green,
+    },
+    mana: {
+      red: Math.min(MANA_CAPS.red, m.red + deltas.red),
+      blue: Math.min(MANA_CAPS.blue, m.blue + deltas.blue),
+      green: Math.min(MANA_CAPS.green, m.green + deltas.green),
+      yellow: Math.min(MANA_CAPS.yellow, m.yellow + deltas.yellow),
     },
   }
 }

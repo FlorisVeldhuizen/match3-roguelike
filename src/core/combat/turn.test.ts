@@ -11,7 +11,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   hp: 60,
   maxHp: 60,
   block: 0,
-  mana: 0,
+  mana: { red: 0, blue: 0, green: 0, yellow: 0 },
   skillCharge: 0,
   phasePools: { red: 0, blue: 0, green: 0 },
   statuses: [],
@@ -44,13 +44,13 @@ const deltas = (over: Partial<PoolDeltas> = {}): PoolDeltas => ({
 })
 
 describe('applyPoolDeltas', () => {
-  it('credits yellow/purple immediately, accumulates R/B/G', () => {
+  it('accumulates per-colour mana and phasePools, credits purple to charge', () => {
     const p = makePlayer()
     const next = applyPoolDeltas(
       p,
       deltas({ red: 3, blue: 2, green: 1, yellow: 4, purple: 5 }),
     )
-    expect(next.mana).toBe(4)
+    expect(next.mana).toEqual({ red: 3, blue: 2, green: 1, yellow: 4 })
     expect(next.skillCharge).toBe(5)
     expect(next.phasePools).toEqual({ red: 3, blue: 2, green: 1 })
   })
@@ -61,13 +61,20 @@ describe('applyPoolDeltas', () => {
     p = applyPoolDeltas(p, deltas({ red: 4, green: 1, yellow: 2 }))
     p = applyPoolDeltas(p, deltas({ blue: 1 }))
     expect(p.phasePools).toEqual({ red: 7, blue: 3, green: 1 })
-    expect(p.mana).toBe(2)
+    expect(p.mana).toEqual({ red: 7, blue: 3, green: 1, yellow: 2 })
+  })
+
+  it('respects MANA_CAPS (yellow caps at 5, others at 8)', () => {
+    let p = makePlayer()
+    p = applyPoolDeltas(p, deltas({ red: 10, yellow: 10 }))
+    expect(p.mana.red).toBe(8) // R cap = 8
+    expect(p.mana.yellow).toBe(5) // Y cap = 5
   })
 
   it('does not mutate the input player', () => {
-    const p = makePlayer({ mana: 1 })
-    applyPoolDeltas(p, deltas({ yellow: 5 }))
-    expect(p.mana).toBe(1)
+    const p = makePlayer({ mana: { red: 0, blue: 0, green: 0, yellow: 1 } })
+    applyPoolDeltas(p, deltas({ yellow: 4 }))
+    expect(p.mana.yellow).toBe(1)
     expect(p.phasePools).toEqual({ red: 0, blue: 0, green: 0 })
   })
 })
@@ -136,7 +143,7 @@ describe('beginPlayerPhase', () => {
     const p = makePlayer({
       hp: 40,
       block: 7,
-      mana: 3,
+      mana: { red: 0, blue: 0, green: 0, yellow: 3 },
       skillCharge: 2,
       phasePools: { red: 1, blue: 1, green: 1 },
     })

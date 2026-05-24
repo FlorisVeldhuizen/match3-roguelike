@@ -82,6 +82,8 @@ function intentDescription(intent: Intent): ReactNode {
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
+  const setTargetEnemy = useGameStore((s) => s.setTargetEnemy)
+  const fightPhase = useGameStore((s) => s.fight.phase)
   // Drive the lethal-intent warning. Store values (not HUD's display-timed
   // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
@@ -240,10 +242,11 @@ export function EnemyFrame() {
           }, 380)
         })
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
-        // Enemy's attack landed — pulse the currently-acting enemy. Single-
-        // enemy fight today; multi-enemy routing waits on a damage-taken
-        // payload that carries the source enemy id.
-        const id = useGameStore.getState().fight.targetEnemyId
+        // Enemy's attack landed — pulse the actual attacker (multi-enemy
+        // safe). Fall back to targetEnemyId only if the event omitted the
+        // attackerId (older payloads / non-attack sources).
+        const id =
+          event.attackerId ?? useGameStore.getState().fight.targetEnemyId
         if (id) bumpIntentFiring(setIntentFiring, id, 'attack')
       } else if (event.kind === 'enemy-block-gained') {
         bumpIntentFiring(setIntentFiring, event.enemyId, 'block')
@@ -390,6 +393,11 @@ export function EnemyFrame() {
         const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
         // Targeted, living enemy is the attractor for red gem trails.
         const poolTargetAttr = isTarget && !dead ? 'red' : undefined
+        // Clickable when the player is acting and the enemy is alive but
+        // not already the target. Dead enemies and the current target are
+        // inert so the cursor doesn't mislead.
+        const selectable =
+          !dead && !isTarget && fightPhase === 'player-acting'
         return (
           <div
             key={enemy.id}
@@ -400,6 +408,7 @@ export function EnemyFrame() {
               dead ? 'dead' : '',
               isKilledPulse ? 'killed' : '',
               isTarget ? 'targeted' : '',
+              selectable ? 'selectable' : '',
               isHit ? 'hit' : '',
               isTrailHit ? 'trail-pulsing' : '',
               isFiring ? `firing-${firingKind}` : '',
@@ -407,7 +416,19 @@ export function EnemyFrame() {
             ]
               .filter(Boolean)
               .join(' ')}
-            aria-label={`${enemy.name} ${shownHp}/${enemy.maxHp} HP${dead ? ' (defeated)' : ''}`}
+            aria-label={`${enemy.name} ${shownHp}/${enemy.maxHp} HP${dead ? ' (defeated)' : ''}${selectable ? ' — click to target' : isTarget ? ' — current target' : ''}`}
+            role={selectable ? 'button' : undefined}
+            tabIndex={selectable ? 0 : undefined}
+            onClick={() => {
+              if (selectable) setTargetEnemy(enemy.id)
+            }}
+            onKeyDown={(e) => {
+              if (!selectable) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setTargetEnemy(enemy.id)
+              }
+            }}
           >
             {!dead && showIntent && (
               <IntentBadge

@@ -20,7 +20,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   hp: 60,
   maxHp: 60,
   block: 0,
-  mana: 0,
+  mana: { red: 0, blue: 0, green: 0, yellow: 0 },
   skillCharge: 0,
   phasePools: { red: 0, blue: 0, green: 0 },
   statuses: [],

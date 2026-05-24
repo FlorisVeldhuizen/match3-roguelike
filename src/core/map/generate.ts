@@ -32,7 +32,74 @@ import type {
 
 const COLUMN_COUNT = 5
 
-const NON_BOSS_ARCHETYPES: EnemyArchetype[] = ['brute', 'smolder']
+// H2a: tier-weighted archetype pool per column. Skirmisher heavier in the
+// early columns (low-HP chip damage → gentle on-ramp); Brute and Smolder
+// pick up weight in mid columns (heavier HP + verbs / statuses). Elites
+// (always col 2) draw from the same mid pool but with a bias toward the
+// scarier archetypes. Boss column is handled separately (always brute,
+// pending J1 Corruptor).
+type ArchetypeWeight = { archetype: EnemyArchetype; weight: number }
+
+const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
+  // col 0: easy start — Skirmisher heavy, the others present but rare
+  [
+    { archetype: 'skirmisher', weight: 6 },
+    { archetype: 'brute', weight: 2 },
+    { archetype: 'smolder', weight: 1 },
+  ],
+  // col 1: balanced — Skirmisher still common
+  [
+    { archetype: 'skirmisher', weight: 4 },
+    { archetype: 'brute', weight: 3 },
+    { archetype: 'smolder', weight: 2 },
+  ],
+  // col 2 (incl. elite): heavier hitters dominate; Skirmisher becomes
+  // filler in multi-enemy groups rather than a centerpiece
+  [
+    { archetype: 'brute', weight: 4 },
+    { archetype: 'smolder', weight: 3 },
+    { archetype: 'skirmisher', weight: 2 },
+  ],
+  // col 3: only rest/shop here today; left for symmetry / future tiers
+  [
+    { archetype: 'brute', weight: 4 },
+    { archetype: 'smolder', weight: 3 },
+    { archetype: 'skirmisher', weight: 2 },
+  ],
+  // col 4: boss column; not used by the weight roller
+  [{ archetype: 'brute', weight: 1 }],
+]
+
+// Group sizes per column: cols 0-1 = solo (1 enemy), col 2 = 2-3 enemies
+// (mixed), elite = solo but tougher (handled by archetype bias, not
+// count, today), boss = solo. Returns the count to roll for this node.
+function rollEnemyCount(
+  column: number,
+  kind: NodeKind,
+  rng: RngState,
+): { count: number; rng: RngState } {
+  if (kind === 'boss' || kind === 'elite') return { count: 1, rng }
+  if (column <= 1) return { count: 1, rng }
+  // col 2: 50/50 split between 2-enemy and 3-enemy groups
+  const [pick, next] = nextInt(rng, 2)
+  return { count: pick === 0 ? 2 : 3, rng: next }
+}
+
+function rollWeightedArchetype(
+  column: number,
+  rng: RngState,
+): { archetype: EnemyArchetype; rng: RngState } {
+  const table = COLUMN_ARCHETYPE_WEIGHTS[column] ?? COLUMN_ARCHETYPE_WEIGHTS[0]!
+  const total = table.reduce((acc, w) => acc + w.weight, 0)
+  const [pick, next] = nextInt(rng, total)
+  let acc = 0
+  for (const entry of table) {
+    acc += entry.weight
+    if (pick < acc) return { archetype: entry.archetype, rng: next }
+  }
+  // Fallback (unreachable as long as total > 0 — guard for sanity).
+  return { archetype: table[0]!.archetype, rng: next }
+}
 
 function rollColumnKinds(
   column: number,
@@ -63,13 +130,6 @@ function rollColumnKinds(
   throw new Error(`rollColumnKinds: unknown column ${column}`)
 }
 
-function rollArchetype(
-  rng: RngState,
-): { archetype: EnemyArchetype; rng: RngState } {
-  const [idx, n] = nextInt(rng, NON_BOSS_ARCHETYPES.length)
-  return { archetype: NON_BOSS_ARCHETYPES[idx] ?? 'brute', rng: n }
-}
-
 function buildNodes(rng: RngState): {
   nodes: MapNode[]
   nodesByColumn: MapNode[][]
@@ -91,12 +151,18 @@ function buildNodes(rng: RngState): {
         lane,
       }
       if (kind === 'fight' || kind === 'elite') {
-        const { archetype, rng: r2 } = rollArchetype(r)
-        r = r2
-        node.archetype = archetype
+        const { count, rng: rCount } = rollEnemyCount(col, kind, r)
+        r = rCount
+        const archetypes: EnemyArchetype[] = []
+        for (let i = 0; i < count; i++) {
+          const { archetype, rng: rArch } = rollWeightedArchetype(col, r)
+          r = rArch
+          archetypes.push(archetype)
+        }
+        node.archetypes = archetypes
       } else if (kind === 'boss') {
-        // Roadmap: boss uses Brute stats in H1; Corruptor lands in J1.
-        node.archetype = 'brute'
+        // Roadmap: boss uses Brute stats in H1/H2a; Corruptor lands in J1.
+        node.archetypes = ['brute']
       }
       colNodes.push(node)
       nodes.push(node)

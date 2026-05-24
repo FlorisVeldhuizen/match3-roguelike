@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase H1 complete.** Working on Phase H2 next.
+Status: **Phase H2a complete.** Working on H3 (multi-color mana economy) next. H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer is **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents + hero power** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued but happen *after* H3/H4 because the spell-economy work elevates the verb work.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
@@ -225,27 +225,144 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ## Phase H2 — Multi-enemy combat, AOE, remaining archetypes
 
-**Goal:** real combat variety. Fights can contain 2-3 enemies; player selects target. AOE matches hit all enemies. All 5 non-boss enemy archetypes (Brute + 4 new) are implemented and used in map node generation.
+> **Split (2026-05-24):** Original single-phase H2 was sized at 4-5h but added up to ~12-15h on real inspection (4 verbs × design+code+telegraph+tests, plus a 591-line single-enemy `EnemyFrame` to rebuild). Split into three sub-phases so each ends at a runnable, demoable state. Locked decisions (carried into every sub-phase):
+> - Multi-enemy layout: **horizontal row** above the board
+> - AOE: relic `onMatch` runs once on the pool; modified deltas then fan out per-enemy through the normal damage pipeline (so per-enemy Vulnerable/Weak still compose independently)
+> - Map weighting: **by tier** (column), not by archetype
+> - Each board verb gets its **own `IntentKind`** (column-smash, petrify-row, color-hex, cluster-shove) — favors telegraph clarity over a generic discriminator
+
+### Phase H2a — Multi-enemy plumbing, AOE, Skirmisher ✅ COMPLETE
+
+**Status:** shipped 2026-05-24. Multi-enemy plumbing, target selection, AOE fan-out, Skirmisher, tier-weighted map generation all live. 170 tests passing.
+
+**Goal:** fights can contain 1-3 enemies in a row; player selects target; AOE matches hit all living enemies. No new board verbs.
 
 **Scope:**
-- Remaining 4 enemy archetypes (Skirmisher, Caster, Defender, Swarmer) — intent patterns, stats, behaviors, **and each non-Skirmisher's board verb** (Caster: color hex; Defender: petrify row; Swarmer: cluster shove). Lock verb specifics at the start of this phase per the candidates in `02-scope.md`
-- Brute board-verb retrofit (column smash), if not done earlier — Brute currently only has direct attacks
-- Each new verb adds its flag to `Cell.flags` and its rendering pass; reuses the flag-tick helpers built in Phase F
-- Multi-enemy fight state (array of enemies, per-enemy intent/HP)
-- Target selection — click enemy to select; selected enemy receives single-target effects
-- Default target = leftmost enemy at fight start
-- AOE damage: 5-line and T/L matches hit all enemies (one source of damage per enemy, applied through normal damage pipeline)
-- Map generation pulls from the full archetype pool (with weights — common archetypes early, harder ones later)
-- (Smolder + tile-burn verb already implemented in Phase F.)
+- Multi-enemy fight state already exists (`FightState.enemies: Enemy[]`); UI catches up. `EnemyFrame` refactored into a list container + an `EnemyCard` for one enemy
+- Target selection: click an enemy card to set `targetEnemyId`; selected card highlights; default = leftmost living at fight start; auto-reselect leftmost living on kill
+- AOE damage: in the match walker, `shape !== 'line' || size === 5` triggers fan-out — relic `onMatch` runs once on the pool, modified red delta then applies per-enemy through `composeDamage` + `applyDamage` (Vulnerable/Weak per-enemy; Thornmail per-attacker stays correct because each per-enemy damage event carries the right `targetId`)
+- **Skirmisher** archetype: low HP, attacks every turn, no verb. Stats per `02-scope` early-tier band
+- Map generation pulls from `{ brute, smolder, skirmisher }` with tier weights (Skirmisher heavier in col 0-1; Brute/Smolder heavier in col 2-3). Fight-node enemy count: col 0-1 single, col 2-3 allows 2-3
 
-**Out of scope:** shop, rest, Corruptor curse, save/load.
+**Out of scope:** new board verbs (H2b, H2c), shop, rest, Corruptor, save/load.
 
 **Acceptance:**
-- ✓ Multi-enemy fights work; target selection persists until enemy dies or new selection
-- ✓ 5-line / T / L match damages all living enemies; per-enemy damage applies Vulnerable/Weak/etc independently
-- ✓ Each archetype shows its specced behavior (Defender gains block + petrifies rows, Swarmer comes in groups + shoves clusters, Caster applies debuffs + hexes colors, Skirmisher attacks every turn, Brute attacks + smashes columns)
-- ✓ Every board verb is **telegraphed** one phase before it fires (which column, which color, which row) and **counterable** through play (clearing the threatened cells changes or denies the effect)
+- ✓ Multi-enemy fights spawn with 1-3 enemies laid out horizontally; clicking an enemy selects it
+- ✓ 5-line / T / L match damages all living enemies; per-enemy Vulnerable/Weak compose independently; per-attacker Thornmail still reflects to the correct enemy
 - ✓ Killing the targeted enemy auto-selects the next leftmost living one
+- ✓ Skirmisher shows attack-every-turn behavior, lower HP than Brute
+- ✓ Map generation respects tier weights (verifiable by sampling N seeds and asserting archetype distribution per column)
+- ✓ **Tests:** AOE fan-out per-enemy damage independence; target auto-reselect on kill; map-generation tier-weight property test
+
+---
+
+### Phase H2b — Brute column-smash + Defender petrify-row
+
+**Goal:** two verbs land on top of H2a. Brute's retrofit promised in the roadmap; Defender is the simplest new archetype because its verb only touches `detectMatches`.
+
+**Scope:**
+- New `CellFlags`: `pendingSmash?: number` (turns until smash fires), `petrified?: number` (turns remaining matchability lock). Both reuse the existing `tickFlagDuration` helper
+- New `IntentKind`s: `column-smash`, `petrify-row`. Pre-flag at telegraph time (mirrors how `tile-burn` already telegraphs by flagging cells when the intent rolls)
+- Brute pattern becomes `attack, column-smash, attack, block, attack`. On resolve, clears the flagged column with no payout, refill from top via existing gravity. Matching the column before the smash phase clears the flag from those cells, denying the verb on those cells
+- Defender pattern: alternates block + petrify-row (per `02-scope` "gains block each turn; petrify forces the player to route matches around the wall"). `detectMatches` reads the `petrified` flag and excludes matches that include a petrified cell. Gems still cascade *through* — only the anchor check changes
+- Pixi rendering passes for both flags (column-smash overlay + petrified-row overlay), wired into `BoardEffects`
+
+**Out of scope:** Caster, Swarmer (H2c), shop, Corruptor, save/load.
+
+**Acceptance:**
+- ✓ Brute telegraphs column-smash one phase before; on the smash turn, the column is wiped without paying pools; refill works
+- ✓ Matching cells in the threatened column clears them from the smash set (counterable through play)
+- ✓ Defender telegraphs petrify-row one phase before; matched rows are skipped as anchors for the duration; cascades still flow through
+- ✓ Both flags tick down + clear automatically via `tickFlagDuration`
+- ✓ **Tests:** column-smash resolution unit test (no payout, correct cells); petrify-row excludes anchors but allows cascade through; flag tick + expire behavior
+
+---
+
+### Phase H2c — Caster color-hex + Swarmer cluster-shove
+
+**Goal:** the two non-cell-flag verbs land — board-global state for Caster, board mutation for Swarmer.
+
+**Scope:**
+- New `FightState.hexedColors?: { color: GemColor; turnsLeft: number }[]` — board-global, not per-cell. Caster's hex intent picks a color, sets the entry; matching a gem of that color while it's active applies 1 stack of Weak per cell to the player. Hex ticks at start of caster's turn
+- Caster pattern: alternates color-hex and direct Weak/Vulnerable debuff. Fragile — low HP, no block
+- Swarmer cluster-shove: telegraphed one phase before (show source 2-cell run + destination), on resolve splice the run into the destination column/row. Existing gravity + match-detection picks up any resulting match naturally. Verb counterplay: clear the source cells before the shove fires
+- Pixi rendering: hex pulse on all gems of the hexed color; shove path arrow during telegraph
+- Map gen: Swarmer spawns in groups of 2-3 (only enabled now because multi-enemy is live since H2a). Add `Caster`, `Swarmer` to the tier-weighted pool
+
+**Out of scope:** shop, Corruptor, save/load.
+
+**Acceptance:**
+- ✓ Caster telegraphs the hex color one phase before; matching that color during the hex applies Weak to the player; hex expires after its specced duration
+- ✓ Swarmer telegraphs source + destination one phase before; on resolve, the run moves and any resulting match resolves normally
+- ✓ Clearing the source cells before the shove cancels the verb on those cells (counterable through play)
+- ✓ Swarmer spawns in groups (verifiable: at least one map node has 2+ Swarmers)
+- ✓ **Tests:** hex applies Weak only on matching the hexed color, decays correctly; shove preserves cell count + flag state; resulting matches resolve through normal pipeline
+
+---
+
+## Phase H3 — Multi-color mana economy
+
+**Goal:** every match contributes to both an immediate effect (today's behaviour) *and* a persistent color mana pool that spells will cost from. Yellow becomes wild mana (universal 1:1 substitute). Purple stays as ultimate charge. Designed before H4 so spells are built into the new economy from day 1, not retrofitted. Full spec in `08-multi-color-mana-proposal.md`.
+
+**Scope:**
+- `Player.mana: number` → `Player.mana: { red, blue, green, yellow }` per-color storage
+- `MANA_CAPS` constant: R/B/G = 8 each, Y = 5
+- New `ManaCost` type in `src/types/index.ts` (per-color optional cost shape)
+- Match-walker (`attemptSwap`): on each match, increment the matching color's mana pool, respecting cap
+- Spell affordability gate (`castSpell`): check `ManaCost` against current mana pools, with **wild substitution** (yellow can pay for any color shortfall at 1:1)
+- Spell consumption: pay exact color first, then yellow for shortfall
+- Existing spells get color costs: **Bulwark = 3 blue**, **Reinforce = 4 blue**, **Riposte = 8 purple charge** (unchanged)
+- HUD shows 4 mana chips (color-coded) replacing the single mana counter; wild (yellow) chip visually distinct
+- Mana persists across fights within a run; wiped on restart
+
+**Out of scope:** new spells beyond the existing 2 (that's H4), board verbs (H2b/H2c), mana-cap relics (J2).
+
+**Acceptance:**
+- ✓ Matching red/blue/green increments mana of that color (capped); existing immediate effect unchanged
+- ✓ Matching yellow adds to wild mana (capped 5); no separate "generic" mana
+- ✓ Bulwark / Reinforce cast iff player has 3 / 4 blue (or wild substitution to make up shortfall)
+- ✓ Wild-mana substitution rule: spell can consume yellow as any color at 1:1
+- ✓ Mana persists across fights; only wiped on `restart()`
+- ✓ HUD displays all 4 color mana chips with cap indicators
+- ✓ **Tests:** mana per-color accumulation; cap respected on match; wild substitution affordability; multi-color cost affordability (placeholder spell), persistence across fights
+
+---
+
+## Phase H4 — Spell roster expansion + ally-target intents + hero power
+
+**Goal:** broaden response heterogeneity (player side) and threat heterogeneity (enemy side). Add 3-5 new spells with multi-color costs. Add ally-target enemy intents (heal-ally, buff-ally, shield-ally) so enemy compositions can be role-mixed (healer + tank, rally brute + minions, shielder + squishy mage) — but **also keep simple block/attack compositions in the pool** so multi-enemy variety doesn't require role-based units in every fight. Introduce a class hero power with a cooldown framing.
+
+**Scope:**
+- **New spells (3-5)** designed around the multi-color mana economy. Working candidates:
+  - **Bash** (3 red): red pool → block at floor(red/2). Mirror of Bulwark.
+  - **Volley** (4 red): split red pool into 3 hits, player distributes across enemies during EOP resolution. The "AOE as spell" answer.
+  - **Cleanse** (2 green): remove 1 stack of one player status.
+  - **Steel Heart** (3 green): heal 4 HP immediately.
+  - **Focus** (2 yellow specifically — not wild): convert 3 of one color mana → 3 of another. Resource-rebalance utility.
+- **Ally-target intent kinds** (engine-level addition):
+  - `heal-ally`: enemy targets an ally; adds HP to it next turn
+  - `buff-ally`: enemy applies a Strength-like buff status to an ally (new status kind: `strength` — flat damage bonus while active)
+  - `shield-ally`: enemy adds block to an ally
+- **Composition design:** map generation includes role-mixed compositions *and* simple stacking compositions. Both are valid multi-enemy fights; variety is the point.
+- **Hero power** — Knight-specific, **cooldown-gated** (not free-every-phase, not mana-costed). Specifics still open (see notes below). One use, then `N` phases of cooldown.
+
+**Hero power design notes:**
+- The "free always-pressable +block" model is rejected: redundant with Resolute, no decision space.
+- The "mana cost" model is rejected: turns hero power into a cheap spell, loses its identity.
+- **Locked framing:** hero power is **free to cast** but has a **cooldown** measured in player phases. Cooldown creates the decisional weight via timing ("when in the next N phases is the right moment to use it?").
+- **Effect: still open.** Candidates: stun an enemy's next intent (skip), shatter all gems of one chosen color (board manipulation), heal 8 HP (bigger heal than would-be passive), reveal next 2 intents of all enemies, convert 3 chosen cells to a chosen color. Pick during H4 design.
+- **Cooldown duration: still open.** Lean 2-3 phases. Decide with effect.
+
+**Out of scope:** persistent / cast-and-trigger spells (J2 territory), board-event spells, slot caps on the spell loadout, spell acquisition shop/upgrade UI (Phase I integration).
+
+**Acceptance:**
+- ✓ 3-5 new spells live, each castable with multi-color mana costs
+- ✓ Bash, Volley, Cleanse, Steel Heart, Focus implementations match their specs
+- ✓ Heal-ally / buff-ally / shield-ally intents wired through `executeEnemyTurn`, telegraphed on the intent badge with the target ally clear
+- ✓ At least 2 new enemy compositions designed for multi-enemy nodes (e.g. "Brute + Caster-as-healer", "Defender + Skirmisher")
+- ✓ Simple-composition multi-enemy fights also still appear (some nodes are just 2 attackers with no role-based units)
+- ✓ Hero power button in HUD, cooldown indicator, free-to-cast, cannot be cast during cooldown
+- ✓ **Tests:** spell affordability per multi-color cost; spell consumption order (exact color before wild); ally-target intent resolution (heal-ally adds HP to ally, etc.); hero power cooldown gating
 
 ---
 
@@ -373,10 +490,10 @@ Audio (sfx, music) is a non-goal for the slice — see `02-scope.md`. Not in thi
 ## Dependency graph
 
 ```
-A → B → C → D → E → F → G → H1 → H2 → I → J1 → J2 → K → L
+A → B → C → D → E → F → G → H1 → H2a → H3 → H4 → H2b → H2c → I → J1 → J2 → K → L
 ```
 
-Linear after the H and J splits. F and G could swap if you want relics before statuses, but design-wise statuses first is easier (Smolder is a useful test enemy for the relic system). H1 must precede H2 (multi-enemy combat needs the run-flow scaffolding); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
+Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) and the spell roster expansion (H4) need to land before the verb work because verb threats become much more interesting once the player has a richer response toolkit. Without H3/H4, H2b/H2c verbs would feel like one-note board hazards rather than threats the player engages with through spell choice. H1 must precede H2a (multi-enemy combat needs the run-flow scaffolding); H3 must precede H4 (spells are designed around the multi-color economy from day 1); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
 
 ---
 
@@ -392,14 +509,18 @@ Linear after the H and J splits. F and G could swap if you want relics before st
 | F | Spells + statuses | 4-5h |
 | G | Relics (5) | 4-5h |
 | H1 | Map + run flow (single-enemy) | 4-5h |
-| H2 | Multi-enemy combat | 4-5h |
+| H2a | Multi-enemy plumbing + AOE + Skirmisher | 4-5h ✅ |
+| H3 | Multi-color mana economy | 6-9h |
+| H4 | Spell roster expansion + ally intents + hero power | 8-10h |
+| H2b | Brute column-smash + Defender petrify-row | 5-6h |
+| H2c | Caster color-hex + Swarmer cluster-shove | 5-7h |
 | I | Shop + rest | 3-4h |
 | J1 | Boss gimmick (Corruptor) | 3-4h |
 | J2 | Content fill + tuning | 6-8h |
 | K | Auto-save | 2-3h |
 | L | Polish | open-ended |
 
-**Total: ~43-58 hours** for a content-complete slice. Polish is uncapped.
+**Total: ~64-90 hours** for a content-complete slice. Polish is uncapped.
 
 ---
 

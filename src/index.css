@@ -763,6 +763,24 @@ body::before {
     0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
+/* Click-to-target affordance. Non-target living enemies during the
+   player's turn get a pointer cursor and a soft hover ring so the
+   "you can switch target" surface is discoverable without making the
+   resting state busy. */
+.enemy-frame.selectable {
+  cursor: pointer;
+}
+.enemy-frame.selectable:hover,
+.enemy-frame.selectable:focus-visible {
+  border-color: rgba(200, 163, 90, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.3),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 0 14px rgba(200, 163, 90, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+  outline: none;
+}
+
 .enemy-frame.dead {
   opacity: 0.4;
   filter: grayscale(0.4);
@@ -942,8 +960,9 @@ body::before {
 
 .hp-bar {
   position: relative;
-  flex: 1;
-  min-width: 200px;
+  flex: 0 1 240px;
+  min-width: 180px;
+  max-width: 280px;
   height: 20px;
   background: var(--ink-0);
   border: 1px solid var(--gold-3);
@@ -1012,6 +1031,37 @@ body::before {
   gap: 1.25rem;
 }
 
+/* H3-C: combined "state + resources" row. On desktop the row holds two
+   clusters side-by-side — HP/block on the left, mana/charge on the
+   right. On narrow viewports `flex-wrap: wrap` lets the right cluster
+   drop below, recreating the mobile-first vertical stack without a
+   media-query branch. */
+.hud-stat-resource-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  width: 100%;
+}
+
+.hud-stat-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.hud-resource-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+}
+
 .resource {
   display: inline-flex;
   align-items: center;
@@ -1055,6 +1105,282 @@ body::before {
 }
 .resource-dot[data-color='purple'] {
   background-image: url('/gems/purple.svg');
+}
+
+/* H3: multi-colour mana chips. One chip per colour (R/B/G/Y) — purple
+   stays on the .resource path because it's ultimate charge, not mana.
+   Each chip carries its gem dot, current value, and cap (e.g. "3/8").
+   Yellow is the wild colour — visually distinct so the player reads it
+   as "the substitute that fits anywhere." Capped chips pulse to nudge
+   "spend me." Per-chip `.pulsing` (on pool-gained timing) keeps the
+   trail-landing beat. */
+.hud-mana-chips {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* H3-C v2 (Option 1): lightweight mana "pips" — gem icon + number, no
+   chip background or border. Reads as a slim resource strip in line
+   with HP/block instead of a row of chunky chips. Visual weight is
+   carried by the gem dot's saturation; the number sits next to it in
+   the existing Cinzel display style. */
+.mana-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.15rem;
+  border-radius: 0.3rem;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  min-width: 0;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+/* Wild yellow: a subtle gold glow on the dot so the player notices
+   "this colour does something special" without the heavy prismatic
+   border the chip version had. */
+.mana-chip.mana-wild .mana-dot {
+  filter: drop-shadow(0 0 4px rgba(245, 209, 90, 0.5))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+
+.mana-dot {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 4px rgba(200, 163, 90, 0.25));
+}
+.mana-dot[data-color='red'] {
+  background-image: url('/gems/red.svg');
+}
+.mana-dot[data-color='blue'] {
+  background-image: url('/gems/blue.svg');
+}
+.mana-dot[data-color='green'] {
+  background-image: url('/gems/green.svg');
+}
+.mana-dot[data-color='yellow'] {
+  background-image: url('/gems/yellow.svg');
+}
+
+.mana-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.05rem;
+}
+
+/* Cap text is dimmed and smaller — "3/8" reads as "3 (of 8 max)" at
+   a glance. The current value is the loud number. */
+.mana-cap {
+  opacity: 0.5;
+  font-size: 0.7em;
+  font-weight: 500;
+  margin-left: 0.05em;
+  color: var(--parchment-dim);
+}
+
+/* Pool-gained pulse: pip pops + brightens when a trail arrives. The
+   gem dot is the loud signal — a brief scale + brightness on the whole
+   pip reads as "this just received something" without needing the
+   chunky box-shadow glow the chip version had. */
+.mana-chip.pulsing {
+  animation: mana-pip-pulse 540ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes mana-pip-pulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.18);
+    filter: brightness(1.4);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Capped state: a continuous slow brightness pulse so the player
+   notices "spend me — I won't grow further." Soft nudge, not a warning. */
+.mana-chip.is-capped {
+  animation: mana-capped-breathe 2400ms ease-in-out infinite;
+}
+.mana-chip.is-capped .mana-dot {
+  filter: drop-shadow(0 0 5px rgba(240, 208, 137, 0.65))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+
+@keyframes mana-capped-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
+/* Faint vertical divider between the mana cluster and the charge pip.
+   Slim so it doesn't shout in the lightweight pip row. */
+.hud-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  margin: 0 0.35rem;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(200, 163, 90, 0.28),
+    transparent
+  );
+}
+
+/* Charge pip — same lightweight treatment as mana pips. Identity
+   carried by the purple gem dot's saturation + a soft purple
+   drop-shadow. .is-ready upgrades the glow to gold when the ultimate
+   is castable so the player notices across the screen. */
+.charge-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.15rem;
+  border-radius: 0.3rem;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  min-width: 0;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+.charge-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  background-image: url('/gems/purple.svg');
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 4px rgba(168, 130, 220, 0.4));
+}
+.charge-chip.pulsing {
+  animation: mana-pip-pulse 540ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.charge-chip.is-ready {
+  animation: charge-ready-breathe 1800ms ease-in-out infinite;
+}
+.charge-chip.is-ready .charge-icon {
+  filter: drop-shadow(0 0 6px rgba(240, 208, 137, 0.7))
+    drop-shadow(0 0 4px rgba(168, 130, 220, 0.5))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+@keyframes charge-ready-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.2);
+  }
+}
+
+/* Spell-button cost pips: colour-coded mana dots + count. Sits in the
+   bottom-right corner of the spell button slot the old "3" number
+   used to occupy. For multi-colour costs (future content), the row
+   wraps naturally. */
+.spell-cost-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+}
+.spell-cost-pip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  padding: 0.02rem 0.18rem;
+  border-radius: 0.25rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(200, 163, 90, 0.18);
+  font-size: 0.78em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.spell-cost-pip.pip-red {
+  border-color: rgba(238, 94, 87, 0.5);
+}
+.spell-cost-pip.pip-blue {
+  border-color: rgba(122, 184, 255, 0.5);
+}
+.spell-cost-pip.pip-green {
+  border-color: rgba(115, 198, 138, 0.5);
+}
+.spell-cost-pip.pip-yellow {
+  border-color: rgba(245, 209, 90, 0.55);
+}
+.spell-cost-pip.pip-purple {
+  border-color: rgba(168, 130, 220, 0.55);
+}
+.spell-cost-dot {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+.spell-cost-dot[data-color='red'] {
+  background-image: url('/gems/red.svg');
+}
+.spell-cost-dot[data-color='blue'] {
+  background-image: url('/gems/blue.svg');
+}
+.spell-cost-dot[data-color='green'] {
+  background-image: url('/gems/green.svg');
+}
+.spell-cost-dot[data-color='yellow'] {
+  background-image: url('/gems/yellow.svg');
+}
+.spell-cost-dot[data-color='purple'] {
+  background-image: url('/gems/purple.svg');
+}
+.spell-cost-amount {
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+.spell-cost-free {
+  font-size: 0.72em;
+  font-style: italic;
+  opacity: 0.65;
+}
+
+/* Mana-chip tooltip: same look as spell tooltip, slightly tighter.
+   The .hover-tooltip-aside line is the "caps at X" subtext. */
+.hover-tooltip-aside {
+  margin-top: 0.4rem;
+  font-size: 0.85em;
+  opacity: 0.72;
+  font-style: italic;
 }
 
 /* Pool is still up for grabs (Bulwark etc. can siphon before commit).
@@ -1798,34 +2124,61 @@ body.vignette-burn::before {
 
 /* --- Phase F: spells, statuses, pending strip --- */
 
+/* H3-C: spell tray as a row of "card slots". Each spell is a vertical
+   card with icon ↑, name, cost pips at the bottom. The card metaphor
+   tells the player "here is your kit" — slots have presence even when
+   the spell is unaffordable or queued. */
 .spell-tray {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
 }
 
 .spell-btn {
-  display: inline-flex;
+  /* Card layout: vertical stack, FIXED dimensions so every spell takes
+     the same UI space regardless of cost shape, label length, or cast
+     state. Consistent silhouette = the row reads as a kit of equal
+     slots. */
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.32rem 0.7rem;
-  background: linear-gradient(180deg, var(--stone-2), var(--ink-2));
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0.5rem 0.55rem 0.45rem;
+  width: 104px;
+  height: 88px;
+  flex: 0 0 104px;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.05), transparent 60%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
   color: var(--parchment);
   border: 1px solid var(--gold-3);
-  border-radius: 0.3rem;
+  border-radius: 0.5rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 6px rgba(0, 0, 0, 0.5);
   cursor: pointer;
   font-family: 'Cinzel', serif;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: center;
   transition: filter 120ms ease, transform 80ms ease, box-shadow 120ms ease,
     border-color 120ms ease;
 }
 
 .spell-btn:hover:not(:disabled) {
   filter: brightness(1.15);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 14px rgba(0, 0, 0, 0.55);
 }
 
 .spell-btn:active:not(:disabled) {
@@ -1835,37 +2188,107 @@ body.vignette-burn::before {
 
 .spell-btn:disabled,
 .spell-btn.is-disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .spell-btn.ready {
   border-color: var(--gold-2);
-  box-shadow: 0 0 10px rgba(240, 208, 137, 0.2);
+  box-shadow:
+    inset 0 0 0 1px rgba(240, 208, 137, 0.18),
+    0 0 14px rgba(240, 208, 137, 0.22),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.ultimate {
+  background:
+    linear-gradient(180deg, rgba(168, 130, 220, 0.12), transparent 60%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
 }
 
 .spell-btn.ultimate.ready {
   border-color: var(--royal-2);
-  box-shadow: 0 0 14px rgba(184, 157, 255, 0.35);
-  background: linear-gradient(180deg, #3a2b66, var(--ink-2));
+  box-shadow:
+    inset 0 0 0 1px rgba(184, 157, 255, 0.25),
+    0 0 18px rgba(184, 157, 255, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  background:
+    linear-gradient(180deg, rgba(184, 157, 255, 0.22), transparent 60%),
+    linear-gradient(180deg, #3a2b66, var(--ink-2));
 }
 
+/* Queued: spell is cast and locked in for the phase. Strong visual
+   delta from idle/ready: card desaturates, a gold rim signals "locked
+   in," and a small ✓ stamp lands in the top-right corner so the cast
+   state is readable at a glance. Card silhouette is unchanged — same
+   width, same height — so the row doesn't shift when you cast. */
 .spell-btn.queued {
-  filter: grayscale(0.4) brightness(0.7);
-  opacity: 0.7;
+  filter: grayscale(0.55) brightness(0.65);
+  opacity: 0.65;
   cursor: default;
+  border-color: rgba(200, 163, 90, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
+    inset 0 0 14px rgba(0, 0, 0, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
+.spell-btn.queued::after {
+  content: '✓';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--gold-1);
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-2);
+  border-radius: 50%;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 6px rgba(240, 208, 137, 0.4);
+  filter: none;
+  opacity: 1;
+}
+
+/* Icon stays top, bigger than before to anchor the card visually. */
 .spell-icon {
-  font-size: 1rem;
+  font-size: 1.3rem;
+  line-height: 1;
 }
 
+.spell-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  /* Allow names to wrap on narrow widths instead of overflowing the
+     card. Most spell names are one word; multi-word names get two
+     lines. */
+  text-wrap: balance;
+}
+
+/* Generic .spell-cost (used by ultimates' "8⚡" text) — sits at the
+   bottom-center of the card. The ManaCostBadges variant gets its own
+   .spell-cost-pips styling (already defined). */
 .spell-cost {
-  margin-left: auto;
+  margin-top: auto;
   font-variant-numeric: tabular-nums;
   color: var(--gold-2);
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   letter-spacing: 0.04em;
+}
+
+/* When the cost is rendered as colour pips, push them to the bottom of
+   the card like the ultimate's charge cost sits. */
+.spell-cost-pips {
+  margin-top: auto;
 }
 
 .pending-strip {
@@ -2269,16 +2692,39 @@ body.vignette-burn::before {
     gap: 0.4rem;
   }
   .spell-btn {
-    /* WCAG touch-target floor on phone: 44px. */
-    padding: 0.5rem 0.55rem;
-    font-size: 0.72rem;
-    min-height: 44px;
-    flex: 1 1 0;
-    justify-content: center;
+    /* Mobile: keep the fixed-slot identity but a touch smaller. WCAG
+       44px touch target still satisfied by the 80px height. The row
+       wraps naturally when not enough cards fit. */
+    padding: 0.45rem 0.5rem 0.4rem;
+    font-size: 0.7rem;
+    width: 88px;
+    height: 80px;
+    flex: 0 0 88px;
   }
   .spell-label {
-    flex: 1 1 auto;
-    text-align: left;
+    font-size: 0.68rem;
+  }
+  .spell-icon {
+    font-size: 1.3rem;
+  }
+  /* Lightweight pips already have no chip background. On mobile we only
+     tighten font + dot sizes so the strip fits the narrower viewport. */
+  .mana-chip,
+  .charge-chip {
+    font-size: 0.78rem;
+    gap: 0.18rem;
+  }
+  .mana-dot,
+  .charge-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .hud-resource-cluster {
+    gap: 0.5rem;
+  }
+  .hud-divider {
+    height: 14px;
+    margin: 0 0.2rem;
   }
   /* Keep statuses + pending pips on their own row so the phase label
      doesn't get shoved off-screen at narrow widths. */
@@ -2328,10 +2774,33 @@ body.vignette-burn::before {
     padding: 0.4rem 0.55rem;
   }
   .spell-btn {
-    font-size: 0.68rem;
-    padding: 0.45rem 0.4rem;
+    font-size: 0.66rem;
+    padding: 0.4rem 0.35rem 0.35rem;
+    width: 76px;
+    height: 74px;
+    flex: 0 0 76px;
   }
+  /* At very-narrow widths the label competes with cost pips for vertical
+     space; drop the label, the icon + cost pip are still legible. */
   .spell-label {
+    display: none;
+  }
+  .spell-icon {
+    font-size: 1.4rem;
+  }
+  /* Tiny viewports: shrink pips a touch and drop the "/cap" text — it
+     stays in the tooltip. */
+  .mana-chip,
+  .charge-chip {
+    gap: 0.15rem;
+    font-size: 0.72rem;
+  }
+  .mana-dot,
+  .charge-icon {
+    width: 14px;
+    height: 14px;
+  }
+  .mana-cap {
     display: none;
   }
   .enemy-frame {

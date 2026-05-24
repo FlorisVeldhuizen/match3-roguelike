@@ -7,7 +7,7 @@ import { forkStreams, type RngStreams } from '../rng/streams'
 import { beginPlayerPhase, resolveEndOfPhase } from '../combat/turn'
 import { executeEnemyTurn } from '../combat/enemyTurn'
 import { rollIntent } from '../combat/intents'
-import { applyDamage } from '../combat/damage'
+import { applyMatchRedDamage, pickNextTarget } from '../combat/aoe'
 import { hasExtraTurnMatch } from '../combat/pools'
 import { applyMultiplier } from '../combat/math'
 import { getCascadeMultiplier } from '../combat/multipliers'
@@ -30,6 +30,7 @@ import {
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
+  MANA_CAPS,
   type Cell,
   type CombatPhase,
   type Enemy,
@@ -51,10 +52,10 @@ import { getArchetype } from '../combat/archetypeRegistry'
 import {
   applyStatusToList,
   BURN_FROM_TILE_BONUS,
-  composeDamage,
   getStatusTemplate,
 } from '../combat/statuses'
 import { getSpell, getUltimate } from '../combat/spellRegistry'
+import { canAffordSpell, consumeSpellCost } from '../combat/mana'
 import { tickFlagDuration } from '../board/flags'
 
 export type BoardState = {
@@ -83,6 +84,10 @@ export type GameStore = {
   map: MapState
   runPhase: RunPhase
   selectCell: (pos: Pos | null) => void
+  // Manual target override (click-to-target). Only valid during
+  // 'player-acting'; no-op on dead/missing enemies. Auto-reselect on kill
+  // is handled inline in attemptSwap / resolveEndOfPhase already.
+  setTargetEnemy: (id: string) => void
   attemptSwap: (a: Pos, b: Pos) => { valid: boolean; events: GameEvent[] }
   castSpell: (id: SpellId) => { ok: boolean; events: GameEvent[] }
   castUltimate: (id: UltimateId) => { ok: boolean; events: GameEvent[] }
@@ -113,7 +118,7 @@ function freshPlayer(relics: RelicInstance[] = []): Player {
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
     block: 0,
-    mana: 0,
+    mana: { red: 0, blue: 0, green: 0, yellow: 0 },
     skillCharge: 0,
     phasePools: { red: 0, blue: 0, green: 0 },
     statuses: [],
@@ -126,45 +131,49 @@ function freshPlayer(relics: RelicInstance[] = []): Player {
 function freshFight(
   enemyRng: RngState,
   relics: RelicInstance[] = [],
-  options: { archetype?: EnemyArchetype; isBoss?: boolean } = {},
+  options: { archetypes?: EnemyArchetype[]; isBoss?: boolean } = {},
 ): { fight: FightState; rng: RngState } {
-  // H1: archetype is provided by the map node. If absent (boot sentinel,
-  // tests that bypass the map), fall back to the original rng pick over
-  // the Phase F archetype pool.
-  let archetype = options.archetype
-  let rngAfterPick = enemyRng
-  if (!archetype) {
-    const candidates: EnemyArchetype[] = ['brute', 'smolder']
+  // H2a: archetypes is a list (length 1-3 today; boss stays length 1).
+  // If absent (boot sentinel, tests that bypass the map), fall back to
+  // a single rng pick over the current archetype pool.
+  let archetypes = options.archetypes
+  let workingRng = enemyRng
+  if (!archetypes || archetypes.length === 0) {
+    const candidates: EnemyArchetype[] = ['brute', 'smolder', 'skirmisher']
     const [archIdx, n] = nextInt(enemyRng, candidates.length)
-    archetype = candidates[archIdx] ?? 'brute'
-    rngAfterPick = n
+    archetypes = [candidates[archIdx] ?? 'brute']
+    workingRng = n
   }
-  const def = getArchetype(archetype)
-  const first = rollIntent(archetype, 0, rngAfterPick)
-  const enemy: Enemy = {
-    id: 'enemy-1',
-    name: def.name,
-    archetype,
-    hp: def.maxHp,
-    maxHp: def.maxHp,
-    // Initial block intent is pre-applied so the enemy is already
-    // guarded when the player makes their first move. Mirrors the
-    // telegraph-time pre-application done by executeEnemyTurn.
-    block: first.intent.kind === 'block' ? first.intent.amount : 0,
-    currentIntent: first.intent,
-    nextIntentIndex: 0,
-    statuses: [],
-  }
+  const builtEnemies: Enemy[] = []
+  archetypes.forEach((archetype, i) => {
+    const def = getArchetype(archetype)
+    const first = rollIntent(archetype, 0, workingRng)
+    workingRng = first.rng
+    builtEnemies.push({
+      id: `enemy-${i + 1}`,
+      name: def.name,
+      archetype,
+      hp: def.maxHp,
+      maxHp: def.maxHp,
+      // Initial block intent is pre-applied so the enemy is already
+      // guarded when the player makes their first move. Mirrors the
+      // telegraph-time pre-application done by executeEnemyTurn.
+      block: first.intent.kind === 'block' ? first.intent.amount : 0,
+      currentIntent: first.intent,
+      nextIntentIndex: 0,
+      statuses: [],
+    })
+  })
   const fight: FightState = {
     phase: 'player-acting',
     player: freshPlayer(resetFightFlags(relics)),
-    enemies: [enemy],
-    targetEnemyId: enemy.id,
+    enemies: builtEnemies,
+    targetEnemyId: builtEnemies[0]?.id ?? null,
   }
   if (options.isBoss) fight.isBoss = true
   return {
     fight,
-    rng: first.rng,
+    rng: workingRng,
   }
 }
 
@@ -220,6 +229,13 @@ export const useGameStore = create<GameStore>()(
     selectCell: (pos) =>
       set((s) => {
         s.board.selected = pos
+      }),
+    setTargetEnemy: (id) =>
+      set((s) => {
+        if (s.fight.phase !== 'player-acting') return
+        const target = s.fight.enemies.find((e) => e.id === id)
+        if (!target || target.hp <= 0) return
+        s.fight.targetEnemyId = id
       }),
     attemptSwap: (a, b) => {
       const current = get()
@@ -327,18 +343,35 @@ export const useGameStore = create<GameStore>()(
         damageHealStream.push(...matchResult.events)
         const finalDeltas = matchResult.payload.deltas
 
-        // Credit immediate-credit colors (yellow/purple) + accumulate
-        // running meters in phasePools (R/B/G).
+        // H3 multi-color mana: each colour delta accumulates BOTH the
+        // immediate-effect track (R/B/G into phasePools, P into
+        // skillCharge) AND into the colour mana pool (per MANA_CAPS).
+        // Yellow goes only into the colour mana pool (wild). Purple
+        // still goes only into skillCharge.
+        const m = player.mana
         player = {
           ...player,
-          mana: player.mana + finalDeltas.yellow,
           skillCharge: player.skillCharge + finalDeltas.purple,
           phasePools: {
             red: player.phasePools.red + finalDeltas.red,
             blue: player.phasePools.blue + finalDeltas.blue,
             green: player.phasePools.green + finalDeltas.green,
           },
+          mana: {
+            red: Math.min(MANA_CAPS.red, m.red + finalDeltas.red),
+            blue: Math.min(MANA_CAPS.blue, m.blue + finalDeltas.blue),
+            green: Math.min(MANA_CAPS.green, m.green + finalDeltas.green),
+            yellow: Math.min(MANA_CAPS.yellow, m.yellow + finalDeltas.yellow),
+          },
         }
+
+        // AOE matches (T, L, line-5) fan red damage out to all living
+        // enemies; single line-3/4 stays single-target. Decision is per-
+        // match so a cascade can mix narrow + wide hits. Relic onMatch
+        // already ran on the pool above, so the same modified red delta
+        // gets fanned — relics like Sharp Edge stay "single-source", just
+        // spread wider, instead of multiplying with enemy count.
+        const isAoe = ev.shape !== 'line' || ev.size === 5
 
         // Emit pool-gained per non-zero delta in the canonical
         // red/blue/green/yellow/purple order so the animator/SFX layer
@@ -349,44 +382,30 @@ export const useGameStore = create<GameStore>()(
           if (amount <= 0) continue
           damageHealStream.push({ kind: 'pool-gained', color, amount })
           if (color === 'red') {
-            if (targetEnemyId == null) continue
-            const target = enemies.find((e) => e.id === targetEnemyId)
-            if (!target || target.hp <= 0) continue
-            const finalDmg = composeDamage(amount, player.statuses, target.statuses)
-            const res = applyDamage(target.block, target.hp, finalDmg)
-            if (res.blocked + res.hpDamage <= 0) continue
-            enemies = enemies.map((e) =>
-              e.id === target.id
-                ? { ...e, block: res.blockAfter, hp: res.hpAfter }
-                : e,
+            // Per-target damage routing lives in core/combat/aoe.ts so
+            // the loop structure + Vulnerable/Weak composition is unit-
+            // testable without standing up a full Zustand store. Caller
+            // (this block) owns the kill-hook + target re-point work.
+            const aoe = applyMatchRedDamage(
+              enemies,
+              targetEnemyId,
+              amount,
+              player.statuses,
+              isAoe,
             )
-            damageHealStream.push({
-              kind: 'damage-dealt',
-              targetId: target.id,
-              amount: res.hpDamage,
-              blocked: res.blocked,
-              source: 'player-attack',
-            })
-            if (res.blockBroken) {
-              damageHealStream.push({ kind: 'block-broken', targetId: target.id })
-            } else if (res.blockAbsorbed) {
-              damageHealStream.push({
-                kind: 'block-absorbed',
-                targetId: target.id,
-              })
-            }
-            if (res.killed) {
-              damageHealStream.push({ kind: 'enemy-killed', enemyId: target.id })
+            enemies = aoe.enemies
+            damageHealStream.push(...aoe.events)
+            for (const killedId of aoe.killedIds) {
+              damageHealStream.push({ kind: 'enemy-killed', enemyId: killedId })
               const killEvents = runOnEnemyKilled(
-                { enemyId: target.id },
+                { enemyId: killedId },
                 player.relics,
                 snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
               )
               damageHealStream.push(...killEvents)
-              const nextLiving = enemies.find(
-                (e) => e.id !== target.id && e.hp > 0,
-              )
-              targetEnemyId = nextLiving?.id ?? null
+              if (killedId === targetEnemyId) {
+                targetEnemyId = pickNextTarget(enemies, null)
+              }
             }
           } else if (color === 'green') {
             const before = player.hp
@@ -497,6 +516,12 @@ export const useGameStore = create<GameStore>()(
           phase = enemyResult.phase
           tailEvents.push(...enemyResult.events)
 
+          // Target may have died during the enemy turn (Thornmail reflect,
+          // Burn tick at turn start, Riposte counter). pickNextTarget
+          // re-points to the leftmost living enemy when the current
+          // target is dead/missing, no-op otherwise.
+          targetEnemyId = pickNextTarget(enemies, targetEnemyId)
+
           if (phase === 'player-acting') {
             const begin = beginPlayerPhase(player, enemies, targetEnemyId)
             player = begin.player
@@ -591,7 +616,7 @@ export const useGameStore = create<GameStore>()(
         return { ok: false, events: [] }
       }
       const def = getSpell(id)
-      if (current.fight.player.mana < def.manaCost) {
+      if (!canAffordSpell(current.fight.player.mana, def.cost)) {
         return { ok: false, events: [] }
       }
       const event: GameEvent = { kind: 'spell-cast', spellId: id }
@@ -610,8 +635,9 @@ export const useGameStore = create<GameStore>()(
           0,
         ),
       )
+      const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
       set((s) => {
-        s.fight.player.mana -= def.manaCost
+        s.fight.player.mana = nextMana
         s.fight.player.pendingSpells.push(id)
         s.fight.player.relics = writeRelics
       })
@@ -726,18 +752,24 @@ export const useGameStore = create<GameStore>()(
         return
       }
 
-      // Fight / elite / boss: roll a fresh fight from the node's archetype.
-      // Player HP carries from the previous fight; freshFight resets to max
-      // and we overwrite below. Boss victory heals to full (see attemptSwap
-      // victory block), so the player enters the next map's run topped up.
+      // Fight / elite / boss: roll a fresh fight from the node's archetypes.
+      // Player HP and mana (H3) carry from the previous fight; freshFight
+      // resets to defaults and we overwrite below. Boss victory heals to
+      // full (see attemptSwap victory block), so the player enters the
+      // next map's run topped up. Mana persistence is locked by the H3
+      // proposal — it would feel terrible to walk into shop, lose your
+      // saved-up mana, and walk into the next fight resource-starved.
+      // skillCharge stays reset between fights (existing behaviour) —
+      // ultimates are designed as per-fight commitments.
       const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics, {
-        archetype: node.archetype,
+        archetypes: node.archetypes,
         isBoss: node.kind === 'boss',
       })
       enemyRoll.fight.player.hp = Math.min(
         enemyRoll.fight.player.maxHp,
         current.fight.player.hp,
       )
+      enemyRoll.fight.player.mana = { ...current.fight.player.mana }
       const boardRoll = generateBoard(current.rng.board)
       // onRoundStarted fires for the new encounter. Events are dropped on
       // the floor here — there's no animation queue between map clicks and

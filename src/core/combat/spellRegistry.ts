@@ -1,4 +1,9 @@
-import type { PendingSpellId, SpellId, UltimateId } from '../../types'
+import type {
+  ManaCost,
+  PendingSpellId,
+  SpellId,
+  UltimateId,
+} from '../../types'
 
 // Registry pattern (mirrors archetypeRegistry): content/ bootstraps the
 // player class's spell defs at app start; combat engine looks them up
@@ -13,7 +18,12 @@ export type SpellDef = {
   id: SpellId
   name: string
   icon: string
-  manaCost: number
+  // H3: multi-colour mana cost. e.g. Bulwark = { blue: 3 }, Reinforce =
+  // { blue: 4 }. Affordability + consumption applies wild-substitution
+  // via core/combat/mana.ts. Yellow listed here means "yellow specifically
+  // required"; for typical spells, yellow is consumed as a wild substitute
+  // when other colours are short.
+  cost: ManaCost
   description: string
   // Short verb shown next to the name when this spell sits in the
   // pending strip (e.g. "queued" — "Bulwark — queued").

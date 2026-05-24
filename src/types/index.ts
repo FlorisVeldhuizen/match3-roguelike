@@ -111,6 +111,11 @@ export type GameEvent =
       amount: number
       blocked: number
       source: DamageSource
+      // Which enemy fired the attack. Set for 'enemy-attack' source (always)
+      // and undefined for player-side sources like 'burn' at phase start.
+      // Lets the FX layer pulse the actual attacker in multi-enemy fights
+      // instead of falling back to targetEnemyId.
+      attackerId?: string
       // Optional hint that this attack also applies a status to the player.
       // Set by enemyTurn when intent.onHit fires AND the hit lands hp damage
       // (the rider's actual proc gate). Lets the FX/audio layer fold the
@@ -226,12 +231,45 @@ export type Intent =
   | { kind: 'block'; amount: number }
   | { kind: 'tile-burn'; count: number }
 
-export type EnemyArchetype = 'brute' | 'smolder'
+export type EnemyArchetype = 'brute' | 'smolder' | 'skirmisher'
 
 export type PhasePools = {
   red: number
   blue: number
   green: number
+}
+
+// H3: Multi-color mana economy. Each match contributes both an immediate
+// effect (today's PhasePools / mana / skillCharge behaviour) AND a
+// persistent color mana pool that spells will cost from. Yellow is the
+// "wild" color — substitutes for any cost at 1:1. Purple stays as
+// ultimate charge (not in this pool).
+export type ManaPools = {
+  red: number
+  blue: number
+  green: number
+  yellow: number
+}
+
+// Per-color caps. Color manas (R/B/G) cap at 8; wild mana (yellow) caps
+// at 5 — lower because it's universally useful, so we don't want it to
+// dominate the planning layer.
+export const MANA_CAPS: Readonly<ManaPools> = {
+  red: 8,
+  blue: 8,
+  green: 8,
+  yellow: 5,
+}
+
+// Spell cost shape. Optional per-color costs; absent fields cost 0.
+// Yellow when EXPLICITLY required (not as wild substitution) is for
+// spells that thematically demand yellow as input (e.g. Focus). For
+// normal spells, yellow is consumed via the wild-substitution rule.
+export type ManaCost = {
+  red?: number
+  blue?: number
+  green?: number
+  yellow?: number
 }
 
 // One acquired relic in the player's inventory. Array order = acquisition
@@ -256,7 +294,10 @@ export type Player = {
   hp: number
   maxHp: number
   block: number
-  mana: number
+  // H3: per-color mana pool. Replaces the single `mana: number` field.
+  // Persists across fights within a run (wiped on restart). Yellow is
+  // the wild color — see ManaCost wild-substitution rule.
+  mana: ManaPools
   skillCharge: number
   phasePools: PhasePools
   statuses: StatusInstance[]
@@ -316,9 +357,10 @@ export type MapNode = {
   // Lane index within the column. Lets MapScreen lay out nodes
   // vertically without re-deriving position from edges.
   lane: number
-  // For fight/elite nodes only. Rolled at map-gen time so re-entering
-  // (impossible in H1, but reserved for K save/load) keeps the matchup.
-  archetype?: EnemyArchetype
+  // For fight/elite/boss nodes only. Rolled at map-gen time so save/load
+  // (Phase K) keeps the matchup. Length-1 for col 0-1 + boss, length 2-3
+  // for col 2-3 multi-enemy nodes. Order = visual left-to-right.
+  archetypes?: EnemyArchetype[]
 }
 
 export type MapEdge = { from: string; to: string }

@@ -1,37 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useGameStore } from '../../core/state/store'
+import { HoverTooltip } from './HoverTooltip'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import {
   applyStatusToList,
   statusKindFromDamageSource,
 } from '../../core/combat/statuses'
 import { TRAIL_ARRIVAL_MS } from '../../timing'
-import type {
-  CombatPhase,
-  GemColor,
-  StatusInstance,
-  StatusKind,
+import {
+  MANA_CAPS,
+  type GemColor,
+  type StatusInstance,
+  type StatusKind,
 } from '../../types'
+import { consumeSpellCost } from '../../core/combat/mana'
 import { StatusBar } from './StatusBar'
-import { PendingStrip, SpellTray } from './SpellTray'
 import {
   getSpell,
   getUltimate,
   isUltimateId,
+  listUltimates,
 } from '../../core/combat/spellRegistry'
-
-const PHASE_LABEL: Record<CombatPhase, string> = {
-  'player-acting': 'Your turn',
-  'enemy-acting': 'Enemy turn',
-  victory: 'Victory',
-  'game-over': 'Defeated',
-}
 
 const PULSE_MS = 380
 
 export function HUD() {
   const player = useGameStore((s) => s.fight.player)
-  const phase = useGameStore((s) => s.fight.phase)
   // Status icons are animation-timed (driven by status-applied /
   // status-ticked / status-expired events) so the chip lands when the
   // particles arrive, not at swap commit. Mirrors the
@@ -103,6 +97,10 @@ export function HUD() {
   // delayed pool-gained timeouts commute with the immediate damage/heal
   // events — no snap-from-store, no race.
   const [displayedHp, setDisplayedHp] = useState(player.hp)
+  // H3: per-colour mana pools, mirrored on a particle-trail delay.
+  // Replaced the single `displayedMana: number` field with a full
+  // ManaPools object. Each pool-gained event for a colour writes to
+  // the matching pool, capped at MANA_CAPS for that colour.
   const [displayedMana, setDisplayedMana] = useState(player.mana)
   const [displayedCharge, setDisplayedCharge] = useState(player.skillCharge)
   // Single source of truth for the block badge. Climbs as blue trails
@@ -125,11 +123,20 @@ export function HUD() {
           window.setTimeout(() => {
             setPulse((prev) => ({ ...prev, [color]: Math.max(0, prev[color] - 1) }))
           }, PULSE_MS)
-          if (color === 'yellow') setDisplayedMana((m) => m + amount)
-          else if (color === 'purple') setDisplayedCharge((c) => c + amount)
-          else if (color === 'blue') setStagedBlue((s) => s + amount)
-          // Red and green commit per-match via damage-dealt/healed
-          // events; nothing accumulates on the HUD for those.
+          // H3: every coloured match (R/B/G/Y) also accumulates into its
+          // colour mana pool, capped at MANA_CAPS. Purple still feeds
+          // skillCharge only. Block staging for blue is unchanged.
+          if (color === 'purple') setDisplayedCharge((c) => c + amount)
+          else if (color === 'red' || color === 'blue' || color === 'green' || color === 'yellow') {
+            setDisplayedMana((m) => ({
+              ...m,
+              [color]: Math.min(MANA_CAPS[color], m[color] + amount),
+            }))
+          }
+          if (color === 'blue') setStagedBlue((s) => s + amount)
+          // Red and green still commit per-match via damage-dealt/healed
+          // events; nothing accumulates on the block badge / HP bar for
+          // those (those events drive HP / enemy HP directly).
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'block-gained') {
         // Just flip styling to "committed". The number itself keeps
@@ -227,8 +234,8 @@ export function HUD() {
           const cost = getUltimate(event.spellId).chargeCost
           setDisplayedCharge((c) => Math.max(0, c - cost))
         } else {
-          const cost = getSpell(event.spellId).manaCost
-          setDisplayedMana((m) => Math.max(0, m - cost))
+          const cost = getSpell(event.spellId).cost
+          setDisplayedMana((m) => consumeSpellCost(m, cost))
         }
       } else if (event.kind === 'phase-changed') {
         // Block is per-phase: it expires the moment the next player
@@ -371,7 +378,13 @@ export function HUD() {
 
   const hpPop = usePopOnChange(displayedHp)
   const blockPop = usePopOnChange(stagedBlue)
-  const manaPop = usePopOnChange(displayedMana)
+  // Per-colour mana pop animations. Each chip animates independently
+  // when its own value changes (a yellow match doesn't pulse the red
+  // chip, etc.).
+  const redManaPop = usePopOnChange(displayedMana.red)
+  const blueManaPop = usePopOnChange(displayedMana.blue)
+  const greenManaPop = usePopOnChange(displayedMana.green)
+  const yellowManaPop = usePopOnChange(displayedMana.yellow)
   const chargePop = usePopOnChange(displayedCharge)
 
   const hpPct = Math.max(0, (displayedHp / player.maxHp) * 100)
@@ -387,79 +400,222 @@ export function HUD() {
       aria-label="Player status"
       data-player-hud="true"
     >
-      <div className="hud-row">
-        <span className="hud-phase">{PHASE_LABEL[phase]}</span>
-        <PendingStrip />
-        <StatusBar
-          statuses={displayedStatuses}
-          tickMarks={statusTickMarks}
-          cueMarks={statusCueMarks}
-          expiringKinds={expiringStatusKinds}
-          className="player-statuses"
-        />
-      </div>
-      <div className="hud-row">
-        <div
-          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${hpBurnHit ? 'burn-hit' : ''} ${isLowHp ? 'low' : ''} ${cls('green', '')}`}
-          role="img"
-          aria-label={`HP ${displayedHp}/${player.maxHp}`}
-          data-pool-target="green"
-        >
-          <div className="hp-fill" style={{ width: `${hpPct}%` }} />
-          <span className="hp-text">
-            <span key={hpPop.key} className={popClass(hpPop)}>
-              {displayedHp}
-            </span>{' '}
-            / {player.maxHp}
-          </span>
+      {/* H3-C v4: state + resources in ONE flat row — HP/block + statuses
+          on the left, mana pips + charge on the right. Statuses are
+          inline with HP because they're combat state (Burn ticks your
+          HP, Vulnerable amplifies incoming damage). Inline means no
+          separate row appearing/disappearing as statuses come and go —
+          when there are none, the row just has less in it; when there
+          are some, they sit next to the block badge. */}
+      <div className="hud-row hud-stat-resource-row">
+        <div className="hud-stat-cluster">
+          <div
+            className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${hpBurnHit ? 'burn-hit' : ''} ${isLowHp ? 'low' : ''} ${cls('green', '')}`}
+            role="img"
+            aria-label={`HP ${displayedHp}/${player.maxHp}`}
+            data-pool-target="green"
+          >
+            <div className="hp-fill" style={{ width: `${hpPct}%` }} />
+            <span className="hp-text">
+              <span key={hpPop.key} className={popClass(hpPop)}>
+                {displayedHp}
+              </span>{' '}
+              / {player.maxHp}
+            </span>
+          </div>
+          <div
+            className={`block-badge ${blockActive ? 'active' : ''} ${blockHasPending ? 'pending' : ''} ${blockPulse ? 'pulsing' : ''} ${cls('blue', '')}`}
+            title={
+              blockHasPending
+                ? `Block ${badgeBlock} (pending — commits at phase end)`
+                : 'Block'
+            }
+            data-pool-target="blue"
+          >
+            <span className="block-icon" aria-hidden>🛡</span>
+            <span className="block-value">
+              <span key={blockPop.key} className={popClass(blockPop)}>
+                {badgeBlock}
+              </span>
+            </span>
+          </div>
+          <StatusBar
+            statuses={displayedStatuses}
+            tickMarks={statusTickMarks}
+            cueMarks={statusCueMarks}
+            expiringKinds={expiringStatusKinds}
+            className="player-statuses player-statuses-inline"
+          />
         </div>
-        <div
-          className={`block-badge ${blockActive ? 'active' : ''} ${blockHasPending ? 'pending' : ''} ${blockPulse ? 'pulsing' : ''} ${cls('blue', '')}`}
-          title={
-            blockHasPending
-              ? `Block ${badgeBlock} (pending — commits at phase end)`
-              : 'Block'
+        <div className="hud-resource-cluster hud-mana-chips">
+          <ManaChip
+          color="red"
+          value={displayedMana.red}
+          cap={MANA_CAPS.red}
+          pop={redManaPop}
+          pulsing={pulse.red > 0}
+          title="Red mana"
+          body={
+            <>
+              <div>Earned from <strong>red gem matches</strong>. Spent on offensive spells like Bash and Volley.</div>
+              <div className="hover-tooltip-aside">Caps at {MANA_CAPS.red}. Persists across fights.</div>
+            </>
           }
-          data-pool-target="blue"
-        >
-          <span className="block-icon" aria-hidden>🛡</span>
-          <span className="block-value">
-            <span key={blockPop.key} className={popClass(blockPop)}>
-              {badgeBlock}
-            </span>
-          </span>
+        />
+        <ManaChip
+          color="blue"
+          value={displayedMana.blue}
+          cap={MANA_CAPS.blue}
+          pop={blueManaPop}
+          pulsing={pulse.blue > 0}
+          title="Blue mana"
+          body={
+            <>
+              <div>Earned from <strong>blue gem matches</strong>. Spent on defensive spells like Bulwark and Reinforce.</div>
+              <div className="hover-tooltip-aside">Caps at {MANA_CAPS.blue}. Persists across fights.</div>
+            </>
+          }
+        />
+        <ManaChip
+          color="green"
+          value={displayedMana.green}
+          cap={MANA_CAPS.green}
+          pop={greenManaPop}
+          pulsing={pulse.green > 0}
+          title="Green mana"
+          body={
+            <>
+              <div>Earned from <strong>green gem matches</strong>. Spent on healing and cleanse spells.</div>
+              <div className="hover-tooltip-aside">Caps at {MANA_CAPS.green}. Persists across fights.</div>
+            </>
+          }
+        />
+        <ManaChip
+          color="yellow"
+          value={displayedMana.yellow}
+          cap={MANA_CAPS.yellow}
+          pop={yellowManaPop}
+          pulsing={pulse.yellow > 0}
+          wild
+          title="Wild mana"
+          body={
+            <>
+              <div>Earned from <strong>yellow gem matches</strong>. <strong>Substitutes for any colour's spell cost at 1:1</strong> — pays the shortfall when you're light on a specific colour.</div>
+              <div className="hover-tooltip-aside">Caps at {MANA_CAPS.yellow}. Persists across fights.</div>
+            </>
+          }
+        />
+          <span className="hud-divider" aria-hidden />
+          <ChargeChip
+            value={displayedCharge}
+            pop={chargePop}
+            pulsing={pulse.purple > 0}
+          />
         </div>
       </div>
-      <SpellTray />
-      <div className="hud-row hud-resources">
-        <div
-          className={cls('yellow', 'resource')}
-          data-pool-target="yellow"
-          title="Mana — earned from yellow stars; spent on spells. Persists across phases."
-        >
-          <span className="resource-dot" data-color="yellow" aria-hidden />
-          <span className="resource-label">Mana</span>
-          <span className="resource-value">
-            <span key={manaPop.key} className={popClass(manaPop)}>
-              {displayedMana}
-            </span>
-          </span>
-        </div>
-        <div
-          className={cls('purple', 'resource')}
-          data-pool-target="purple"
-          title="Skill charge — earned from purple gems; full bar unlocks your ultimate."
-        >
-          <span className="resource-dot" data-color="purple" aria-hidden />
-          <span className="resource-label">Charge</span>
-          <span className="resource-value">
-            <span key={chargePop.key} className={popClass(chargePop)}>
-              {displayedCharge}
-            </span>
-          </span>
-        </div>
-      </div>
+      {/* Statuses now render inline with the stat cluster above (next
+          to the block badge). No separate context row → no layout shift
+          when statuses appear / disappear. */}
     </section>
+  )
+}
+
+function ManaChip({
+  color,
+  value,
+  cap,
+  pop,
+  pulsing,
+  wild,
+  title,
+  body,
+}: {
+  color: GemColor
+  value: number
+  cap: number
+  pop: PopState
+  pulsing: boolean
+  wild?: boolean
+  title: string
+  body: ReactNode
+}) {
+  // data-mana-target: the trail attractor for this colour's pool-gained
+  // particles (H3 routing). data-pool-target stays on the immediate-effect
+  // target (block badge for blue, HP bar for green, etc.) so the arrival
+  // popup + heal/block FX still anchor to those. For yellow specifically,
+  // the chip carries both attributes because yellow's popup IS the
+  // mana popup — no other "effect" anchor exists for it.
+  return (
+    <HoverTooltip
+      variant="mana"
+      title={`${title} — ${value}/${cap}`}
+      body={body}
+      ariaLabel={`${title}: ${value} of ${cap}`}
+    >
+      <span
+        className={`mana-chip mana-${color}${wild ? ' mana-wild' : ''}${pulsing ? ' pulsing' : ''}${value >= cap ? ' is-capped' : ''}`}
+        data-mana-target={color}
+        data-pool-target={color === 'yellow' ? 'yellow' : undefined}
+      >
+        <span className="mana-dot" data-color={color} aria-hidden />
+        <span className="mana-value">
+          <span key={pop.key} className={popClass(pop)}>{value}</span>
+          <span className="mana-cap">/{cap}</span>
+        </span>
+      </span>
+    </HoverTooltip>
+  )
+}
+
+// Charge sits next to the mana row visually but is conceptually separate:
+// it's not mana, it's the ultimate's fuel. Matches the mana-chip
+// silhouette so the row reads coherently, with a faint divider before
+// it (see .hud-divider) signalling "different resource class."
+function ChargeChip({
+  value,
+  pop,
+  pulsing,
+}: {
+  value: number
+  pop: PopState
+  pulsing: boolean
+}) {
+  // Threshold = the lowest-cost ultimate. Slice has one (Riposte) so this
+  // is just its chargeCost. With multiple ultimates later, this becomes
+  // "your cheapest available ultimate."
+  const ult = listUltimates()[0]
+  const threshold = ult?.chargeCost ?? 8
+  const ready = value >= threshold
+  // Display just the current value — there's no cap on charge, only a
+  // *cost* to fire the ultimate. Previous "/8" misread as a cap (the
+  // value can overflow 8 — confusing). The cost is shown on the spell
+  // card itself; the chip just shows how much charge you've banked.
+  return (
+    <HoverTooltip
+      variant="charge"
+      title={`Skill charge — ${value}`}
+      body={
+        <>
+          <div>Earned from <strong>purple gem matches</strong>. Powers your <strong>ultimate</strong> ability.</div>
+          <div className="hover-tooltip-aside">
+            {ready
+              ? `Fully charged — ${ult?.name ?? 'your ultimate'} is ready to cast.`
+              : `${threshold - value} more to unlock ${ult?.name ?? 'your ultimate'}.`}
+          </div>
+        </>
+      }
+      ariaLabel={`Skill charge: ${value}`}
+    >
+      <span
+        className={`charge-chip${pulsing ? ' pulsing' : ''}${ready ? ' is-ready' : ''}`}
+        data-pool-target="purple"
+      >
+        <span className="charge-icon" data-color="purple" aria-hidden />
+        <span className="mana-value">
+          <span key={pop.key} className={popClass(pop)}>{value}</span>
+        </span>
+      </span>
+    </HoverTooltip>
   )
 }
 
