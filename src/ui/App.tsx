@@ -34,7 +34,7 @@ export function App() {
           <span className="hud-seed" title="Run seed (select to copy)">
             {seed}
           </span>
-          <span className="hud-build">Phase H1 · map</span>
+          <span className="hud-build">{runPhase}</span>
           <div className="game-header-controls">
             <RelicTray />
             <SettingsPanel />

@@ -149,8 +149,8 @@ Initial numbers, expected to change:
      |  X  |
     [c3] [c3] [c3]      col 3: 3 nodes (mix of fight + elite)
      |  X  |  X  |
-    [c4] [c4]            col 4: rest + shop (or 2 shops)
-        |
+    [c4] [c4]            col 4: rest + shop (always one of each — "2 shops"
+        |                       would break the ≥1-rest-reachable guarantee)
       [BOSS]             col 5: boss
 ```
 
@@ -165,8 +165,8 @@ Initial numbers, expected to change:
 ### Node distribution
 - ~5-6 fights per run (depending on path)
 - 1 elite
-- 1-2 shops (player picks 1 via path)
-- 1 rest (player may skip via different path)
+- 1-2 shops (col 4 always has one; col 2 may add a second on the fight+shop variant — player picks which to walk into via their col-3→col-4 edge)
+- 1 rest (always present in col 4; reaching it forecloses the col-4 shop on that run)
 - 1 boss
 
 ---
