@@ -5,6 +5,14 @@ import type {
   StatusKind,
 } from '../../types'
 
+// Tile-burn Smolder bonus on top of the cleared-cell count. Keeps a
+// 1-cell match meaningful (1 cell → Burn 2 → 3 dmg total) while letting
+// the triangle curve scale sharply for multi-cell clears (4 cells →
+// Burn 5 → 15 dmg). Lives next to the rest of Burn's mechanics — the
+// cascade walker in store.ts reads it, and tuning it here re-balances
+// the whole interaction.
+export const BURN_FROM_TILE_BONUS = 1
+
 // Apply / re-apply rules (StS pattern — one number per status):
 // - Burn: stacks += incoming.stacks. Each tick deals stacks damage, then
 //   stacks decrements by 1. So Burn 3 deals 3 → 2 → 1 (6 total). A

@@ -11,8 +11,15 @@ export const GEM_COLORS: readonly GemColor[] = [
 // Phase F adds the first board-verb flag: `burning`. The flag carries the
 // remaining duration (in player phases). More flags land in H2/J1 — keep
 // the bag open-ended so each verb plugs in without re-shaping Cell.
+//
+// `blessed` is the match-5 reward flag (player-side, opposite of burning).
+// 1-bit: present or absent, no duration. Set on the cells cleared by a
+// line-5 match and inherited by whatever gem ends up there after gravity
+// + refill. Matching a blessed gem doubles all pool deltas for that match
+// (see PLANNING/01-design.md §Blessed cells).
 export type CellFlags = {
   burning?: number
+  blessed?: true
 }
 
 export type Cell = {
@@ -70,6 +77,11 @@ export type GameEvent =
       // Set by the store on the first 4+ match of a swap when the bonus turn
       // will actually be granted. Drives the in-cascade "+1 TURN" feedback.
       grantsExtraTurn?: boolean
+      // True when any cell in `cells` has the `blessed` flag at the moment of
+      // the match. Triggers the 2× pool-delta multiplier in the store and the
+      // gold "BLESSED!" callout in FX. Set in cascade.ts before clear, since
+      // the flag is wiped by the same step.
+      blessed?: boolean
     }
   | { kind: 'cascade-start'; level: number }
   // Emitted once after a swap's cascade loop fully resolves. `levels` is the
@@ -94,7 +106,18 @@ export type GameEvent =
       blocked: number
       source: DamageSource
     }
-  | { kind: 'damage-taken'; amount: number; blocked: number; source: DamageSource }
+  | {
+      kind: 'damage-taken'
+      amount: number
+      blocked: number
+      source: DamageSource
+      // Optional hint that this attack also applies a status to the player.
+      // Set by enemyTurn when intent.onHit fires AND the hit lands hp damage
+      // (the rider's actual proc gate). Lets the FX/audio layer fold the
+      // status apply into the impact moment instead of treating it as a
+      // 350ms-later sequel — the fire IS the attack, not a follow-up.
+      onHitRider?: StatusKind
+    }
   | {
       kind: 'status-applied'
       target: 'player' | string
@@ -130,9 +153,19 @@ export type GameEvent =
       duration: number
     }
   // Emitted when a match clears one or more cells whose `burning` flag was
-  // active. Total burn stacks = number of burning cells in the cleared set
-  // (one stack per cell per match, per 02-scope §Enemies/Smolder).
-  | { kind: 'tile-burn-triggered'; cells: Pos[]; stacks: number }
+  // active. The consumer (store) computes Burn magnitude from cells.length
+  // plus a content-side bonus (see BURN_FROM_TILE_BONUS in content/statuses).
+  | { kind: 'tile-burn-triggered'; cells: Pos[] }
+  // Emitted when a line-5 match flags the cleared cells as Blessed. The
+  // positions are the (x,y) coords that will inherit the flag once gravity
+  // + refill places a new gem there. FX layer uses this to seed the gold
+  // rim + sparkle overlay. See PLANNING/01-design.md §Blessed cells.
+  | { kind: 'tile-blessed-placed'; cells: Pos[]; color: GemColor }
+  // Emitted when a match clears one or more cells whose `blessed` flag was
+  // active. Carries the count for audio/FX intensity, mirroring tile-burn-
+  // triggered's role. The 2× multiplier itself is applied in the store via
+  // the `blessed` flag on the preceding match-found event.
+  | { kind: 'blessed-match-triggered'; cells: Pos[]; count: number }
   // `expired` is the subset of `positions` whose remaining duration just
   // reached 0 (flag cleared this tick). Lets UI/SFX react to the "burn
   // fizzled out unmatched" beat without re-deriving it from the board.

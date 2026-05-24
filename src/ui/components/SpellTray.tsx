@@ -5,6 +5,7 @@ import {
   listSpells,
   listUltimates,
 } from '../../core/combat/spellRegistry'
+import { emitGameEvent } from '../../core/events/emitter'
 import { HoverTooltip } from './HoverTooltip'
 
 // CSS flash duration on cast. Matches the spell-btn.just-cast keyframe
@@ -81,7 +82,10 @@ export function SpellTray() {
               onClick={() => {
                 if (blocked) return
                 const res = castSpell(def.id)
-                if (res.ok) flashCast(def.id)
+                if (res.ok) {
+                  for (const ev of res.events) emitGameEvent(ev)
+                  flashCast(def.id)
+                }
               }}
             >
               <span className="spell-icon" aria-hidden>
@@ -125,7 +129,10 @@ export function SpellTray() {
               aria-disabled={blocked}
               onClick={() => {
                 if (blocked) return
-                castUltimate(def.id)
+                const res = castUltimate(def.id)
+                if (res.ok) {
+                  for (const ev of res.events) emitGameEvent(ev)
+                }
               }}
             >
               <span className="spell-icon" aria-hidden>

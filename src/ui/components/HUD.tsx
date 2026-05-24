@@ -14,6 +14,11 @@ import type {
 } from '../../types'
 import { StatusBar } from './StatusBar'
 import { PendingStrip, SpellTray } from './SpellTray'
+import {
+  getSpell,
+  getUltimate,
+  isUltimateId,
+} from '../../core/combat/spellRegistry'
 
 const PHASE_LABEL: Record<CombatPhase, string> = {
   'player-acting': 'Your turn',
@@ -40,6 +45,19 @@ export function HUD() {
   const [statusTickMarks, setStatusTickMarks] = useState<
     Partial<Record<StatusKind, number>>
   >({})
+  // Parallel bumps that fire BEFORE the proc damage lands — drives the
+  // chip's "winding up" ember pulse so the player sees the chip act
+  // before the HP drain arrives.
+  const [statusCueMarks, setStatusCueMarks] = useState<
+    Partial<Record<StatusKind, number>>
+  >({})
+  // Kinds in their fizzle window — the chip remains in displayedStatuses
+  // during this window so the goodbye flash + fade animation has
+  // something to play on. Cleared once the fizzle finishes and the
+  // chip is filtered out.
+  const [expiringStatusKinds, setExpiringStatusKinds] = useState<
+    Set<StatusKind>
+  >(() => new Set())
   const [pulse, setPulse] = useState<Record<GemColor, number>>({
     red: 0,
     blue: 0,
@@ -69,6 +87,15 @@ export function HUD() {
   const [hpGlow, setHpGlow] = useState(false)
   const [blockPulse, setBlockPulse] = useState(false)
   const [hpHit, setHpHit] = useState(false)
+  // Separate flag for burn-tick HP flashes so the bar can render an
+  // ember pulse (`.burn-hit`) instead of the red `.hit` flash. Driven by
+  // damage-taken events with source='burn' (proc path).
+  const [hpBurnHit, setHpBurnHit] = useState(false)
+  // "This attack carried fire" halo on the HUD frame — fires once at
+  // the impact moment of an enemy attack whose onHitRider is burn. Sits
+  // alongside the regular shake/vignette/red flash (the attack itself
+  // is still a normal hit) and lingers a beat as the chip drops in.
+  const [hudBurnImpact, setHudBurnImpact] = useState(false)
 
   // Displayed values mirror the canonical store but tick to animation time
   // (gem trail arrival), not store-commit time. Every channel that writes
@@ -123,11 +150,32 @@ export function HUD() {
           )
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'damage-taken') {
-        // Status-proc damage (Burn etc.) is delayed so the HP drain +
-        // hit pulse land with the chip-to-HP particle trail.
-        // Everything else (enemy attacks, etc.) is immediate.
+        // Status-proc damage (Burn etc.) is delayed so the HP drain,
+        // block-badge drop, and hit pulses all land with the chip→
+        // bar particle trail's arrival. Everything else (enemy
+        // attacks, etc.) is immediate.
         const proc = statusKindFromDamageSource(event.source)
-        const delay = proc && event.amount > 0 ? TRAIL_ARRIVAL_MS : 0
+        const isProc = proc !== null
+        // Fire the chip "wind up" cue IMMEDIATELY (not delayed) so it
+        // precedes the impact at +TRAIL_ARRIVAL_MS. The chip pulses
+        // as its particles launch; the impact lands when they arrive.
+        if (isProc && proc && (event.amount > 0 || event.blocked > 0)) {
+          const procKind = proc
+          setStatusCueMarks((prev) => ({
+            ...prev,
+            [procKind]: (prev[procKind] ?? 0) + 1,
+          }))
+        }
+        // Delay HUD updates to trail arrival whenever the proc did ANY
+        // damage (HP or block). Previously only `amount > 0` triggered
+        // the delay, so a fully-blocked burn tick snapped the block
+        // badge to its new value at t=0 while the chip→block particle
+        // trail was still in flight — particles arrived 700ms later
+        // at an already-updated badge.
+        const delay =
+          isProc && (event.amount > 0 || event.blocked > 0)
+            ? TRAIL_ARRIVAL_MS
+            : 0
         const amount = event.amount
         const blocked = event.blocked
         const apply = () => {
@@ -137,18 +185,51 @@ export function HUD() {
           setDisplayedHp((h) => Math.max(0, h - amount))
           setStagedBlue((s) => Math.max(0, s - blocked))
           if (amount > 0) {
-            setHpHit(true)
-            window.setTimeout(() => setHpHit(false), 420)
-            triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
-            document.body.classList.add('vignette-damage')
-            window.setTimeout(
-              () => document.body.classList.remove('vignette-damage'),
-              500,
-            )
+            if (isProc) {
+              // Burn-tick treatment: ember bar pulse + dim orange
+              // vignette, no shake. A DoT shouldn't gut-punch the same
+              // way a Smolder attack does — the chip→bar particle trail
+              // already carries the "fire damage" story; piling on red
+              // shake/vignette made the two events feel identical.
+              setHpBurnHit(true)
+              window.setTimeout(() => setHpBurnHit(false), 520)
+              document.body.classList.add('vignette-burn')
+              window.setTimeout(
+                () => document.body.classList.remove('vignette-burn'),
+                520,
+              )
+            } else {
+              setHpHit(true)
+              window.setTimeout(() => setHpHit(false), 420)
+              triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
+              document.body.classList.add('vignette-damage')
+              window.setTimeout(
+                () => document.body.classList.remove('vignette-damage'),
+                500,
+              )
+              // Enemy attack with a status rider: pulse the "carrier"
+              // halo on the HUD frame so the eye registers "this hit
+              // brought something extra" before the chip arrives.
+              if (event.onHitRider != null) {
+                setHudBurnImpact(true)
+                window.setTimeout(() => setHudBurnImpact(false), 640)
+              }
+            }
           }
         }
         if (delay > 0) window.setTimeout(apply, delay)
         else apply()
+      } else if (event.kind === 'spell-cast') {
+        // Mirror the store's cost deduction on the HUD's local mirror.
+        // Spell-cast is a free action with no animated trail, so this
+        // applies immediately rather than waiting for TRAIL_ARRIVAL_MS.
+        if (isUltimateId(event.spellId)) {
+          const cost = getUltimate(event.spellId).chargeCost
+          setDisplayedCharge((c) => Math.max(0, c - cost))
+        } else {
+          const cost = getSpell(event.spellId).manaCost
+          setDisplayedMana((m) => Math.max(0, m - cost))
+        }
       } else if (event.kind === 'phase-changed') {
         // Block is per-phase: it expires the moment the next player
         // phase begins. beginPlayerPhase already cleared it on the
@@ -179,18 +260,19 @@ export function HUD() {
         setBlockPulse(true)
         window.setTimeout(() => setBlockPulse(false), 500)
       } else if (event.kind === 'status-applied' && event.target === 'player') {
-        // Delay the chip appearance to match the particle trail when
-        // the source is a caster or board cells — otherwise the icon
-        // pops the instant the store commits, ahead of the visible
-        // hand-off. Player-cast statuses (none yet) fire immediately.
-        const delay =
-          event.source?.kind === 'enemy' || event.source?.kind === 'board-cells'
-            ? TRAIL_ARRIVAL_MS
-            : 0
-        const incoming = event.status
-        window.setTimeout(() => {
-          setDisplayedStatuses((prev) => applyStatusToList(prev, incoming))
-        }, delay)
+        // Apply the chip change IMMEDIATELY at event time — no delay.
+        // The previous behaviour delayed the chip update by
+        // TRAIL_ARRIVAL_MS to sync with the particle trail, but that
+        // delay let a follow-up status-ticked (next-phase begin within
+        // the same synchronous event burst) race the apply at +700ms.
+        // The intermediate value (e.g. "Burn 5") was visible for ~5ms
+        // before being overwritten by the tick's `remaining` (e.g.
+        // "Burn 4"), so the player saw chip 3 → 4 with a `−5` popup
+        // and no visible "+2 applied" beat. Now the chip reflects the
+        // new value at event time; the trail particles spawned by
+        // AC.spawnStatusTrail are decorative confirmation flying
+        // toward an already-updated chip.
+        setDisplayedStatuses((prev) => applyStatusToList(prev, event.status))
       } else if (event.kind === 'status-ticked' && event.target === 'player') {
         // StS pattern: stacks is the chip number AND the turns counter,
         // and the tick decrements it. Delay the chip update by
@@ -210,14 +292,39 @@ export function HUD() {
           }))
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'status-expired' && event.target === 'player') {
-        // Same delay as status-ticked: the final tick's HP drain has to
-        // land before we yank the chip from the DOM.
+        // Goodbye flash + fade on the chip when its final tick lands.
+        // Sequence:
+        //   t = +TRAIL_ARRIVAL_MS         → mark chip as expiring; the
+        //                                    `is-expiring` CSS class plays
+        //                                    a ~480ms flash-and-fade.
+        //   t = +TRAIL_ARRIVAL_MS + FIZZLE → filter the status out of
+        //                                    displayedStatuses; chip
+        //                                    unmounts after animation.
+        // The chip stays mounted during the fizzle window so the
+        // animation has something to play on. Without this beat the
+        // chip would just vanish silently as the HP drain landed,
+        // losing the "you survived that burn" feedback.
         const { statusKind } = event
+        const FIZZLE_MS = 480
+        window.setTimeout(() => {
+          setExpiringStatusKinds((prev) => {
+            if (prev.has(statusKind)) return prev
+            const next = new Set(prev)
+            next.add(statusKind)
+            return next
+          })
+        }, TRAIL_ARRIVAL_MS)
         window.setTimeout(() => {
           setDisplayedStatuses((prev) =>
             prev.filter((s) => s.kind !== statusKind),
           )
-        }, TRAIL_ARRIVAL_MS)
+          setExpiringStatusKinds((prev) => {
+            if (!prev.has(statusKind)) return prev
+            const next = new Set(prev)
+            next.delete(statusKind)
+            return next
+          })
+        }, TRAIL_ARRIVAL_MS + FIZZLE_MS)
       }
     })
     return unsub
@@ -240,6 +347,8 @@ export function HUD() {
       setBlockCommitted(p.block > 0)
       setDisplayedStatuses(p.statuses)
       setStatusTickMarks({})
+      setStatusCueMarks({})
+      setExpiringStatusKinds(new Set())
     })
   }, [])
 
@@ -273,19 +382,25 @@ export function HUD() {
   const blockActive = badgeBlock > 0 && blockCommitted
 
   return (
-    <section className="hud" aria-label="Player status" data-player-hud="true">
+    <section
+      className={`hud${hudBurnImpact ? ' burn-impact' : ''}`}
+      aria-label="Player status"
+      data-player-hud="true"
+    >
       <div className="hud-row">
         <span className="hud-phase">{PHASE_LABEL[phase]}</span>
         <PendingStrip />
         <StatusBar
           statuses={displayedStatuses}
           tickMarks={statusTickMarks}
+          cueMarks={statusCueMarks}
+          expiringKinds={expiringStatusKinds}
           className="player-statuses"
         />
       </div>
       <div className="hud-row">
         <div
-          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${isLowHp ? 'low' : ''} ${cls('green', '')}`}
+          className={`hp-bar ${hpGlow ? 'glow' : ''} ${hpHit ? 'hit' : ''} ${hpBurnHit ? 'burn-hit' : ''} ${isLowHp ? 'low' : ''} ${cls('green', '')}`}
           role="img"
           aria-label={`HP ${displayedHp}/${player.maxHp}`}
           data-pool-target="green"

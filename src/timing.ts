@@ -7,6 +7,15 @@ export function scheduleAtTrailArrival(fn: () => void): number {
   return window.setTimeout(fn, TRAIL_ARRIVAL_MS)
 }
 
+// Extra breath inserted between an enemy hit landing and its status rider
+// (e.g. Smolder's attack → Burn apply) starting to animate. Without it,
+// the burn trail spawns ~440ms after the hit and visually overlaps the
+// tail of the damage shake / vignette, so the two beats read as one
+// messy event. Pushing the apply sequence by this much lets the hit
+// drama settle first. AC, HUD, and audio bindings all add it together
+// so trail spawn, chip mount, and whoosh stay synchronized.
+export const STATUS_APPLY_AFTER_HIT_MS = 350
+
 // Gem-motion timings. Shared between the Pixi AnimationController (which
 // tweens the gem sprites) and HTML cell-anchored overlays (e.g.
 // BurningOverlay) so decorations animate over the exact same window as

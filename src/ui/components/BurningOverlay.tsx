@@ -32,9 +32,12 @@ type Fizzle = { id: number; x: number; y: number }
 
 const BURST_MS = 720
 // Soft smoke puff for the "burn expired" beat (countdown ran out without
-// being triggered). Shorter and softer than BURST_MS so it reads as
-// "passed without firing" rather than "exploded".
-const FIZZLE_MS = 650
+// being triggered). Longer than BURST_MS so the player has time to
+// register a happy event — at 650ms it was too quick to catch, the
+// puff was gone before the eye landed on it. Softer in shape than
+// BURST_MS so it still reads as "passed without firing" rather than
+// "exploded" despite being longer.
+const FIZZLE_MS = 1200
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
@@ -229,7 +232,9 @@ export function BurningOverlay() {
             }}
             data-remaining={m.remaining}
           >
-            <span className="burning-flame">🔥</span>
+            <span className="burning-flame">
+              <FlameSvg />
+            </span>
           </span>
         )
       })}
@@ -242,11 +247,21 @@ export function BurningOverlay() {
             top: `${b.y * 12.5}%`,
           }}
         >
-          <span className="burst-core">🔥</span>
-          <span className="burst-spark spark-1">✦</span>
-          <span className="burst-spark spark-2">✦</span>
-          <span className="burst-spark spark-3">✦</span>
-          <span className="burst-spark spark-4">✦</span>
+          <span className="burst-core">
+            <FlameSvg />
+          </span>
+          <span className="burst-spark spark-1">
+            <SparkSvg />
+          </span>
+          <span className="burst-spark spark-2">
+            <SparkSvg />
+          </span>
+          <span className="burst-spark spark-3">
+            <SparkSvg />
+          </span>
+          <span className="burst-spark spark-4">
+            <SparkSvg />
+          </span>
         </span>
       ))}
       {fizzles.map((f) => (
@@ -258,10 +273,122 @@ export function BurningOverlay() {
             top: `${f.y * 12.5}%`,
           }}
         >
-          <span className="fizzle-smoke">💨</span>
+          <span className="fizzle-smoke">
+            <SmokeSvg />
+          </span>
         </span>
       ))}
     </div>
+  )
+}
+
+// Palette-matched SVG flame. Replaces the 🔥 emoji used previously —
+// the emoji fidelity didn't sit alongside the Pixi particle palette
+// (FLAME_PALETTE / FLAME_CORE_HEX) used everywhere else for fire FX.
+// Hex stops match those particle colors: deep red → bright ember →
+// hot orange → amber → molten core. A separate inner-core gradient
+// makes the base of the flame glow brighter, mimicking real flame
+// physics (hottest at the bottom near the fuel). preserveAspectRatio
+// 'xMidYMax' anchors the flame's foot to the middle-bottom of its box
+// so transform:scale keeps the flame "standing on the gem" rather
+// than centering and floating mid-cell.
+function FlameSvg() {
+  return (
+    <svg
+      viewBox="0 0 24 32"
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMax meet"
+      aria-hidden
+    >
+      <defs>
+        <radialGradient id="flame-body" cx="50%" cy="78%" r="65%">
+          <stop offset="0%" stopColor="#ffe39a" />
+          <stop offset="32%" stopColor="#ffc15c" />
+          <stop offset="62%" stopColor="#ff9034" />
+          <stop offset="92%" stopColor="#ee5e57" />
+          <stop offset="100%" stopColor="#c4423c" />
+        </radialGradient>
+        <radialGradient id="flame-core" cx="50%" cy="84%" r="40%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="50%" stopColor="#ffe39a" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="#ffc15c" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* Teardrop flame body — pointed tip with a curled-back top to
+          give it motion, broad rounded base for the "sitting on the
+          gem" silhouette. */}
+      <path
+        d="M12 1.5
+           C 10 7, 6.5 10, 5 16
+           C 3.5 22, 6 30, 12 30.5
+           C 18 30, 20.5 22, 19 16
+           C 17.5 10, 14.5 8, 13.5 4
+           C 13.2 2.6, 12.6 1.7, 12 1.5 Z"
+        fill="url(#flame-body)"
+      />
+      {/* Inner core: brighter bottom glow. Eccentric ellipse rather
+          than circle so the molten heart reads as fire shape. */}
+      <ellipse cx="12" cy="22" rx="4.5" ry="6" fill="url(#flame-core)" />
+    </svg>
+  )
+}
+
+// Diamond-shaped ember spark — replaces the ✦ unicode char so the
+// sparks render consistently across platforms (some fonts substitute
+// ✦ with a less-fiery glyph) and pick up our palette directly.
+function SparkSvg() {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      <defs>
+        <radialGradient id="spark-body" cx="50%" cy="50%" r="55%">
+          <stop offset="0%" stopColor="#ffe39a" />
+          <stop offset="55%" stopColor="#ffc15c" />
+          <stop offset="100%" stopColor="#ff9034" />
+        </radialGradient>
+      </defs>
+      {/* Four-point star (longer vertical axis). */}
+      <path
+        d="M6 0 L7.2 4.8 L12 6 L7.2 7.2 L6 12 L4.8 7.2 L0 6 L4.8 4.8 Z"
+        fill="url(#spark-body)"
+      />
+    </svg>
+  )
+}
+
+// Smoke wisp — replaces the 💨 emoji used for the fizzle puff. The
+// emoji was horizontal (wind-style) and got rotated -90° via CSS to
+// point up; here it's natively vertical so the CSS keyframe doesn't
+// need the rotation workaround. Cool grey-blue to read as "fire is
+// out" rather than warm ember tones.
+function SmokeSvg() {
+  return (
+    <svg
+      viewBox="0 0 24 32"
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      <defs>
+        <radialGradient id="smoke-body" cx="50%" cy="55%" r="60%">
+          <stop offset="0%" stopColor="#dad6ce" stopOpacity="0.85" />
+          <stop offset="60%" stopColor="#a89f93" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#776e63" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* Three soft puffs stacked into a wisp — bottom widest, top
+          narrowest, slight S-curve. */}
+      <ellipse cx="12" cy="22" rx="8" ry="6" fill="url(#smoke-body)" />
+      <ellipse cx="13" cy="14" rx="6" ry="5" fill="url(#smoke-body)" />
+      <ellipse cx="11" cy="7" rx="4" ry="3.5" fill="url(#smoke-body)" />
+    </svg>
   )
 }
 

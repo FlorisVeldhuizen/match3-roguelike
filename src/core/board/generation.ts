@@ -1,6 +1,7 @@
 import {
   type Cell,
   type GemColor,
+  type Pos,
   BOARD_HEIGHT,
   BOARD_WIDTH,
   GEM_COLORS,
@@ -99,6 +100,27 @@ export function hasValidSwap(board: Cell[][]): boolean {
     }
   }
   return false
+}
+
+// Returns every (from → to) pair that yields at least one match. Used by the
+// idle-hint nudge to cycle through random suggestions without repeats.
+export function findAllValidSwaps(
+  board: Cell[][],
+): Array<{ from: Pos; to: Pos }> {
+  const out: Array<{ from: Pos; to: Pos }> = []
+  const h = board.length
+  const w = board[0]?.length ?? 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x + 1 < w && swapMakesMatch(board, x, y, x + 1, y)) {
+        out.push({ from: { x, y }, to: { x: x + 1, y } })
+      }
+      if (y + 1 < h && swapMakesMatch(board, x, y, x, y + 1)) {
+        out.push({ from: { x, y }, to: { x, y: y + 1 } })
+      }
+    }
+  }
+  return out
 }
 
 function swapMakesMatch(

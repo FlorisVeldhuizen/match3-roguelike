@@ -13,7 +13,27 @@ import { createBoardInteraction } from './input'
 import { AnimationController } from './AnimationController'
 import { BoardEffects } from './BoardEffects'
 import { emitGameEvent } from '../core/events/emitter'
-import { isStarted, subscribeStarted } from '../ui/splashState'
+import { isStarted, subscribeStarted } from '../splashState'
+import {
+  getTimeScale,
+  onDebugSwap,
+  subscribeTimeScale,
+} from '../debug/devControls'
+import { findAllValidSwaps } from '../core/board/generation'
+
+// Idle-hint nudge: after this long without player activity, pulse a random
+// pair of gems that swap into a match. New pair every NUDGE_CYCLE_MS.
+const NUDGE_TRIGGER_MS = 7000
+const NUDGE_PULSE_PERIOD_MS = 1000
+// Multiple of NUDGE_PULSE_PERIOD_MS so cycle-expiry always lands on a sine
+// zero — the release that follows runs for exactly one full period.
+const NUDGE_CYCLE_MS = 3000
+const NUDGE_SCALE_AMPLITUDE = 0.09
+// Attack ramp: amplitude grows 0→1 over this many ms, cubic-eased, so the
+// first bounces are subtle. Release length is dynamic — see startNudgeRelease.
+const NUDGE_ATTACK_MS = 500
+const easeInOutCubic = (t: number): number =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
 
 const CELL_SIZE = 64
 const GEM_SIZE = 54
@@ -44,6 +64,11 @@ const inBounds = (p: Pos): boolean =>
   p.x >= 0 && p.x < BOARD_DIM && p.y >= 0 && p.y < BOARD_DIM
 
 const samePos = (a: Pos, b: Pos): boolean => a.x === b.x && a.y === b.y
+
+const pairKey = (a: Pos, b: Pos): string =>
+  a.y * 1000 + a.x < b.y * 1000 + b.x
+    ? `${a.x},${a.y}|${b.x},${b.y}`
+    : `${b.x},${b.y}|${a.x},${a.y}`
 
 type PointerState = {
   pointerId: number
@@ -182,6 +207,9 @@ export class BoardScene {
   private detachPointer: (() => void) | null = null
   private detachKeyboard: (() => void) | null = null
   private detachRectInvalidation: (() => void) | null = null
+  private detachVisibility: (() => void) | null = null
+  private detachTimeScale: (() => void) | null = null
+  private detachDebugSwap: (() => void) | null = null
   private unsubscribeStarted: (() => void) | null = null
   // Sprites built by the initial buildSprites pass. Stashed so the splash-
   // gated intro can flip their alpha back to 1 right before playInitialFill.
@@ -219,6 +247,31 @@ export class BoardScene {
   // Tracks last-set canvas cursor so the per-frame cursor update doesn't
   // write to style on every tick when nothing has changed.
   private lastCursor = ''
+  // Idle-hint nudge state. idleMs counts up only when the player can act and
+  // nothing is animating. Once it crosses the threshold, a random valid swap
+  // is picked; cycleMs counts down to the next pick. lastPairKey avoids
+  // re-picking the same pair back-to-back. pulseElapsedMs drives the sine
+  // pulse on the two target sprites.
+  private nudgeIdleMs = 0
+  private nudgePair: { from: Pos; to: Pos } | null = null
+  private nudgeCycleMs = 0
+  private nudgeLastPairKey: string | null = null
+  private nudgePulseElapsedMs = 0
+  private nudgePulsingSprites: Array<{ sprite: Sprite; baseScale: number }> = []
+  // Attack/release state. Attack: env eases 0→1 over NUDGE_ATTACK_MS.
+  // Release: env eases 1→0 across a window that ENDS at the next sine
+  // cycle boundary (pulseElapsed % PERIOD === 0, where sin === 0), so the
+  // pulse always finishes on a clean wave completion. Both env and sin hit
+  // zero at the same instant, so release at the boundary is invisible.
+  private nudgeAttackElapsedMs = 0
+  private nudgeIsReleasing = false
+  private nudgeReleaseStartElapsedMs = 0
+  private nudgeReleaseEndElapsedMs = 0
+  // Swap list cached by cells reference. board.cells changes (new array) on
+  // every store update, so identity check is both correct and free. Lets
+  // mid-idle cycle picks skip the 128-detectMatches scan.
+  private nudgeSwapCache: Array<{ from: Pos; to: Pos }> | null = null
+  private nudgeSwapCacheCells: unknown = null
 
   constructor(mountEl: HTMLElement) {
     this.mountEl = mountEl
@@ -267,17 +320,82 @@ export class BoardScene {
   }
 
   // Capture-phase scroll catches inner scrollers (events don't bubble from
-  // them); passive keeps us off the scroll critical path.
+  // them); passive keeps us off the scroll critical path. ResizeObserver
+  // chain catches layout shifts that DON'T fire window resize/scroll —
+  // most commonly the relic tray wrapping to a second row between fights,
+  // which makes a flex-column ancestor grow and translates the canvas
+  // downward without resizing the canvas itself.
+  //
+  // We have to observe each ANCESTOR of the mount up to <body>, because:
+  // - The mount's own size is pinned by the canvas inside (LOGICAL_SIZE),
+  //   so it never reports a resize when the page reshuffles around it.
+  // - On a tall-enough viewport, <body> stays at min-height: 100vh and
+  //   never resizes either.
+  // - But the flex-column ancestor (`.game`) DOES grow when its header
+  //   child wraps, so observing the chain catches the layout shift.
   private attachRectInvalidation(): void {
     const invalidate = () => {
       this.cachedCanvasRect = null
     }
     window.addEventListener('resize', invalidate)
     window.addEventListener('scroll', invalidate, { capture: true, passive: true })
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(invalidate)
+      let node: HTMLElement | null = this.mountEl
+      while (node) {
+        resizeObserver.observe(node)
+        if (node === document.body) break
+        node = node.parentElement
+      }
+    }
     this.detachRectInvalidation = () => {
       window.removeEventListener('resize', invalidate)
       window.removeEventListener('scroll', invalidate, { capture: true })
+      resizeObserver?.disconnect()
     }
+  }
+
+  // Stop Pixi tickers while the tab is hidden. Without this, RAF naturally
+  // pauses but the AnimationController's setTimeout-based `wait()` between
+  // events keeps firing (throttled to ~1s by the browser). The queue partly
+  // advances while hidden and the visual catch-up on return reads as the
+  // game playing itself — pawfessor saw this on the Discord demo. Pausing
+  // both shared and app tickers blocks tween Promises, which the AC awaits,
+  // which in turn halts the queue at the first tweened event.
+  private attachVisibilityPause(app: Application): void {
+    const onVisibility = () => {
+      const ticker = app.ticker
+      if (document.hidden) {
+        Ticker.shared.stop()
+        ticker.stop()
+      } else {
+        Ticker.shared.start()
+        ticker.start()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    this.detachVisibility = () =>
+      document.removeEventListener('visibilitychange', onVisibility)
+  }
+
+  // Dev tooling: time-scale + debug-swap subscriptions. Defaults to a
+  // 1× scale (no-op in prod). Pixi's Ticker.speed scales deltaMS, so
+  // setting it < 1 slows down all sprite tweens; the AC's setTimeout
+  // wait() reads getTimeScale() directly. Both layers stay in sync.
+  private attachDevControls(app: Application): void {
+    const applyScale = (value: number) => {
+      Ticker.shared.speed = value
+      app.ticker.speed = value
+    }
+    applyScale(getTimeScale())
+    this.detachTimeScale = subscribeTimeScale(applyScale)
+    // DevTools triggers swaps via this bus instead of going through the
+    // pointer/keyboard input path, so the request lands directly at
+    // performSwap. Same animation pipeline as a real user swap.
+    this.detachDebugSwap = onDebugSwap(({ from, to }) => {
+      void this.performSwap(from, to)
+    })
   }
 
   async init(): Promise<void> {
@@ -334,6 +452,8 @@ export class BoardScene {
     this.attachPointerEvents(app.canvas)
     this.attachKeyboardEvents()
     this.attachRectInvalidation()
+    this.attachVisibilityPause(app)
+    this.attachDevControls(app)
     // Post-FX (bloom / RGB split / shockwave / CRT noise) — applied to the
     // stage so the board background, gems, shimmers, and halos all get the
     // same treatment. Constructed last so the filter chain wraps the fully
@@ -373,6 +493,12 @@ export class BoardScene {
     this.detachKeyboard = null
     this.detachRectInvalidation?.()
     this.detachRectInvalidation = null
+    this.detachVisibility?.()
+    this.detachVisibility = null
+    this.detachTimeScale?.()
+    this.detachTimeScale = null
+    this.detachDebugSwap?.()
+    this.detachDebugSwap = null
     this.cachedCanvasRect = null
     if (this.effectsTickerCb) Ticker.shared.remove(this.effectsTickerCb)
     this.effectsTickerCb = null
@@ -617,6 +743,12 @@ export class BoardScene {
     })
 
     const onPointerDown = (ev: PointerEvent) => {
+      this.resetNudgeIdle()
+      // Safety net: every drag starts with a fresh rect. The ResizeObserver
+      // path covers the common cases (sibling growth, parent resize), but
+      // one extra getBoundingClientRect at drag-start is cheap and means
+      // pointer→cell mapping can't lag a layout shift the observer missed.
+      this.cachedCanvasRect = null
       const cell = this.clientToCell(ev.clientX, ev.clientY)
       if (!cell) return
       canvas.setPointerCapture(ev.pointerId)
@@ -639,6 +771,7 @@ export class BoardScene {
     }
 
     const onPointerMove = (ev: PointerEvent) => {
+      this.resetNudgeIdle()
       const active = this.activePointer
       if (active) {
         if (active.pointerId !== ev.pointerId) return
@@ -759,6 +892,7 @@ export class BoardScene {
       ) {
         return
       }
+      this.resetNudgeIdle()
       const store = useGameStore.getState()
       if (store.fight.phase === 'victory' || store.fight.phase === 'game-over')
         return
@@ -1075,7 +1209,151 @@ export class BoardScene {
     }
     this.tickFloat(dtMs, animating)
     this.tickShimmers(dtMs, animating)
+    this.tickNudge(dtMs, animating)
     this.boardEffects?.tick(dtMs)
+  }
+
+  // Idle-hint nudge. Pulses two gems that would swap into a match when the
+  // player hasn't acted for NUDGE_TRIGGER_MS. Cycles to a different random
+  // pair every NUDGE_CYCLE_MS so repeat-stares feel varied. Any pointer or
+  // key activity calls resetNudgeIdle() — see hookups in input handlers.
+  //
+  // Attack ramp (env: 0→1 over NUDGE_ATTACK_MS) keeps the first bounces
+  // subtle. Release winds down across a window aligned to the next sine
+  // cycle boundary so both env and sin reach zero together — the pulse
+  // always finishes on a complete wave.
+  private tickNudge(dtMs: number, animating: boolean): void {
+    const phase = useGameStore.getState().fight.phase
+    const canHint =
+      !animating && phase === 'player-acting' && isStarted()
+    if (!canHint) {
+      // Suppress immediately — animator owns sprite scale during anims and
+      // an eased fade would just fight its tweens.
+      this.nudgeIdleMs = 0
+      this.nudgeAttackElapsedMs = 0
+      this.nudgeIsReleasing = false
+      this.restoreNudgeSprites()
+      this.nudgePair = null
+      return
+    }
+    if (this.nudgePulsingSprites.length > 0) {
+      this.nudgePulseElapsedMs += dtMs
+      // Cycle expiry triggers the cycle-aligned release.
+      if (!this.nudgeIsReleasing) {
+        this.nudgeCycleMs -= dtMs
+        if (this.nudgeCycleMs <= 0) this.startNudgeRelease()
+      }
+      // Compute envelope (attack ramp, sustain at 1, or release ramp).
+      let env: number
+      if (this.nudgeIsReleasing) {
+        const span =
+          this.nudgeReleaseEndElapsedMs - this.nudgeReleaseStartElapsedMs
+        const t =
+          (this.nudgePulseElapsedMs - this.nudgeReleaseStartElapsedMs) / span
+        if (t >= 1) {
+          // End of cycle reached: sin === 0 and env === 0 simultaneously.
+          this.restoreNudgeSprites()
+          this.nudgePair = null
+          this.nudgeIsReleasing = false
+          this.nudgeAttackElapsedMs = 0
+          return
+        }
+        env = 1 - easeInOutCubic(t)
+      } else if (this.nudgeAttackElapsedMs < NUDGE_ATTACK_MS) {
+        this.nudgeAttackElapsedMs += dtMs
+        env = easeInOutCubic(
+          Math.min(1, this.nudgeAttackElapsedMs / NUDGE_ATTACK_MS),
+        )
+      } else {
+        env = 1
+      }
+      const phaseRad =
+        (this.nudgePulseElapsedMs / NUDGE_PULSE_PERIOD_MS) * Math.PI * 2
+      const mul = 1 + NUDGE_SCALE_AMPLITUDE * env * Math.sin(phaseRad)
+      for (const entry of this.nudgePulsingSprites) {
+        entry.sprite.scale.set(entry.baseScale * mul)
+      }
+      return
+    }
+    this.nudgeIdleMs += dtMs
+    if (this.nudgeIdleMs >= NUDGE_TRIGGER_MS) this.pickNudgePair()
+  }
+
+  // Compute a release window that ENDS at the next sine cycle boundary
+  // (sin === 0 there). With NUDGE_CYCLE_MS a multiple of the pulse period,
+  // cycle-expiry triggers this with cur exactly on a boundary — release
+  // then runs for one full period. User-resets can hit at any phase; the
+  // half-period guard ensures we always get a visible taper.
+  private startNudgeRelease(): void {
+    if (this.nudgeIsReleasing) return
+    const cur = this.nudgePulseElapsedMs
+    const period = NUDGE_PULSE_PERIOD_MS
+    let end = (Math.floor(cur / period) + 1) * period
+    if (end - cur < period / 2) end += period
+    this.nudgeIsReleasing = true
+    this.nudgeReleaseStartElapsedMs = cur
+    this.nudgeReleaseEndElapsedMs = end
+  }
+
+  private pickNudgePair(): void {
+    const animator = this.animator
+    if (!animator) return
+    const cells = useGameStore.getState().board.cells
+    // Board doesn't change while the player sits idle, so cycle picks reuse
+    // the swap list. Identity check is enough: any store update produces a
+    // fresh cells array.
+    let swaps: Array<{ from: Pos; to: Pos }>
+    if (this.nudgeSwapCacheCells === cells && this.nudgeSwapCache) {
+      swaps = this.nudgeSwapCache
+    } else {
+      // Shallow-clone rows so swapMakesMatch's transient mutations don't
+      // touch the live store arrays. Cells (the inner objects) aren't
+      // mutated by the scan, only row slots.
+      const cloned = cells.map((row) => row.slice())
+      swaps = findAllValidSwaps(cloned)
+      this.nudgeSwapCache = swaps
+      this.nudgeSwapCacheCells = cells
+    }
+    if (swaps.length === 0) return
+    // Avoid re-picking the last pair when alternatives exist.
+    let pool = swaps
+    if (this.nudgeLastPairKey && swaps.length > 1) {
+      pool = swaps.filter(
+        (s) => pairKey(s.from, s.to) !== this.nudgeLastPairKey,
+      )
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)]
+    if (!pick) return
+    const fromSprite = animator.peekSprite(pick.from)
+    const toSprite = animator.peekSprite(pick.to)
+    if (!fromSprite || !toSprite) return
+    this.restoreNudgeSprites()
+    this.nudgePair = pick
+    this.nudgeLastPairKey = pairKey(pick.from, pick.to)
+    this.nudgeCycleMs = NUDGE_CYCLE_MS
+    this.nudgePulseElapsedMs = 0
+    this.nudgeAttackElapsedMs = 0
+    this.nudgeIsReleasing = false
+    this.nudgePulsingSprites = [
+      { sprite: fromSprite, baseScale: fromSprite.scale.x },
+      { sprite: toSprite, baseScale: toSprite.scale.x },
+    ]
+  }
+
+  private restoreNudgeSprites(): void {
+    for (const entry of this.nudgePulsingSprites) {
+      entry.sprite.scale.set(entry.baseScale)
+    }
+    this.nudgePulsingSprites = []
+  }
+
+  // Player acted: start the cycle-aligned release. tickNudge tapers
+  // amplitude across the rest of the current sine cycle and releases at
+  // the boundary (where scale === baseScale by construction).
+  private resetNudgeIdle(): void {
+    this.nudgeIdleMs = 0
+    this.nudgeLastPairKey = null
+    if (this.nudgePair && !this.nudgeIsReleasing) this.startNudgeRelease()
   }
 
   // Slow Lissajous drift on every resting gem. Skipped during

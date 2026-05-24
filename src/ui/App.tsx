@@ -3,13 +3,12 @@ import { EnemyFrame } from './components/EnemyFrame'
 import { VictoryOverlay } from './components/VictoryOverlay'
 import { GameOverOverlay } from './components/GameOverOverlay'
 import { PhaseBanner } from './components/PhaseBanner'
-import { MuteToggle } from './components/MuteToggle'
-import { VolumeSlider } from './components/VolumeSlider'
-import { FXToggle } from './components/FXToggle'
+import { SettingsPanel } from './components/SettingsPanel'
 import { ArcaneBackground } from './components/ArcaneBackground'
 import { AriaLiveAnnouncer } from './components/AriaLiveAnnouncer'
 import { CRTOverlay } from './components/CRTOverlay'
 import { BurningOverlay } from './components/BurningOverlay'
+import { BlessedOverlay } from './components/BlessedOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
 import { Splash } from './components/Splash'
@@ -31,9 +30,7 @@ export function App() {
           <span className="hud-build">Phase G · relics</span>
           <div className="game-header-controls">
             <RelicTray />
-            <VolumeSlider />
-            <MuteToggle />
-            <FXToggle />
+            <SettingsPanel />
           </div>
         </header>
         <EnemyFrame />
@@ -44,6 +41,7 @@ export function App() {
                 canvas and this overlay coexist as siblings inside the
                 mount div. */}
             <BurningOverlay />
+            <BlessedOverlay />
           </div>
         </section>
         <HUD />

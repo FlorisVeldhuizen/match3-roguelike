@@ -97,64 +97,165 @@ describe('cascade.resolveSwap', () => {
     expect(r1.rng.seed).toBe(r2.rng.seed)
   })
 
-  it('5-line match clears whole row of that color', () => {
-    // Hand-built: row 4 has b,b,b,b,b at cols 1-5; rest are non-blue
-    // such that the swap producing this is bringing in the 5th blue.
-    // Easier: build a board with 5 blues already in a row, plus a few
-    // extra blues elsewhere in the same row, and verify they all clear.
-    const board: Cell[][] = Array.from({ length: 8 }, () =>
+  // The 3-color rotation pattern `palette[(x + y) % 3]` produces a board
+  // with NO 3-runs in any direction or shape — used as a deterministic
+  // "safe" base for tests that need to surgically place a few gems
+  // without spurious pre-existing matches.
+  const buildSafeBoard = (): Cell[][] => {
+    const palette: GemColor[] = ['red', 'green', 'yellow']
+    return Array.from({ length: 8 }, (_, y) =>
       Array.from(
         { length: 8 },
-        (): Cell => ({ gemColor: 'red' }),
+        (_, x): Cell => ({ gemColor: palette[(x + y) % 3] ?? 'red' }),
       ),
     )
-    // Pre-cleanse: alternate non-blue colors so no spurious matches.
-    const palette: GemColor[] = ['red', 'green', 'yellow', 'purple']
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        const row = board[y]
-        if (!row) continue
-        const c = row[x]
-        if (!c) continue
-        const idx = (x + y * 2) % palette.length
-        const col = palette[idx]
-        if (col) c.gemColor = col
-      }
-    }
-    // Place 4 blues at row 3, cols 1..4, plus one extra blue elsewhere in row 3 (col 7).
-    const row3 = board[3]
-    if (!row3) throw new Error('row 3')
-    for (const x of [1, 2, 3, 4]) {
-      const c = row3[x]
+  }
+
+  // Pre-arrange a horizontal 5-line that completes at (3,3) when the
+  // blue at (3,4) is swapped up. 4 blues split across (1,3)-(2,3) and
+  // (4,3)-(5,3) leaves a 2-run + 2-run with no pre-existing match; the
+  // swap source at (3,4) is a lone blue (no vertical match against the
+  // safe palette). Verified by `expect(detectMatches).length === 0` in
+  // each test, so a palette change here fails loud.
+  const setupFiveLineSwap = (board: Cell[][]) => {
+    for (const x of [1, 2, 4, 5]) {
+      const c = board[3]?.[x]
       if (c) c.gemColor = 'blue'
     }
-    const extra = row3[7]
-    if (extra) extra.gemColor = 'blue'
-    // Set up the swap source: a blue at (5, 4) below the line, swap up brings it to (5, 3) — completes the 5-line.
-    const row4 = board[4]
-    if (!row4) throw new Error('row 4')
-    const swapSrc = row4[5]
+    const swapSrc = board[4]?.[3]
     if (swapSrc) swapSrc.gemColor = 'blue'
-    // Ensure (5,3) is non-blue so the swap is meaningful.
-    const target = row3[5]
-    if (target) target.gemColor = 'green'
-    // Patch up adjacent cells to (1,3)..(4,3) and (5,4) so no spurious matches exist pre-swap.
-    // (Easier: verify no pre-existing matches and bail if there are.)
-    if (detectMatches(board).length !== 0) {
-      // Skip this test rather than fail on a fragile fixture.
-      return
-    }
-    const result = resolveSwap(board, { seed: 1 }, { x: 5, y: 4 }, { x: 5, y: 3 })
+  }
+  const FIVE_LINE_SWAP = {
+    from: { x: 3, y: 4 },
+    to: { x: 3, y: 3 },
+  }
+  const FIVE_LINE_CELLS = [1, 2, 3, 4, 5].map((x) => ({ x, y: 3 }))
+
+  it('5-line match flags the cleared cells as Blessed', () => {
+    const board = buildSafeBoard()
+    setupFiveLineSwap(board)
+    expect(board[3]?.[3]?.gemColor).not.toBe('blue')
+    expect(detectMatches(board).length).toBe(0)
+
+    const result = resolveSwap(
+      board,
+      { seed: 1 },
+      FIVE_LINE_SWAP.from,
+      FIVE_LINE_SWAP.to,
+    )
     expect(result.valid).toBe(true)
-    // After cascade, the original 4 blues + the extra blue at col 7 + the swapped-in blue at col 5
-    // should ALL have been part of the clear (5-line + row-of-color extension).
+
+    // Cleared set is exactly the 5 line cells — no row extension anymore.
     const cleared = result.events.find((e) => e.kind === 'gems-cleared')
-    expect(cleared).toBeDefined()
-    if (cleared && cleared.kind === 'gems-cleared') {
-      const clearedKeys = new Set(cleared.cells.map((c) => `${c.x},${c.y}`))
-      // The lone extra blue at (7, 3) is in row 3 and must be cleared by the row-extension.
-      expect(clearedKeys.has('7,3')).toBe(true)
+    expect(cleared?.kind).toBe('gems-cleared')
+    if (cleared?.kind === 'gems-cleared') {
+      const keys = new Set(cleared.cells.map((c) => `${c.x},${c.y}`))
+      for (const p of FIVE_LINE_CELLS) expect(keys.has(`${p.x},${p.y}`)).toBe(true)
+      expect(cleared.cells).toHaveLength(5)
     }
+
+    // tile-blessed-placed event fires with the 5 line positions.
+    const placed = result.events.find((e) => e.kind === 'tile-blessed-placed')
+    expect(placed?.kind).toBe('tile-blessed-placed')
+    if (placed?.kind === 'tile-blessed-placed') {
+      const keys = new Set(placed.cells.map((c) => `${c.x},${c.y}`))
+      for (const p of FIVE_LINE_CELLS) expect(keys.has(`${p.x},${p.y}`)).toBe(true)
+      expect(placed.color).toBe('blue')
+    }
+
+    // After gravity + refill, the 5 line positions hold blessed-flagged
+    // gems. (After this single 5-line with no chain, the cascade settles
+    // here; the only blessed cells on the board are these 5.)
+    for (const p of FIVE_LINE_CELLS) {
+      expect(result.board[p.y]?.[p.x]?.flags?.blessed).toBe(true)
+    }
+  })
+
+  it('blessed flag travels with the gem when gravity pulls it down', () => {
+    // Pre-flag a gem at (4, 0). A line-5 in row 3 clears (4, 3), so
+    // gravity pulls the col-4 stack down by one — (4, 0) lands at (4, 1)
+    // (and the col-4 cleared cell at (4, 3) receives the original (4, 2)
+    // gem, which itself also gets re-flagged blessed by the line-5).
+    const board = buildSafeBoard()
+    setupFiveLineSwap(board)
+    const topCell = board[0]?.[4]
+    if (topCell) topCell.flags = { blessed: true }
+    expect(detectMatches(board).length).toBe(0)
+
+    const result = resolveSwap(
+      board,
+      { seed: 1 },
+      FIVE_LINE_SWAP.from,
+      FIVE_LINE_SWAP.to,
+    )
+    expect(result.valid).toBe(true)
+    // The original (4, 0) gem is now at (4, 1) and still carries its flag.
+    expect(result.board[1]?.[4]?.flags?.blessed).toBe(true)
+    // (4, 3) is one of the line-5 cells → re-blessed by the same step.
+    expect(result.board[3]?.[4]?.flags?.blessed).toBe(true)
+  })
+
+  it('matching a blessed gem sets match-found.blessed and emits blessed-match-triggered', () => {
+    const board = buildSafeBoard()
+    // Set up a 3-run that completes via swap and includes a pre-flagged
+    // blessed gem. (2,2) is the swap target (non-red); (3,2) is red and
+    // is the blessed gem we'll match into the run. (0,2) and (1,2) are
+    // red so the swap (3,2)→(2,2) makes a horizontal run at cols 0..3.
+    // Actually we want a 3-run; place reds at (0,2), (1,2), and (3,2);
+    // swap (3,2)→(2,2) shifts the run to cols 0..2 (with (3,2) becoming
+    // whatever was at (2,2)).
+    for (const x of [0, 1, 3]) {
+      const c = board[2]?.[x]
+      if (c) c.gemColor = 'red'
+    }
+    // The swap exchanges (2,2)'s palette color (green per (2+2)%3=1)
+    // with (3,2)'s red. After swap, (0,2)=(1,2)=(2,2)=red — 3-run. The
+    // blessed gem must be on (3,2) so that *after the swap* it lands at
+    // (2,2) and participates in the cleared match. Flag (3,2) blessed.
+    const blessedCell = board[2]?.[3]
+    if (blessedCell) blessedCell.flags = { blessed: true }
+    expect(detectMatches(board).length).toBe(0)
+
+    const result = resolveSwap(board, { seed: 1 }, { x: 3, y: 2 }, { x: 2, y: 2 })
+    expect(result.valid).toBe(true)
+
+    const matchFound = result.events.find((e) => e.kind === 'match-found')
+    expect(matchFound?.kind).toBe('match-found')
+    if (matchFound?.kind === 'match-found') {
+      expect(matchFound.blessed).toBe(true)
+      expect(matchFound.size).toBe(3)
+      expect(matchFound.color).toBe('red')
+    }
+
+    const blessedFired = result.events.find(
+      (e) => e.kind === 'blessed-match-triggered',
+    )
+    expect(blessedFired?.kind).toBe('blessed-match-triggered')
+    if (blessedFired?.kind === 'blessed-match-triggered') {
+      expect(blessedFired.count).toBe(1)
+    }
+  })
+
+  it('blessed flag does not stack on re-bless', () => {
+    const board = buildSafeBoard()
+    setupFiveLineSwap(board)
+    // Pre-flag (3,3) as blessed. The line-5 swap brings the blue from
+    // (3,4) into (3,3) — (3,3) becomes the new gem, NOT the previously
+    // flagged one (the previously flagged gem moves down to (3,4)). So
+    // (3,3) post-cascade carries `blessed: true` because the line-5
+    // placed it there fresh. Flag is exactly `true`, not a count.
+    const target = board[3]?.[3]
+    if (target) target.flags = { blessed: true }
+    expect(detectMatches(board).length).toBe(0)
+
+    const result = resolveSwap(
+      board,
+      { seed: 1 },
+      FIVE_LINE_SWAP.from,
+      FIVE_LINE_SWAP.to,
+    )
+    expect(result.valid).toBe(true)
+    expect(result.board[3]?.[3]?.flags?.blessed).toBe(true)
   })
 
   it('property: 1000 seeds → all settle, no orphans, deterministic', () => {

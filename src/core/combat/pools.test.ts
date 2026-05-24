@@ -30,6 +30,18 @@ const match = (
   shape: 'line',
 })
 
+const blessedMatch = (
+  color: 'red' | 'blue' | 'green' | 'yellow' | 'purple',
+  size: number,
+): GameEvent => ({
+  kind: 'match-found',
+  cells: [],
+  color,
+  size,
+  shape: 'line',
+  blessed: true,
+})
+
 describe('computeMatchPayouts', () => {
   it('returns zero deltas for an empty stream', () => {
     expect(computeMatchPayouts([])).toEqual(ZERO_DELTAS)
@@ -44,6 +56,21 @@ describe('computeMatchPayouts', () => {
     // level 1 = 1.5x; 3 * 1.5 = 4.5 → floor 4
     const events: GameEvent[] = [cascadeStart(1), match('blue', 3)]
     expect(computeMatchPayouts(events)).toEqual({ ...ZERO_DELTAS, blue: 4 })
+  })
+
+  it('doubles the pool delta for a blessed match', () => {
+    // Blessed × 2 at cascade level 0 → 3 * 1 * 2 = 6
+    const events: GameEvent[] = [cascadeStart(0), blessedMatch('red', 3)]
+    expect(computeMatchPayouts(events)).toEqual({ ...ZERO_DELTAS, red: 6 })
+  })
+
+  it('composes blessed with cascade multiplier (multiplicatively, floored)', () => {
+    // Cascade level 1 (×1.5) + blessed (×2) → 3 * 1.5 * 2 = 9
+    const events: GameEvent[] = [cascadeStart(1), blessedMatch('blue', 3)]
+    expect(computeMatchPayouts(events)).toEqual({ ...ZERO_DELTAS, blue: 9 })
+    // Cascade level 1 (×1.5) + blessed (×2) on size 5 → 5 * 1.5 * 2 = 15
+    const big: GameEvent[] = [cascadeStart(1), blessedMatch('green', 5)]
+    expect(computeMatchPayouts(big)).toEqual({ ...ZERO_DELTAS, green: 15 })
   })
 
   it('sums across multiple cascade levels and colors', () => {

@@ -4,7 +4,7 @@ import { rollIntent } from './intents'
 import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage, tickStatuses } from './statuses'
 import { getArchetype } from './archetypeRegistry'
-import { applyFlagToCells, pickRandomCellsWithoutFlag } from '../board/flags'
+import { applyFlagToCells, pickClusterCellsWithoutFlag } from '../board/flags'
 import {
   interceptFatalDamage,
   runOnDamageTaken,
@@ -200,11 +200,20 @@ export function executeEnemyTurn(
         // damage taken is less than res.hpDamage. Recompute from the
         // delta so the FX layer shows the real number.
         const actualHpDamage = res.hpDamage - (finalHp - res.hpAfter)
+        // Surface the onHit rider on damage-taken when it WILL proc this
+        // hit (rider gate: onHit set AND the attack landed hp damage —
+        // same gate as the apply below). FX/audio fold the status apply
+        // into the impact moment instead of running a 350ms-later sequel.
+        const willApplyRider =
+          intent.onHit != null && res.hpDamage > 0
+            ? intent.onHit.status
+            : undefined
         events.push({
           kind: 'damage-taken',
           amount: actualHpDamage,
           blocked: res.blocked,
           source: 'enemy-attack',
+          ...(willApplyRider ? { onHitRider: willApplyRider } : {}),
         })
         if (res.blockBroken) {
           events.push({ kind: 'block-broken', targetId: 'player' })
@@ -292,7 +301,10 @@ export function executeEnemyTurn(
       // them. Either way the verb generates board pressure.
       const def = getArchetype(updatedEnemy.archetype)
       const duration = def.tileBurnDuration ?? 2
-      const { cells, rng: pickRng } = pickRandomCellsWithoutFlag(
+      // Cluster pick: a fireball lands HERE, not as N independent
+      // sparks across the board. Falls back to random fill if the
+      // cluster can't grow large enough.
+      const { cells, rng: pickRng } = pickClusterCellsWithoutFlag(
         nextBoard,
         'burning',
         intent.count,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { isStarted, markStarted, subscribeStarted } from '../splashState'
+import { isStarted, markStarted, subscribeStarted } from '../../splashState'
 import { unlockAudio } from '../../audio/sfx'
 
 // Click-to-start splash. Full-viewport overlay sitting on top of the running

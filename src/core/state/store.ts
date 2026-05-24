@@ -46,6 +46,7 @@ import {
 import { getArchetype } from '../combat/archetypeRegistry'
 import {
   applyStatusToList,
+  BURN_FROM_TILE_BONUS,
   composeDamage,
   getStatusTemplate,
 } from '../combat/statuses'
@@ -79,6 +80,13 @@ export type GameStore = {
   acquireRelic: (id: string) => { ok: boolean; events: GameEvent[] }
   skipReward: () => void
   restart: () => void
+  // Dev-only: rewrites board.cells to a safe (no-match) palette pattern
+  // with a planted line-5 prereq, then returns the swap coords that
+  // will trigger the match-5 cascade. Caller (DevTools) dispatches the
+  // actual swap via the debug bus so animations play normally through
+  // BoardScene.performSwap. Bumps fightCounter so the BoardScene
+  // rebuilds sprites against the new cells.
+  debugForceMatch5: () => { from: Pos; to: Pos } | null
 }
 
 const PLAYER_MAX_HP = 40
@@ -224,16 +232,14 @@ export const useGameStore = create<GameStore>()(
         // the StS model, so adding more makes the burn both heavier
         // and longer.
         if (ev.kind === 'tile-burn-triggered') {
-          // Apply Burn to the player. With the StS pattern, stacks
-          // doubles as "turns left" so total damage = stacks*(stacks+1)/2.
-          // +1 per cell over ev.stacks keeps the single-tile case
-          // meaningful (1 cell → Burn 2 → 3 dmg total), matching the
-          // old (1 stack × 3 turns) impact. Multi-tile matches scale
-          // up sharply via the triangle-number curve — 4 cells → Burn 5
-          // → 15 dmg total — which feels right for a costly cluster.
+          // Apply Burn to the player. Magnitude = cells.length + content-
+          // side BURN_FROM_TILE_BONUS (currently 1). StS triangle math:
+          // total damage = stacks*(stacks+1)/2. 1 cell → Burn 2 → 3 dmg
+          // total; 4 cells → Burn 5 → 15 dmg. Bonus lives in content so
+          // tuning doesn't require touching this cascade walker.
           const incoming = {
             ...getStatusTemplate('burn'),
-            stacks: ev.stacks + 1,
+            stacks: ev.cells.length + BURN_FROM_TILE_BONUS,
           }
           player = {
             ...player,
@@ -259,10 +265,13 @@ export const useGameStore = create<GameStore>()(
         }
         if (ev.kind !== 'match-found') continue
 
-        // Per-match payload: raw amount = size × cascade multiplier,
+        // Per-match payload: raw amount = size × cascade × blessed,
         // assigned to the match's color slot. Relics' onMatch hooks
-        // mutate these deltas in acquisition order.
-        const mult = getCascadeMultiplier(cascadeLevel)
+        // mutate these deltas in acquisition order. Blessed flag on the
+        // match doubles the multiplier before floor (so `floor(size ×
+        // cascade × 2)` — single helper call inherits the rounding rule).
+        const cascadeMult = getCascadeMultiplier(cascadeLevel)
+        const mult = ev.blessed ? cascadeMult * 2 : cascadeMult
         const raw = applyMultiplier(ev.size, mult)
         const initialDeltas = {
           red: ev.color === 'red' ? raw : 0,
@@ -666,6 +675,45 @@ export const useGameStore = create<GameStore>()(
         s.pendingReward = fresh.pendingReward
         s.fightCounter += 1
       })
+    },
+    debugForceMatch5: () => {
+      // Hard guard: only valid while the player can swap. Avoids running
+      // during a cascade or enemy turn (which would clash with the AC
+      // queue) or at game-over / victory (where attemptSwap returns
+      // invalid anyway).
+      const cur = get()
+      if (cur.fight.phase !== 'player-acting') return null
+
+      // Safe 3-color rotation: palette[(x + y) % 3] produces no 3-runs
+      // anywhere. Same trick as cascade.test.ts's buildSafeBoard. We
+      // then overlay the line-5 prereq: 4 blues at row 3 cols 1, 2, 4,
+      // 5 (split so the row has no pre-existing match), with a blue at
+      // (3, 4) that will swap up into (3, 3) to complete the line. (3,
+      // 3) is left at the palette default (red per (3+3)%3) so the
+      // pre-swap board is match-free.
+      const palette: ('red' | 'green' | 'yellow')[] = ['red', 'green', 'yellow']
+      set((s) => {
+        const cells = s.board.cells
+        for (let y = 0; y < cells.length; y++) {
+          const row = cells[y]
+          if (!row) continue
+          for (let x = 0; x < row.length; x++) {
+            row[x] = { gemColor: palette[(x + y) % 3] ?? 'red' }
+          }
+        }
+        const row3 = cells[3]
+        const row4 = cells[4]
+        if (!row3 || !row4) return
+        for (const x of [1, 2, 4, 5]) {
+          row3[x] = { gemColor: 'blue' }
+        }
+        row4[3] = { gemColor: 'blue' }
+        s.board.selected = null
+        // Bump fightCounter so subscribers (BoardScene sprite grid,
+        // BurningOverlay, BlessedOverlay) rebuild against the new cells.
+        s.fightCounter += 1
+      })
+      return { from: { x: 3, y: 4 }, to: { x: 3, y: 3 } }
     },
   })),
 )

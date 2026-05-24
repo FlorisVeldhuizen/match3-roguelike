@@ -163,8 +163,9 @@ describe('cascade emits tile-burn-triggered on burning cell clears', () => {
     const burnEv = res.events.find((e) => e.kind === 'tile-burn-triggered')
     expect(burnEv).toBeTruthy()
     if (burnEv?.kind === 'tile-burn-triggered') {
-      // Both flagged cells were in the cleared set.
-      expect(burnEv.stacks).toBe(2)
+      // Both flagged cells were in the cleared set. The consumer
+      // computes Burn magnitude from cells.length + BURN_FROM_TILE_BONUS;
+      // the event itself just carries the cells.
       expect(burnEv.cells).toHaveLength(2)
     }
   })

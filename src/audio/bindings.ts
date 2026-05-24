@@ -52,6 +52,12 @@ export function installSfxBindings(): void {
   // (or otherwise skips). performance.now() is monotonic; -Infinity means
   // "never fired", so the first player-turn cue is never suppressed.
   let lastEnemyTurnCueAt = -Infinity
+  // Mirrors AC.pendingProcBlockDelay — when a proc damage event has a
+  // block component, the upcoming block-absorbed/broken event's shield
+  // SFX should defer to trail-arrival rather than fire at t=0 (before
+  // the chip→block particles visibly arrive). Consumed by the next
+  // block-absorbed/broken handler.
+  let pendingProcBlockSfx = false
   const FALL_MIN_MS = 150
   const FALL_PER_CELL_MS = 80
   const scheduleDrop = (maxDist: number) => {
@@ -125,14 +131,14 @@ export function installSfxBindings(): void {
         // Also stash blocked/amount so the block-absorbed/block-broken event
         // that follows (for enemy targets) can scale itself correctly.
         const amt = event.amount
-        // Status proc on an enemy (Burn etc.): per-status whoosh on
-        // spawn + per-status impact at trail arrival. Keeps the cue
-        // family coherent — burn damage sounds like burn, not a
-        // generic attack.
+        // Status proc on an enemy (Burn etc.): impact-only at trail
+        // arrival. The apply cue (bonfire) is reserved for the moment
+        // Burn is FIRST applied (Smolder rider, board-cells match) —
+        // playing it on every tick stacked two sustained fire roars
+        // back-to-back and read as "the same sound twice".
         const procKind = statusKindFromDamageSource(event.source)
         if (procKind && amt > 0) {
           if (procKind === 'burn') {
-            playBurnApplySfx()
             scheduleAtTrailArrival(() => playBurnImpactSfx(amt))
           }
           return
@@ -163,16 +169,25 @@ export function installSfxBindings(): void {
         return
       }
       case 'damage-taken': {
-        // Status proc on the player (Burn etc.): play the whoosh on
-        // spawn, the burn impact at trail arrival.
-        // AnimationController.spawnStatusProcTrail fires particles
-        // chip → HP at the same beat.
+        // Status proc on the player (Burn etc.): impact-only at trail
+        // arrival. See the matching damage-dealt note above — playing
+        // both apply (bonfire) and impact (furnace) on a tick stacks
+        // two long fire roars and reads as a doubled cue.
         const procKind = statusKindFromDamageSource(event.source)
-        if (procKind && event.amount > 0) {
-          if (procKind === 'burn') {
-            playBurnApplySfx()
+        if (procKind && (event.amount > 0 || event.blocked > 0)) {
+          if (procKind === 'burn' && event.amount > 0) {
             scheduleAtTrailArrival(() => playBurnImpactSfx(event.amount))
           }
+          // Stash so the upcoming block-absorbed/broken event scales
+          // its shield SFX from the correct value (the proc branch
+          // previously didn't stash these — block SFX could scale
+          // from a stale enemy-attack value).
+          lastPlayerBlocked = event.blocked
+          lastPlayerUnblocked = event.amount
+          // Tell the upcoming block-absorbed/broken handler to defer
+          // its shield SFX to trail-arrival — particles take 700ms to
+          // visibly hit the block badge, the SFX should land with them.
+          if (event.blocked > 0) pendingProcBlockSfx = true
           return
         }
         // Regular enemy-attack damage. Without this, unblocked hits on
@@ -181,18 +196,35 @@ export function installSfxBindings(): void {
         // block-absorbed/broken event can scale itself.
         lastPlayerBlocked = event.blocked
         lastPlayerUnblocked = event.amount
-        if (event.amount > 0) playAttackSfx(event.amount)
+        if (event.amount > 0) {
+          playAttackSfx(event.amount)
+          // Smolder-style attack riders: the burn whoosh used to play
+          // ~1s after the impact (TRAIL_ARRIVAL_MS + STATUS_APPLY_AFTER_HIT_MS
+          // on the following status-applied event), making the fire feel
+          // like a separate beat. Layer it onto the attack itself so the
+          // hit reads as fiery. The deferred apply on status-applied is
+          // suppressed below for source.kind==='enemy' to avoid a double-
+          // whoosh; the chip's mount sound is now embedded in the impact.
+          if (event.onHitRider === 'burn') playBurnApplySfx()
+        }
         return
       }
       case 'block-absorbed': {
-        // Player target (enemy attacking): the shield-block visual fires
-        // synchronously and the damage-taken SFX also plays immediately,
-        // so play the thump now too — lands with the visual, ahead of any
-        // leaked damage SFX. Enemy target (player attacking): the red gem
-        // trail arrives at +TRAIL_ARRIVAL_MS, so delay both to land with
-        // the attack rather than at gem-match time.
+        // Player target (enemy attack): shield SFX usually fires
+        // immediately to land with the synchronous shield visual. When
+        // a proc damage event preceded this (chip→block particle
+        // trail in flight), defer to trail-arrival so the SFX lands
+        // with the particles' visible impact instead of 700ms ahead.
+        // Enemy target (player attack): always trail-arrival-delayed
+        // (red gem trail mirror).
         if (event.targetId === 'player') {
-          playShieldThumpSfx(lastPlayerBlocked)
+          const amt = lastPlayerBlocked
+          if (pendingProcBlockSfx) {
+            pendingProcBlockSfx = false
+            scheduleAtTrailArrival(() => playShieldThumpSfx(amt))
+          } else {
+            playShieldThumpSfx(amt)
+          }
         } else {
           const amt = lastEnemyBlocked
           scheduleAtTrailArrival(() => playShieldThumpSfx(amt))
@@ -201,10 +233,16 @@ export function installSfxBindings(): void {
       }
       case 'block-broken': {
         // Same target-split timing as block-absorbed. Scale by total
-        // incoming damage so a shield breaking under a 6-damage hit cracks
-        // harder than one breaking under a 1-damage finisher.
+        // incoming damage so a shield breaking under a 6-damage hit
+        // cracks harder than one breaking under a 1-damage finisher.
         if (event.targetId === 'player') {
-          playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
+          const amt = lastPlayerBlocked + lastPlayerUnblocked
+          if (pendingProcBlockSfx) {
+            pendingProcBlockSfx = false
+            scheduleAtTrailArrival(() => playShieldCrackSfx(amt))
+          } else {
+            playShieldCrackSfx(amt)
+          }
         } else {
           const amt = lastEnemyBlocked + lastEnemyUnblocked
           scheduleAtTrailArrival(() => playShieldCrackSfx(amt))
@@ -235,12 +273,12 @@ export function installSfxBindings(): void {
         return
       }
       case 'tile-burn-triggered':
-        // Each burning cell cleared in a match → one burst. Stagger by
-        // a few ms so multi-cell clears don't sample-loop into a single
-        // unsatisfying thwack.
-        for (let i = 0; i < event.cells.length; i++) {
-          window.setTimeout(playBurnBurstSfx, i * 35)
-        }
+        // One cue per match, scaled by cell count (intensity). Previously
+        // we played N staggered bursts at 35ms apart, which sample-looped
+        // into a muddy "buzz" on multi-cell clears. Visual still shows N
+        // bursts on the board; one audio impact reads as the unified
+        // moment without crowding the rest of the cascade soundtrack.
+        playBurnBurstSfx(event.cells.length)
         return
       case 'cell-flag-ticked':
         // Soft "fizzle out" cue when a burning tile's countdown reached
@@ -257,11 +295,16 @@ export function installSfxBindings(): void {
         // hand-off and the status chip, not at swap commit.
         // (Vulnerable/Weak applications are silent for now; can get
         // their own timbres later.)
+        //
+        // Enemy-attack riders (Smolder onHit) are intentionally NOT
+        // played here — the apply whoosh has already been folded into
+        // the damage-taken handler above (onHitRider branch) so the
+        // attack sounds fiery on impact rather than 1s later. Playing
+        // it here too would double-whoosh.
         if (event.status.kind === 'burn') {
-          if (
-            event.source?.kind === 'enemy' ||
-            event.source?.kind === 'board-cells'
-          ) {
+          if (event.source?.kind === 'enemy') {
+            return
+          } else if (event.source?.kind === 'board-cells') {
             scheduleAtTrailArrival(playBurnApplySfx)
           } else {
             playBurnApplySfx()

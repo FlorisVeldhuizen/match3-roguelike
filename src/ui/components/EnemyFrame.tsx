@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type ReactNode,
   type SetStateAction,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -11,20 +12,14 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
-import type {
-  Enemy,
-  Intent,
-  Player,
-  StatusInstance,
-  StatusKind,
-} from '../../types'
+import type { Intent, StatusInstance, StatusKind } from '../../types'
 import {
   applyStatusToList,
-  composeDamage,
   statusKindFromDamageSource,
 } from '../../core/combat/statuses'
 import { getStatusDef } from '../../content/statuses'
 import { StatusBar } from './StatusBar'
+import { Keyword } from './Keyword'
 
 const HIT_FLASH_MS = 280
 // Must match (or slightly outlast) the longest .firing-* animation in
@@ -45,22 +40,43 @@ function intentIcon(intent: Intent): string {
 }
 
 function intentLabel(intent: Intent): string {
-  if (intent.kind === 'attack') return `Attacks for ${intent.amount}`
+  if (intent.kind === 'attack') {
+    const base = `Attacks for ${intent.amount}`
+    const onHit = intent.onHit
+    if (!onHit) return base
+    const def = getStatusDef(onHit.status)
+    return `${base} (applies ${onHit.stacks} ${def.name} on hit)`
+  }
   if (intent.kind === 'block') return `Blocks for ${intent.amount}`
   return `Sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire`
 }
 
-function intentDescription(intent: Intent): string {
+function intentDescription(intent: Intent): ReactNode {
   if (intent.kind === 'attack') {
     const onHit = intent.onHit
     const base = `Will hit you for ${intent.amount} next turn.`
     if (!onHit) return base
-    const def = getStatusDef(onHit.status)
-    return `${base} If it lands, you also gain ${onHit.stacks} ${def.name} (decays by 1 each turn).`
+    return (
+      <>
+        {base} If it lands, you also gain {onHit.stacks}{' '}
+        <Keyword id={onHit.status} />.
+      </>
+    )
   }
   if (intent.kind === 'block')
-    return `Armored for ${intent.amount} — your attacks chip through this first.`
-  return `Next turn, sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire. Match a burning tile and you take Burn — bigger matches mean longer, fiercer burns.`
+    return (
+      <>
+        Armored for {intent.amount} — your attacks chip through this{' '}
+        <Keyword id="block">block</Keyword> first.
+      </>
+    )
+  return (
+    <>
+      Next turn, sets {intent.count} tile{intent.count === 1 ? '' : 's'} on
+      fire. Match a burning tile and you take <Keyword id="burn" /> — bigger
+      matches mean longer, fiercer burns.
+    </>
+  )
 }
 
 export function EnemyFrame() {
@@ -70,8 +86,6 @@ export function EnemyFrame() {
   // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
   const playerBlock = useGameStore((s) => s.fight.player.block)
-  const playerStatuses = useGameStore((s) => s.fight.player.statuses)
-  const playerPending = useGameStore((s) => s.fight.player.pendingSpells)
   const animatedPhase = useAnimatedPhase()
 
   // Displayed HP per enemy, mirrored event-driven so the bar drains on
@@ -124,6 +138,18 @@ export function EnemyFrame() {
   const [statusTickMarks, setStatusTickMarks] = useState<
     Record<string, Partial<Record<StatusKind, number>>>
   >({})
+  // Parallel pre-impact "wind up" cue bumps; fires when this enemy's
+  // status is about to deal proc damage. Pulses the chip just as the
+  // chip→frame trail launches.
+  const [statusCueMarks, setStatusCueMarks] = useState<
+    Record<string, Partial<Record<StatusKind, number>>>
+  >({})
+  // Per-enemy fizzle window — chips remain in displayedStatuses for an
+  // extra ~480ms past status-expired so the goodbye flash + fade can
+  // play on the chip itself. Cleared once the fizzle finishes.
+  const [expiringStatusKinds, setExpiringStatusKinds] = useState<
+    Record<string, Set<StatusKind>>
+  >({})
 
   const [flashing, setFlashing] = useState<Record<string, number>>({})
   // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
@@ -151,6 +177,19 @@ export function EnemyFrame() {
         const amount = event.amount
         const isPlayerAttack = event.source === 'player-attack'
         const procKind = statusKindFromDamageSource(event.source)
+        // Status-proc damage on this enemy: bump the chip's pre-impact
+        // cue immediately so the chip pulses as the trail launches,
+        // not when it arrives.
+        if (procKind && amount > 0) {
+          const pk = procKind
+          setStatusCueMarks((prev) => ({
+            ...prev,
+            [id]: {
+              ...(prev[id] ?? {}),
+              [pk]: ((prev[id] ?? {})[pk] ?? 0) + 1,
+            },
+          }))
+        }
         // Both player-attack hits (red gem trail) and status-proc hits
         // (chip → enemy trail) need to delay the bar drain so it lands
         // when the particles arrive. Everything else is immediate.
@@ -228,22 +267,19 @@ export function EnemyFrame() {
           [event.enemyId]: (prev[event.enemyId] ?? 0) + 1,
         }))
       } else if (event.kind === 'status-applied' && event.target !== 'player') {
-        // Delay chip arrival to match the particle trail when the
-        // caster is the player or board cells; player-cast targeting
-        // an enemy fires the trail from data-player-hud → enemy frame,
-        // same timing as enemy → player.
+        // Apply IMMEDIATELY at event time. Was delayed by
+        // TRAIL_ARRIVAL_MS to sync with the particle trail; that delay
+        // let a follow-up status-ticked race the apply at +700ms and
+        // skip the intermediate value (player saw chip jump from N to
+        // N+M-1 with a popup of N+M, instead of N → N+M → N+M-1).
+        // Trail particles spawned by AnimationController are decorative
+        // confirmation now — the chip is the authoritative state.
         const enemyId = event.target
-        const delay =
-          event.source?.kind === 'player' || event.source?.kind === 'board-cells'
-            ? TRAIL_ARRIVAL_MS
-            : 0
         const incoming = event.status
-        window.setTimeout(() => {
-          setDisplayedStatuses((prev) => ({
-            ...prev,
-            [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
-          }))
-        }, delay)
+        setDisplayedStatuses((prev) => ({
+          ...prev,
+          [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
+        }))
       } else if (event.kind === 'status-ticked' && event.target !== 'player') {
         // Delay by TRAIL_ARRIVAL_MS so the chip number drops AFTER the
         // tick's chip→target particle lands (otherwise the chip ticks
@@ -267,10 +303,25 @@ export function EnemyFrame() {
           }))
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'status-expired' && event.target !== 'player') {
-        // Same delay as status-ticked: the final tick's damage has to
-        // land before the chip leaves the DOM.
+        // Goodbye flash + fade on the enemy chip when its final tick
+        // lands. Sequence mirrors HUD.tsx player-side:
+        //   t = +TRAIL_ARRIVAL_MS         → mark chip as expiring; the
+        //                                    `is-expiring` CSS class plays
+        //                                    a ~480ms flash-and-fade.
+        //   t = +TRAIL_ARRIVAL_MS + FIZZLE → filter the chip out of
+        //                                    displayedStatuses.
         const enemyId = event.target
         const { statusKind } = event
+        const FIZZLE_MS = 480
+        window.setTimeout(() => {
+          setExpiringStatusKinds((prev) => {
+            const cur = prev[enemyId] ?? new Set<StatusKind>()
+            if (cur.has(statusKind)) return prev
+            const next = new Set(cur)
+            next.add(statusKind)
+            return { ...prev, [enemyId]: next }
+          })
+        }, TRAIL_ARRIVAL_MS)
         window.setTimeout(() => {
           setDisplayedStatuses((prev) => ({
             ...prev,
@@ -278,7 +329,14 @@ export function EnemyFrame() {
               (s) => s.kind !== statusKind,
             ),
           }))
-        }, TRAIL_ARRIVAL_MS)
+          setExpiringStatusKinds((prev) => {
+            const cur = prev[enemyId]
+            if (!cur || !cur.has(statusKind)) return prev
+            const next = new Set(cur)
+            next.delete(statusKind)
+            return { ...prev, [enemyId]: next }
+          })
+        }, TRAIL_ARRIVAL_MS + FIZZLE_MS)
       }
     })
     return unsub
@@ -303,6 +361,8 @@ export function EnemyFrame() {
       setDisplayedBlock(freshBlock)
       setDisplayedStatuses(freshStatuses)
       setStatusTickMarks({})
+      setStatusCueMarks({})
+      setExpiringStatusKinds({})
     })
   }, [])
 
@@ -354,12 +414,6 @@ export function EnemyFrame() {
                 intent={intent}
                 tick={intentTick[enemy.id] ?? 0}
                 lethal={lethalIntent}
-                preview={previewIncomingDamage(
-                  intent,
-                  enemy,
-                  { hp: playerHp, block: playerBlock, statuses: playerStatuses },
-                  playerPending.includes('riposte'),
-                )}
               />
             )}
             <div className="enemy-sprite" aria-hidden>
@@ -387,6 +441,8 @@ export function EnemyFrame() {
               <StatusBar
                 statuses={displayedStatuses[enemy.id] ?? enemy.statuses}
                 tickMarks={statusTickMarks[enemy.id]}
+                cueMarks={statusCueMarks[enemy.id]}
+                expiringKinds={expiringStatusKinds[enemy.id]}
                 className="enemy-statuses"
               />
             </div>
@@ -403,67 +459,21 @@ export function EnemyFrame() {
   )
 }
 
-type DamagePreview =
-  | { kind: 'attack'; raw: number; afterMultipliers: number; blocked: number; toHp: number; riposte: boolean }
-  | null
-
-// Compute the player-side damage preview for a telegraphed attack:
-// final amount after Weak (source) and Vulnerable (player) multipliers,
-// split by player block. Riposte parries to 0. Non-attack intents return null.
-function previewIncomingDamage(
-  intent: Intent,
-  enemy: Enemy,
-  player: Pick<Player, 'hp' | 'block' | 'statuses'>,
-  riposteArmed: boolean,
-): DamagePreview {
-  if (intent.kind !== 'attack') return null
-  if (riposteArmed) {
-    return {
-      kind: 'attack',
-      raw: intent.amount,
-      afterMultipliers: 0,
-      blocked: 0,
-      toHp: 0,
-      riposte: true,
-    }
-  }
-  const final = composeDamage(intent.amount, enemy.statuses, player.statuses)
-  const blocked = Math.min(player.block, final)
-  const toHp = Math.min(player.hp, final - blocked)
-  return {
-    kind: 'attack',
-    raw: intent.amount,
-    afterMultipliers: final,
-    blocked,
-    toHp,
-    riposte: false,
-  }
-}
-
-function formatPreview(preview: DamagePreview): string | null {
-  if (!preview) return null
-  if (preview.riposte) {
-    return 'Riposte armed — parried, 0 damage. Counter for the full amount.'
-  }
-  const multNote =
-    preview.afterMultipliers !== preview.raw
-      ? ` (after multipliers: ${preview.afterMultipliers})`
-      : ''
-  return `${preview.afterMultipliers}${multNote} − ${preview.blocked} block = ${preview.toHp} to HP`
-}
-
 // Badge + viewport-aware tooltip. The tooltip is portalled to body and
 // position is computed in JS so it never clips the viewport edges.
+// Closes immediately on mouseleave — inline keyword sub-tooltips
+// auto-show alongside the parent (see <Keyword> + HoverTooltip's
+// autoShow path), so the player never needs to traverse into the
+// tooltip itself, and both parent + children vanish together when the
+// badge loses hover.
 function IntentBadge({
   intent,
   tick,
   lethal,
-  preview,
 }: {
   intent: Intent
   tick: number
   lethal: boolean
-  preview: DamagePreview
 }) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -521,6 +531,11 @@ function IntentBadge({
             aria-hidden
           >
             {getStatusDef(intent.onHit.status).icon}
+            {/* Rider stacks — surfaces the magnitude of the applied
+                status so the player can read the full threat as a
+                single sentence: "⚔ 3 🔥 2" → "hit for 3, apply Burn 2".
+                The chip will show the same number once it lands. */}
+            <span className="intent-rider-amount">{intent.onHit.stacks}</span>
           </span>
         )}
       </div>
@@ -540,9 +555,11 @@ function IntentBadge({
             <div className="intent-tooltip-body">
               {intentDescription(intent)}
             </div>
-            {preview && (
-              <div className="intent-tooltip-preview">{formatPreview(preview)}</div>
-            )}
+            {/* Damage-math preview (`X − Y block = Z to HP`) was removed
+                — it duplicated info already conveyed by the intent
+                amount + the keyword sub-tooltips, and added visual
+                noise to every hover. Block/damage interactions are
+                covered by the <Keyword id="block"/> sub-tooltip. */}
           </div>,
           document.body,
         )}

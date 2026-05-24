@@ -6,6 +6,7 @@ import {
   GEM_COLORS,
 } from '../../types'
 import { detectMatches } from './detectMatches'
+import { applyFlagToCells, hasFlag } from './flags'
 import { applyGravity } from './gravity'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
@@ -36,9 +37,10 @@ const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
 // Compute the full set of cells to clear for a cascade step, including
-// special-clear extensions: 5-line clears whole row/col of that color;
-// T clears a 3×3 area around the intersection; L clears a +-shape
-// around the intersection.
+// special-clear extensions: T clears a 3×3 area around the intersection;
+// L clears a +-shape around the intersection. Line-5 used to extend to
+// the whole row/col but now flags the cleared cells as Blessed instead
+// (see resolveSwap and PLANNING/01-design.md §Blessed cells).
 function expandClears(
   board: Cell[][],
   matches: ReturnType<typeof detectMatches>,
@@ -49,22 +51,6 @@ function expandClears(
   const w = firstRow?.length ?? 0
   for (const m of matches) {
     for (const c of m.cells) out.add(keyOf(c))
-
-    if (m.shape === 'line' && m.size >= 5) {
-      // Determine orientation.
-      const horizontal = m.cells.every((c) => c.y === m.cells[0]?.y)
-      if (horizontal && m.cells[0]) {
-        const y = m.cells[0].y
-        for (let x = 0; x < w; x++) {
-          if (board[y]?.[x]?.gemColor === m.color) out.add(keyOf({ x, y }))
-        }
-      } else if (m.cells[0]) {
-        const x = m.cells[0].x
-        for (let y = 0; y < h; y++) {
-          if (board[y]?.[x]?.gemColor === m.color) out.add(keyOf({ x, y }))
-        }
-      }
-    }
 
     if (m.shape === 'T' || m.shape === 'L') {
       // Intersection = the cell shared by H and V runs. Recover it as the
@@ -140,13 +126,31 @@ export function resolveSwap(
   while (matches.length > 0) {
     events.push({ kind: 'cascade-start', level })
     for (const m of matches) {
+      // `blessed` is computed against the pre-clear board because the flag
+      // is wiped by the upcoming clear step. The store reads this flag to
+      // apply the 2× pool-delta multiplier on the per-match payload.
+      const hasBlessed = m.cells.some((c) => hasFlag(board[c.y]?.[c.x], 'blessed'))
       events.push({
         kind: 'match-found',
         cells: m.cells,
         color: m.color,
         size: m.size,
         shape: m.shape,
+        ...(hasBlessed ? { blessed: true } : {}),
       })
+    }
+
+    // Line-5 matches flag the cleared cells as Blessed. Collected here so
+    // we can re-apply the flag after gravity + refill — the cleared cells
+    // are null at the moment of clear, so the flag can only attach once a
+    // gem has dropped into / been spawned into the position. Multiple
+    // line-5s in the same step union their positions naturally via the
+    // Set semantics (a position is either targeted or not, no stacking).
+    const blessTargets: Pos[] = []
+    for (const m of matches) {
+      if (m.shape === 'line' && m.size >= 5) {
+        blessTargets.push(...m.cells)
+      }
     }
 
     const clearSet = expandClears(board, matches)
@@ -155,12 +159,20 @@ export function resolveSwap(
     // the player (02-scope §Smolder verb). Sum during the same walk to
     // avoid a second pass.
     const burningCleared: Pos[] = []
+    // Blessed cells cleared this step → emit blessed-match-triggered for
+    // the FX/audio layer. The math-side 2× lives on match-found.blessed
+    // above; this event is purely a consumption notification (mirrors
+    // tile-burn-triggered's role).
+    const blessedCleared: Pos[] = []
     const cleared: (Cell | null)[][] = board.map((row, y) =>
       row.map((c, x) => {
         if (clearSet.has(keyOf({ x, y }))) {
           clearedCells.push({ x, y })
           if (c?.flags?.burning && c.flags.burning > 0) {
             burningCleared.push({ x, y })
+          }
+          if (c?.flags?.blessed) {
+            blessedCleared.push({ x, y })
           }
           return null
         }
@@ -172,7 +184,13 @@ export function resolveSwap(
       events.push({
         kind: 'tile-burn-triggered',
         cells: burningCleared,
-        stacks: burningCleared.length,
+      })
+    }
+    if (blessedCleared.length > 0) {
+      events.push({
+        kind: 'blessed-match-triggered',
+        cells: blessedCleared,
+        count: blessedCleared.length,
       })
     }
 
@@ -197,7 +215,28 @@ export function resolveSwap(
     )
     if (spawns.length > 0) events.push({ kind: 'gems-spawned', spawns })
 
-    board = refilled
+    // Apply blessed flag to the line-5 target positions on the freshly
+    // refilled board. The match-found event for each line-5 carries the
+    // color, but for FX purposes a single tile-blessed-placed per cascade
+    // step is enough — group by color when there's exactly one line-5,
+    // fall back to the first match's color when multiple line-5s of
+    // different colors land together (rare; FX layer can still anchor on
+    // positions regardless of color).
+    let blessedBoard = refilled
+    if (blessTargets.length > 0) {
+      blessedBoard = applyFlagToCells(refilled, blessTargets, 'blessed', true)
+      const fiveLines = matches.filter((m) => m.shape === 'line' && m.size >= 5)
+      const color = fiveLines[0]?.color ?? matches[0]?.color
+      if (color) {
+        events.push({
+          kind: 'tile-blessed-placed',
+          cells: blessTargets,
+          color,
+        })
+      }
+    }
+
+    board = blessedBoard
     level++
     matches = detectMatches(board)
   }

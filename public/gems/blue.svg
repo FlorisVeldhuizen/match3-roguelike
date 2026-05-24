@@ -1,25 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <radialGradient id="bg-fill" cx="0.3" cy="0.22" r="0.95">
+    <radialGradient id="bg-fill" cx="0.35" cy="0.25" r="0.85">
       <stop offset="0" stop-color="#f5faff"/>
       <stop offset="0.18" stop-color="#9ec1ff"/>
       <stop offset="0.55" stop-color="#2056d6"/>
-      <stop offset="1" stop-color="#1c2f7a"/>
+      <stop offset="1" stop-color="#0f1f5e"/>
     </radialGradient>
-    <radialGradient id="bg-bloom" cx="0.5" cy="0.55" r="0.5">
+    <radialGradient id="bg-bloom" cx="0.5" cy="0.45" r="0.45">
       <stop offset="0" stop-color="#cfe0ff" stop-opacity="0.3"/>
       <stop offset="1" stop-color="#cfe0ff" stop-opacity="0"/>
     </radialGradient>
     <clipPath id="bg-clip">
-      <path d="M32 5 C 42 4, 50 6, 53 11 C 58 22, 56 38, 50 47 C 44 55, 38 59, 32 60 C 26 59, 20 55, 14 47 C 8 38, 6 22, 11 11 C 14 6, 22 4, 32 5 Z"/>
+      <path d="M 10 9 L 32 6 L 54 9 C 56 22, 54 38, 48 47 C 42 55, 37 59, 32 61 C 27 59, 22 55, 16 47 C 10 38, 8 22, 10 9 Z"/>
     </clipPath>
   </defs>
-  <!-- Shield silhouette -->
-  <path d="M32 5 C 42 4, 50 6, 53 11 C 58 22, 56 38, 50 47 C 44 55, 38 59, 32 60 C 26 59, 20 55, 14 47 C 8 38, 6 22, 11 11 C 14 6, 22 4, 32 5 Z"
+  <!-- Heater shield silhouette: flat top, tapered point -->
+  <path d="M 10 9 L 32 6 L 54 9 C 56 22, 54 38, 48 47 C 42 55, 37 59, 32 61 C 27 59, 22 55, 16 47 C 10 38, 8 22, 10 9 Z"
         fill="url(#bg-fill)" stroke="#03082a" stroke-width="2.8" stroke-linejoin="round"/>
   <g clip-path="url(#bg-clip)">
-    <circle cx="32" cy="34" r="16" fill="url(#bg-bloom)"/>
-    <!-- Subtle light facet -->
-    <path d="M32 5 C 22 4, 14 6, 11 11 C 8 22, 10 32, 32 32 Z" fill="#a5c2ff" opacity="0.18"/>
+    <circle cx="32" cy="30" r="15" fill="url(#bg-bloom)"/>
+    <!-- Left bright facet -->
+    <path d="M 10 9 L 32 6 L 32 32 L 16 47 C 10 38, 8 22, 10 9 Z" fill="#a5c2ff" opacity="0.18"/>
+    <!-- Central vertical seam -->
+    <line x1="32" y1="6" x2="32" y2="61" stroke="#0f1f5e" stroke-width="0.6" opacity="0.35"/>
   </g>
 </svg>

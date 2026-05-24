@@ -227,69 +227,7 @@ body::before {
   opacity: 0.8;
 }
 
-.volume-slider {
-  display: inline-flex;
-  align-items: center;
-}
-.volume-slider input[type='range'] {
-  --thumb: var(--gold-1);
-  --track: var(--ink-0);
-  width: 84px;
-  height: 18px;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
-}
-.volume-slider input[type='range']::-webkit-slider-runnable-track {
-  height: 4px;
-  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
-  border: 1px solid var(--stone-2);
-  border-radius: 3px;
-}
-.volume-slider input[type='range']::-moz-range-track {
-  height: 4px;
-  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
-  border: 1px solid var(--stone-2);
-  border-radius: 3px;
-}
-.volume-slider input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -5px;
-  border-radius: 50%;
-  background: var(--gold-1);
-  border: 1px solid var(--ink-1);
-  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
-}
-.volume-slider input[type='range']::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--gold-1);
-  border: 1px solid var(--ink-1);
-  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
-}
-
-.mute-toggle {
-  background: transparent;
-  border: 1px solid var(--gold-3);
-  border-radius: 0.3rem;
-  color: var(--gold-2);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0.3rem 0.55rem;
-  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
-}
-
-.mute-toggle:hover {
-  border-color: var(--gold-2);
-  background: rgba(200, 163, 90, 0.12);
-  color: var(--gold-2);
-}
-
-/* Right-clustered controls (relics + audio + FX). margin-left:auto on the
+/* Right-clustered controls (relics + settings). margin-left:auto on the
    group pushes the whole bundle to the right edge regardless of which
    children are conditionally rendered (RelicTray only mounts when relics
    exist). */
@@ -302,47 +240,63 @@ body::before {
   justify-content: flex-end;
 }
 
-/* Visual FX toggle — small dropdown next to the mute button. Wraps the
-   button so the popover anchors to it without an extra positioning layer. */
-.fx-toggle {
+/* Unified settings popover. Single ⚙ button in the header opens a
+   panel containing all runtime toggles (sound, FX, dev tools). The
+   button + popover share the relative-positioned wrapper so the
+   popover anchors to the button without an extra layer. */
+.settings-panel {
   position: relative;
   display: inline-flex;
 }
 
-.fx-toggle-button {
+.settings-button {
   background: transparent;
   border: 1px solid var(--gold-3);
   border-radius: 0.3rem;
   color: var(--gold-2);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1;
   padding: 0.3rem 0.55rem;
   transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
-.fx-toggle-button:hover,
-.fx-toggle-button[aria-expanded='true'] {
+.settings-button:hover,
+.settings-button[aria-expanded='true'] {
   border-color: var(--gold-2);
   background: rgba(200, 163, 90, 0.12);
 }
 
-.fx-toggle-popover {
+.settings-popover {
   position: absolute;
   top: calc(100% + 0.45rem);
   right: 0;
   z-index: 20;
-  min-width: 200px;
-  padding: 0.6rem 0.7rem 0.7rem;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 0.55rem 0.75rem 0.7rem;
   background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--gold-3);
-  border-radius: 0.35rem;
+  border-radius: 0.4rem;
   box-shadow:
     inset 0 0 0 1px rgba(200, 163, 90, 0.12),
     0 10px 28px rgba(0, 0, 0, 0.55);
+  display: grid;
+  gap: 0.45rem;
 }
 
-.fx-toggle-title {
+.settings-section {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.settings-section + .settings-section {
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(200, 163, 90, 0.14);
+}
+
+.settings-title {
   font-family: 'Cinzel', serif;
   font-size: 0.72rem;
   font-weight: 700;
@@ -350,33 +304,148 @@ body::before {
   text-transform: uppercase;
   color: var(--gold-2);
   opacity: 0.85;
-  margin-bottom: 0.45rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 1px solid rgba(200, 163, 90, 0.18);
+  padding-bottom: 0.15rem;
 }
 
-.fx-toggle-row {
+.settings-row {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.25rem 0.1rem;
+  padding: 0.2rem 0.1rem;
   cursor: pointer;
   font-size: 0.85rem;
   color: var(--parchment);
   user-select: none;
 }
 
-.fx-toggle-row:hover {
+.settings-row:hover {
   color: var(--gold-2);
 }
 
-.fx-toggle-row input[type='checkbox'] {
+.settings-row input[type='checkbox'] {
   accent-color: var(--gold-1);
   cursor: pointer;
 }
 
-.fx-toggle-label {
+.settings-row-slider {
+  gap: 0.5rem;
+}
+
+.settings-row-slider input[type='range'] {
+  flex: 1;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 18px;
+}
+
+.settings-row-slider input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
+  border: 1px solid var(--stone-2);
+  border-radius: 3px;
+}
+.settings-row-slider input[type='range']::-moz-range-track {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
+  border: 1px solid var(--stone-2);
+  border-radius: 3px;
+}
+.settings-row-slider input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--gold-1);
+  border: 1px solid var(--ink-1);
+  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+.settings-row-slider input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold-1);
+  border: 1px solid var(--ink-1);
+  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+
+.settings-row-slider input[type='range']:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-label {
   letter-spacing: 0.02em;
+  min-width: 3.5rem;
+}
+
+.settings-value {
+  font-size: 0.75rem;
+  color: var(--gold-2);
+  opacity: 0.8;
+  min-width: 2.4rem;
+  text-align: right;
+}
+
+.settings-btn {
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(200, 163, 90, 0.35);
+  color: var(--parchment);
+  border-radius: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.settings-btn:hover:not(:disabled) {
+  background: rgba(71, 85, 105, 0.55);
+  border-color: var(--gold-2);
+}
+
+.settings-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-row-chips {
+  cursor: default;
+}
+
+.settings-chips {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.settings-chip {
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(200, 163, 90, 0.3);
+  color: var(--parchment);
+  border-radius: 0.25rem;
+  padding: 0.18rem 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  min-width: 2rem;
+}
+
+.settings-chip:hover {
+  background: rgba(71, 85, 105, 0.55);
+  border-color: var(--gold-2);
+}
+
+.settings-chip.is-active {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: var(--gold-1);
+  color: var(--gold-2);
+}
+
+.settings-section-dev .settings-title {
+  color: #fbbf24;
 }
 
 /* --- Board --- */
@@ -569,6 +638,10 @@ body::before {
   line-height: 1.45;
   letter-spacing: 0;
   text-align: left;
+  /* pointer-events:none so the cursor never traps inside the tooltip
+     and never blocks its badge's mouseleave. Inline <Keyword> uses
+     autoShow to appear alongside the parent — the user doesn't need
+     to traverse into the tooltip. */
   pointer-events: none;
   transition: opacity 120ms ease;
   z-index: 100;
@@ -1486,6 +1559,31 @@ body.vignette-damage::before {
   animation: vignette-damage-flash 500ms ease-out;
 }
 
+/* Burn-tick vignette: softer + ember-tinted so a DoT tick doesn't read
+   as the same gut-punch a Smolder *attack* delivers. Same shape as the
+   damage vignette, dimmer alpha and orange hue (ff8540) to match the
+   `-N` popup and chip-trail palette. */
+@keyframes vignette-burn-flash {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+  20% {
+    box-shadow: inset 0 0 120px 30px rgba(255, 133, 64, 0.32);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+}
+
+body.vignette-burn::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  animation: vignette-burn-flash 520ms ease-out;
+}
+
 @keyframes hp-hit {
   0% {
     box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
@@ -1501,6 +1599,80 @@ body.vignette-damage::before {
 .hp-bar.hit {
   animation: hp-hit 420ms ease-out;
 }
+
+/* Burn-tick HP-bar flash: orange glow instead of red. The bar still
+   pulses (the player IS taking damage), but the color tells them which
+   kind. Slightly longer/softer to read as "the fire ate at you", not
+   "you got punched". */
+@keyframes hp-burn-hit {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+  25% {
+    box-shadow: inset 0 0 22px 4px rgba(255, 133, 64, 0.65);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+}
+
+.hp-bar.burn-hit {
+  animation: hp-burn-hit 520ms ease-out;
+}
+
+/* "This attack carried fire" halo — pulses on the HUD frame at the
+   moment of impact for any enemy attack that applies Burn. Pairs with
+   the in-place ember burst spawned by AC.spawnBurnImpactBurst; the
+   burst sells the moment, the halo lingers a beat so the eye reads
+   "the frame is now glowing orange" before the chip drops in. Shorter
+   than the burn-tick vignette so it doesn't bleed into the chip
+   appearance at +700ms. */
+/* Two-peak flicker (15% → 50% → 100%) so the halo doesn't just decay
+   linearly; the second pulse mirrors the delayed lingering-flame burst
+   spawned by AC.spawnBurnImpactBurst at +120ms. Longer total ride
+   (640ms) gives the flame more presence on the frame. */
+@keyframes hud-burn-impact {
+  0% {
+    box-shadow:
+      inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+      inset 0 0 22px rgba(0, 0, 0, 0.5),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 0 0 rgba(255, 133, 64, 0);
+  }
+  15% {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 200, 130, 0.7),
+      inset 0 0 38px rgba(255, 133, 64, 0.55),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 32px 6px rgba(255, 133, 64, 0.65);
+  }
+  35% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 175, 100, 0.45),
+      inset 0 0 26px rgba(255, 133, 64, 0.35),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 18px 3px rgba(255, 133, 64, 0.4);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1.2px rgba(255, 190, 120, 0.55),
+      inset 0 0 32px rgba(255, 133, 64, 0.45),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 22px 4px rgba(255, 175, 100, 0.5);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+      inset 0 0 22px rgba(0, 0, 0, 0.5),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 0 0 rgba(255, 133, 64, 0);
+  }
+}
+
+.hud.burn-impact {
+  animation: hud-burn-impact 640ms ease-out;
+}
+
 
 /* Low-HP urgency pulse via ::after so it doesn't stomp the .hit/.glow
    box-shadow animations on the main element. */
@@ -1752,22 +1924,130 @@ body.vignette-damage::before {
    works without disturbing the chip's flex layout. */
 .status-stacks-pulse {
   display: inline-block;
-  animation: status-stacks-pulse 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+  animation: status-stacks-pulse 280ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
   transform-origin: center;
 }
 
 @keyframes status-stacks-pulse {
+  /* Was scale 1.35 — too bouncy when firing alongside the popup,
+     vignette, and HP drain at the resolve moment. 1.18 is enough to
+     register "the number just changed" without making the chip
+     visibly wobble in the same frame as everything else. */
   0% {
     transform: scale(1);
     color: inherit;
   }
   35% {
-    transform: scale(1.35);
+    transform: scale(1.18);
     color: var(--parchment, #f4ead8);
   }
   100% {
     transform: scale(1);
     color: inherit;
+  }
+}
+
+/* "You survived it" goodbye flash on a chip whose final tick just
+   landed. A brief ember peak (the "last lick" of the fire) followed
+   by a fade + shrink + blur as the chip dissolves. Driven by the
+   parent component (HUD / EnemyFrame) holding the chip in
+   displayedStatuses for an extra ~480ms past status-expired so the
+   animation has something to play on. Without this beat the chip
+   used to vanish silently the instant the HP drain landed — losing
+   the resolution feedback. */
+.status-chip.is-expiring {
+  animation: status-chip-fizzle 480ms cubic-bezier(0.4, 0, 0.7, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes status-chip-fizzle {
+  /* Layout-collapse rationale: the chip used to unmount at full width
+     once the fade finished, snapping neighbouring elements (block
+     badge on the enemy frame, sibling chips on either frame) leftward
+     in a single frame. The fizzle now also collapses max-width,
+     padding-inline, and margin-inline-end (eating the parent flex
+     gap) so neighbours slide back smoothly while the chip fades.
+     Width hold across 0% → 18% keeps the ember flare at full size;
+     collapse runs 18% → 100% (~390ms) for a readable slide. */
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    max-width: 8rem;
+    padding-inline: 0.35rem;
+    margin-inline-end: 0;
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow:
+      0 0 16px 4px rgba(255, 156, 74, 0.75),
+      inset 0 0 12px 2px rgba(255, 156, 74, 0.45);
+    max-width: 8rem;
+    padding-inline: 0.35rem;
+    margin-inline-end: 0;
+  }
+  55% {
+    opacity: 0.55;
+    transform: scale(0.94);
+    filter: blur(0.5px);
+    max-width: 4rem;
+    padding-inline: 0.18rem;
+    margin-inline-end: -0.15rem;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.72);
+    filter: blur(2px);
+    max-width: 0;
+    padding-inline: 0;
+    margin-inline-end: -0.3rem;
+  }
+}
+
+/* "Here it comes" pre-impact cue on the chip — fires when this status
+   is about to deal proc damage. Builds in intensity while the chip→bar
+   particle trail flies (700ms travel), peaking right before the
+   resolve hits. Previously the keyframe peaked at 20% and decayed
+   over the rest — so the bright moment fired at 140ms and was gone
+   by the time the resolve landed at 700ms, making the cue read as
+   a disconnected flicker. Rebalanced: dim start, steady build, peak
+   at 85% (~595ms), snap off at 100% (700ms) right as the impact lands
+   — the cue now culminates with the resolve rather than preceding it.
+   No scale transform — scale on the chip itself competed visually
+   with the inner number's pulse at resolve time. */
+.status-chip-cue {
+  position: absolute;
+  inset: -2px;
+  border-radius: 0.32rem;
+  pointer-events: none;
+  animation: status-chip-cue 700ms cubic-bezier(0.4, 0, 0.7, 1) forwards;
+}
+
+@keyframes status-chip-cue {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(255, 156, 74, 0),
+      inset 0 0 0 0 rgba(255, 156, 74, 0);
+  }
+  35% {
+    box-shadow:
+      0 0 6px 2px rgba(255, 156, 74, 0.25),
+      inset 0 0 4px 1px rgba(255, 156, 74, 0.15);
+  }
+  70% {
+    box-shadow:
+      0 0 11px 3px rgba(255, 156, 74, 0.5),
+      inset 0 0 7px 1.5px rgba(255, 156, 74, 0.3);
+  }
+  85% {
+    box-shadow:
+      0 0 15px 4px rgba(255, 156, 74, 0.8),
+      inset 0 0 11px 2px rgba(255, 156, 74, 0.5);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 156, 74, 0),
+      inset 0 0 0 0 rgba(255, 156, 74, 0);
   }
 }
 
@@ -1855,6 +2135,24 @@ body.vignette-damage::before {
      already exists whether or not any status is active. */
 }
 
+/* Player-side equivalent: the chips sit in .hud-row alongside the phase
+   label + PendingStrip. PendingStrip is conditionally null (no spell
+   queued), and the phase label is shorter than a chip, so when the
+   last chip resolves and unmounts the row collapses — a small but
+   visible vertical jolt that drags the HP bar below it. Reserve the
+   chip slot's height here so the row stays the same height regardless
+   of whether any status is active.
+
+   The 1.6rem value comes from the chip's natural rendered height: the
+   tallest inner child is .status-icon at font-size: 0.85rem, and
+   Cinzel's default line-height (~1.45) plus 0.2rem vertical padding +
+   2×1px border lands around 1.55rem. 1.6rem gives a small buffer so
+   font-loading flicker or minor metric drift between browsers can't
+   reintroduce the shift. */
+.player-statuses {
+  min-height: 1.6rem;
+}
+
 .enemy-effects-row {
   display: flex;
   align-items: center;
@@ -1865,15 +2163,6 @@ body.vignette-damage::before {
      HP bar doesn't shift up/down based on whether block or statuses exist.
      Matches the rendered block-badge height (~0.78rem font + padding + border). */
   min-height: 1.4rem;
-}
-
-.intent-tooltip-preview {
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--gold-3);
-  font-size: 0.78rem;
-  color: var(--gold-2);
-  font-variant-numeric: tabular-nums;
 }
 
 /* --- Phase F: layout / mobile responsiveness ---
@@ -1953,10 +2242,6 @@ body.vignette-damage::before {
   .hud-title::after {
     margin: 0 0.25rem;
   }
-  .volume-slider input[type='range'] {
-    width: 60px;
-  }
-
   .hud {
     padding: 0.55rem 0.7rem 0.65rem;
     gap: 0.4rem;
@@ -2039,11 +2324,6 @@ body.vignette-damage::before {
   .hud-seed {
     display: none;
   }
-  /* Volume slider eats horizontal room and most phones use system audio
-     anyway — keep the mute toggle as the bare-minimum sound control. */
-  .volume-slider {
-    display: none;
-  }
   .game-header {
     padding: 0.4rem 0.55rem;
   }
@@ -2103,6 +2383,73 @@ body.vignette-damage::before {
   align-items: stretch;
 }
 
+/* Inline keyword (Burn / Vulnerable / Block / ...) embedded in a longer
+   tooltip body or label. Highlighted in the mechanic's palette; a dotted
+   underline on hover signals "this has its own info tooltip" without
+   competing with regular link styles. */
+.kw {
+  cursor: help;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px dotted transparent;
+  transition: border-color 120ms ease;
+}
+
+.kw:hover,
+.kw:focus {
+  border-bottom-color: currentColor;
+}
+
+.kw.kw-burn {
+  color: #ff9c4a;
+}
+
+.kw.kw-vulnerable {
+  color: #d49158;
+}
+
+.kw.kw-weak {
+  color: #d6c298;
+}
+
+.kw.kw-block {
+  color: #9ec5ff;
+}
+
+.kw.kw-riposte {
+  color: #c9a8ff;
+}
+
+/* Keyword sub-tooltips: same shell as the regular hover-tooltip, but
+   with a left-edge accent in the keyword's palette so the nested
+   tooltip immediately reads as "extra info about that highlighted
+   word." z-index above the intent tooltip (100) so any pixel overlap
+   during repositioning still renders the sub-tooltip on top. */
+.hover-tooltip[class*='tooltip-kw-'] {
+  z-index: 110;
+  border-left-width: 3px;
+}
+
+.hover-tooltip.tooltip-kw-burn {
+  border-left-color: #ff9c4a;
+}
+
+.hover-tooltip.tooltip-kw-vulnerable {
+  border-left-color: #d49158;
+}
+
+.hover-tooltip.tooltip-kw-weak {
+  border-left-color: #d6c298;
+}
+
+.hover-tooltip.tooltip-kw-block {
+  border-left-color: #9ec5ff;
+}
+
+.hover-tooltip.tooltip-kw-riposte {
+  border-left-color: #c9a8ff;
+}
+
 /* When a fullscreen overlay (reward / victory / game-over) is mounted,
    any spell-tray / relic tooltip pinned open by a touch tap would float
    above the modal and look stuck. Hide them while the modal is up — the
@@ -2131,6 +2478,10 @@ body:has(.game-over-overlay) .intent-tooltip {
   color: var(--parchment);
   font-size: 0.78rem;
   line-height: 1.35;
+  /* pointer-events:none so the tooltip never traps the cursor and never
+     blocks its own anchor's mouseleave. Inline keywords are shown via
+     autoShow alongside the parent, so the cursor doesn't need to enter
+     a tooltip — it stays on the original anchor. */
   pointer-events: none;
   transition: opacity 90ms ease;
 }
@@ -2243,13 +2594,22 @@ body:has(.game-over-overlay) .intent-tooltip {
 }
 
 .burning-flame {
-  display: inline-block;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 70%;
+  height: 70%;
   /* Per-instance scale set inline by BurningOverlay (--flame-scale).
      Eases between values so a tick visibly shrinks the flame rather
      than snapping. The cell's pulse animation compounds with this
      scale through nested transforms. */
   transform: scale(var(--flame-scale, 1));
   transition: transform 320ms cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+
+.burning-flame svg {
+  width: 100%;
+  height: 100%;
 }
 
 @keyframes burning-pulse {
@@ -2352,8 +2712,17 @@ body:has(.game-over-overlay) .intent-tooltip {
 
 .burst-core {
   position: absolute;
-  font-size: clamp(1.2rem, 5vmin, 2rem);
+  width: 80%;
+  height: 80%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   animation: burst-core-anim 720ms cubic-bezier(0.18, 0.84, 0.32, 1) forwards;
+}
+
+.burst-core svg {
+  width: 100%;
+  height: 100%;
 }
 
 @keyframes burst-core-anim {
@@ -2376,10 +2745,18 @@ body:has(.game-over-overlay) .intent-tooltip {
 
 .burst-spark {
   position: absolute;
-  font-size: clamp(0.55rem, 2.2vmin, 1rem);
-  color: var(--ember-2);
+  width: 32%;
+  height: 32%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0;
-  text-shadow: 0 0 6px rgba(255, 184, 110, 0.95);
+  filter: drop-shadow(0 0 4px rgba(255, 184, 110, 0.95));
+}
+
+.burst-spark svg {
+  width: 100%;
+  height: 100%;
 }
 
 .burst-spark.spark-1 {
@@ -2432,34 +2809,50 @@ body:has(.game-over-overlay) .intent-tooltip {
 
 .fizzle-smoke {
   position: absolute;
-  font-size: clamp(0.95rem, 4.2vmin, 1.55rem);
-  /* Desaturate + lift the grey so the smoke reads cooler than the
-     flame's warm palette — sells "fire is out". */
-  filter: grayscale(0.7) brightness(1.05) drop-shadow(0 0 4px rgba(200, 200, 200, 0.35));
+  width: 60%;
+  height: 60%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Cool-tinted shadow so the wisp reads colder than the flame's
+     warm palette. */
+  filter: drop-shadow(0 0 4px rgba(200, 200, 200, 0.4));
   opacity: 0;
-  animation: fizzle-smoke-anim 650ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: fizzle-smoke-anim 1200ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.fizzle-smoke svg {
+  width: 100%;
+  height: 100%;
 }
 
 @keyframes fizzle-smoke-anim {
-  /* The 💨 glyph is drawn horizontally (tail on the right, head on the
-     left). Rotating -90° throughout points the head UPWARD so it reads
-     as a wisp drifting up rather than a side gust. The small delta
-     around -90° across keyframes layers a gentle wobble without
-     disturbing the upward orientation. */
+  /* SVG wisp is natively vertical (no rotation needed). Drifts up and
+     slightly to the right while expanding + fading. Longer than the
+     burst (650→1200ms) because the player should have time to see
+     "the threat passed" — at 650ms the puff was gone before the eye
+     landed on it. Peak opacity now lands a touch later (22→18%) so
+     the eye-catch is brighter; the long fade-out tail makes the
+     "passed without firing" beat readable. Final translate held to
+     -55% (was -68%) so the wisp doesn't leave the cell. */
   0% {
-    transform: translate(0, 0) scale(0.55) rotate(-96deg);
+    transform: translate(0, 0) scale(0.55);
     opacity: 0;
   }
-  22% {
-    transform: translate(2%, -18%) scale(0.9) rotate(-92deg);
-    opacity: 0.85;
+  18% {
+    transform: translate(2%, -16%) scale(0.95);
+    opacity: 0.9;
   }
-  60% {
-    transform: translate(7%, -42%) scale(1.05) rotate(-86deg);
-    opacity: 0.55;
+  45% {
+    transform: translate(5%, -32%) scale(1.05);
+    opacity: 0.75;
+  }
+  75% {
+    transform: translate(8%, -45%) scale(1.1);
+    opacity: 0.4;
   }
   100% {
-    transform: translate(11%, -68%) scale(1.15) rotate(-81deg);
+    transform: translate(10%, -55%) scale(1.15);
     opacity: 0;
   }
 }
@@ -2473,6 +2866,111 @@ body:has(.game-over-overlay) .intent-tooltip {
   .burst-spark,
   .fizzle-smoke {
     animation: none;
+  }
+}
+
+/* Blessed cells — match-5 reward flag. Gold additive rim that pulses
+   on a slow breath cadence, plus three drifting sparkles staggered out
+   of phase so peripheral vision picks them up during cascades. Mirrors
+   .burning-overlay's geometry so flags align with the gem grid inside
+   the Pixi canvas. Z-index above burning (defensive — the two flags
+   are mutually exclusive per design, but if both ever co-occur the
+   reward should be the readable layer). */
+.blessed-overlay {
+  position: absolute;
+  top: calc(8 / 528 * 100%);
+  left: calc(8 / 528 * 100%);
+  right: calc(8 / 528 * 100%);
+  bottom: calc(8 / 528 * 100%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.blessed-cell {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  pointer-events: none;
+}
+
+/* Soft gold halo — a radial gradient (no hard rim) layered over the gem
+   so the cell reads as "lit from within" rather than UI-boxed. Inset 6%
+   keeps the glow inside the cell's footprint so neighbours don't bleed.
+   screen blend keeps the gem color underneath readable while warm gold
+   layers on top. */
+.blessed-cell::before {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 22%;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 222, 140, 0.42) 0%,
+    rgba(255, 200, 90, 0.2) 45%,
+    rgba(255, 190, 70, 0) 75%
+  );
+  mix-blend-mode: screen;
+  animation: blessed-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes blessed-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+
+/* Sparkles. Three small ✦ chars per blessed cell, drifting upward +
+   fading. Position (left/top), delay, and duration are randomized
+   per-cell at flag-place time by BlessedOverlay and passed in via
+   inline style — adjacent blessed cells never tick in sync. drop-
+   shadow on the glyph gives a soft golden halo without the harsh
+   text-shadow ringing that emojis pick up. */
+.blessed-spark {
+  position: absolute;
+  color: rgba(255, 238, 175, 1);
+  font-size: clamp(0.42rem, 1.4vmin, 0.7rem);
+  filter: drop-shadow(0 0 4px rgba(255, 200, 90, 0.95));
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-name: blessed-spark-drift;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+  /* animation-duration + animation-delay are set inline per-spark. */
+}
+
+@keyframes blessed-spark-drift {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(-6%) scale(1);
+  }
+  70% {
+    opacity: 0.65;
+    transform: translateY(-32%) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-55%) scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blessed-cell::before,
+  .blessed-spark {
+    animation: none;
+  }
+  .blessed-spark {
+    opacity: 0.6;
   }
 }
 
@@ -2541,6 +3039,20 @@ body:has(.game-over-overlay) .intent-tooltip {
   font-size: 0.72em;
   line-height: 1;
   opacity: 0.95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+/* Rider stacks number — sits tight with the rider icon so the eye reads
+   them as one token ("🔥2") rather than two separate things. Same font
+   family as the main intent amount; slightly smaller so the primary
+   damage number still dominates. */
+.intent-rider-amount {
+  font-family: 'Cinzel', serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 1em;
 }
 
 .intent-rider.rider-burn {
@@ -2936,3 +3448,4 @@ body:has(.game-over-overlay) .intent-tooltip {
     animation-duration: 0ms;
   }
 }
+

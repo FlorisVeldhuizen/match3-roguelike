@@ -65,9 +65,38 @@ A **player phase** is the full window from when the player regains control until
 | Match | Effect |
 |-------|--------|
 | 3     | Base payout to color's pool |
-| 4     | Bigger payout + **extra turn** + spawns special tile? (TBD) |
-| 5 (line) | Even bigger + **clears row or column** of matched color |
+| 4     | Bigger payout + **extra turn** |
+| 5 (line) | Bigger payout + extra turn + **flags the cleared cells as Blessed** (see *Blessed cells* below) |
 | T / L     | Big payout + **clears area** (3x3 or +-shape) |
+
+### Blessed cells (match-5 reward — draft)
+
+Genre context for this design lives in the player-feedback section below. Player feedback flagged that match-5 didn't feel meaningfully different from match-4. The "clears row/column" payoff was a one-shot moment with no setup → payoff loop, no follow-up potential, and no compositional depth. Genre reference points:
+- **Bejeweled match-5** spawns a Hypercube (persistent wildcard tile) → match it later for a board-wide color clear. Match-5 is the *setup*, the real payoff is the *next* match.
+- **Puzzle Quest match-5** is just "scaling reward + extra turn." No spawned tile. Depth comes from gem variety on the board.
+
+Neither path is a clean fit for this game. Bejeweled-style wildcard tiles would require a new gem category, special-tile combination logic, and rendering — and would conflict with the "match by color" loop since the wildcard hides its underlying color. Puzzle Quest's path leaves match-5 feeling incremental, which is the original complaint.
+
+**The design:** match-5 reuses the **cell-flag primitive** already proven by burning cells. The five cleared cells get a `blessed` flag. When new gems fall into those cells, they inherit the flag. Matching a flagged gem multiplies that match's pool deltas by 2× *before* the cascade multiplier applies.
+
+#### Mechanics
+
+- **Trigger:** any line-5 same-color match (horizontal or vertical). T/L shapes keep their existing area-clear payoff — they're a different category, not a less-shaped match-5.
+- **Match-5 reward stacks with match-4's extra turn.** A match-5 grants the extra turn *and* flags the cleared cells. Match-5 is rare enough that compounding rewards is genre-standard (Puzzle Quest, Candy Crush both do this), and the alternative — replacing the extra turn with the flag — would make match-5 feel worse than match-4 in the moment.
+- **Flag lifetime:** persists across cascades and across turns until the flagged gem is cleared by a match (any match, including a chain-clear from a neighbor). The flag travels *with the gem*, not with the cell — once a gem drops into a flagged cell and inherits, the cell itself is no longer flagged (the gem is). Subsequent drops into that cell are normal.
+- **Stacking:** flags don't stack. A gem is either blessed or not — 1 bit. If a match-5 lands on cells that already contain blessed gems, those gems remain blessed (no extra multiplier, no extension). Keeps the mechanic legible.
+- **Multiplier model:** the 2× is the *only* effect of the flag — no standalone "+1 per blessed gem" on top. Single-blessed-in-a-3-match is already a +3 floor (3 → 6 for a base red match), which doesn't need padding. Keeps the mental model to one sentence: "blessed gems double the match."
+- **Multiplier scope:** Blessed × 2 applies to **all five pool deltas** of any match that includes at least one blessed gem (red/blue/green/yellow/purple), consistent with cascade multiplier scope. Composes multiplicatively with cascade multiplier: `floor(base × cascade × 2)` for a blessed match in a level-2 cascade. Uses the same `applyMultiplier` helper to inherit the floor-on-land rounding rule.
+- **Regen behavior:** the no-valid-moves regen path wipes the board including all flags (blessed and burning). Same default as burning. Regen is rare enough in practice that losing a blessed gem to it isn't a regular feel issue, and tracking-and-restoring flags across a full board re-roll adds implementation cost for a marginal case.
+- **Relic surface:** introduces a clean `onBlessedMatch` (or `onMatch` with a `blessed: boolean` payload — TBD in architecture) hook. Relic candidates: "blessed gems clear in a 3×3," "blessed matches refund 1 mana," "blessed gems grant +1 stack of skill charge."
+- **Interaction with burning cells:** a cell can be flagged burning OR blessed but not both (1 flag slot per cell). Match-5 landing on burning cells clears the burns (burns are still triggered as part of the line-5 clear, so player gets the existing burn-clear payoff *and* the blessed flag transfers down to the new drops). No collision logic needed.
+
+#### Visual treatment
+
+- **Golden rim light** — soft additive outline around the gem in warm gold/amber, slow ~1.2s breath pulse. Lives in the same rhythm as the existing `floatPhases` idle motion. This is the persistent "this cell is special" anchor.
+- **Sparkle drift** — small particles drifting upward off the gem, ~one every 600-900ms per blessed gem. Reuses the existing particle system. Catches the eye in peripheral vision during cascades.
+- **Gem color preserved** — the gold rim and sparkles are *additive*, not transformative. A blessed red still reads as red; the player needs the color identity to plan the match. Opposite design choice from Bejeweled's color bombs.
+- **Differentiates from burning** — burning is hot/red/aggressive (avoid); blessed is gold/warm/inviting (target). Opposite visual language for opposite player intent.
 
 ### Cascade multiplier
 - 1st cascade: ×1
@@ -213,3 +242,49 @@ Hooks are pure where possible (no implicit ordering between relics for read-only
 - Difficulty curve
 - Status effects catalogue (burn, freeze, poison, etc.)
 - Special tile system (do 4-matches spawn power gems? what do they do?)
+
+---
+
+## 📓 Player feedback — Discord demo (2026-05-23)
+
+First public demo share to a small game community. Two players (OutlawTorn, pawfessor) and a few rounds of unstructured feedback. Captured here because the design critique surfaces real gaps before the player vocabulary for the game exists.
+
+### "Parallel play" — the central critique
+> *"why don't my abilities affect the gems the way that enemy attacks affect the gems? then everything operates through the same medium. atm it's parallel play"* — pawfessor
+
+Right now, enemies act on **the board** (burning gems, future rocks/freeze/siphons) while player abilities act on **stats** (deal damage, gain armor). That asymmetry is what makes the encounter feel like an abstraction over a score threshold rather than a puzzle.
+
+Already aligned with the "Enemies share the board" direction above — but the corollary is that **player abilities should also push back on the board**, not just on stats. Candidates:
+- *Cleanse* — clear burns / status flags from cells
+- *Transmute* — convert N gems of color A → color B (the "I generate mana and now I can make a gem a bomb" comment)
+- *Bomb-tile* — spawn a special tile that detonates with the next match
+- *Sweep* — clear a row or column (small AOE board verb)
+- *Freeze counter* — lock an enemy's intent for one turn (board ↔ stat bridge)
+
+These belong in the relic/spell pool, not the class baseline — but the slice should ship at least one player-side board verb so the asymmetry isn't load-bearing on enemies alone.
+
+### "Save up reds, cash in at the perfect moment"
+> *"a cool moment will be like oh i saved up all the red gems on the board for a specific point for when the enemy is ready, now i pop everything do a massive combo and they explode"* — pawfessor
+
+The Tetris-style telegraph-and-stockpile loop. Intent telegraphing already gives the player a *reason* to delay, but the current spell economy doesn't have a "stockpile and cash in" payoff beat. Things that would deepen this:
+- **Board-state preservation incentives**: relics that reward "no red matched for N turns, then huge red match" (latent damage). Already a clean modifier hook on `onMatch` + a per-color drought counter.
+- **Setup → payoff spells**: e.g. *Detonator* — mark a gem; next time it's matched, all gems of that color clear and deal pooled damage. Turns one held cluster into an explosion.
+- **Threat-window spells**: only castable while an enemy is telegraphing an attack — incentivizes reading intent before acting.
+
+### "The enemy is an abstraction"
+> *"it's not exactly 'is this challenging' it's like, how is this meant to interact?"* — pawfessor
+
+Players couldn't tell from the demo why they should care about red vs green on any given turn. The answer is **board-state pressure + relic synergies**, not threshold math:
+- Enemy intent should give a clear *because* for matching a specific color (an attack is coming → I need blue; a burn is going to land → I need to clear those cells).
+- Relics that anchor color preference (Iron Buckler favors blue, Cascade Crystal favors chains) give run-shape identity per pickup.
+
+Don't take the "HP = score threshold" framing too literally — the resource-pool design already decouples match output from damage, which is closer to StS energy than to a pure score game. The framing is useful as a player-comprehension lens (the player needs to understand *why* they're matching what they're matching), not as a mechanical re-design.
+
+### Tetris parallel
+> *"there's some overlap in the genres. you go all the way back to tetris and it telegraphs the next piece you put in"* — pawfessor
+
+Worth keeping in mind: every great puzzle game telegraphs *the future state of the playing field*, not just outcomes. The current intent telegraph tells the player about enemy actions; it should also (over time) communicate **board changes** — which cells will be burned, which column will be locked, which gems will be corrupted. Already implicit in the board-verb design above; calling it out explicitly so the telegraph affordance gets used to its full width.
+
+### Bugs / UX notes captured
+- **ResizeObserver / 5+ relics offset** — fixed; relic tray growth pushed UI down without invalidating the board's hit-detection rect.
+- **Alt-tab "auto-play"** — fixed via visibility-driven Pixi ticker pause. When the tab is hidden, in-flight animations pause cleanly instead of partially-advancing the queue and snapping forward on return.

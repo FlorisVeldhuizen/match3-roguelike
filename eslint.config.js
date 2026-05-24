@@ -35,8 +35,10 @@ export default defineConfig([
         { type: 'pixi', pattern: 'src/pixi/**/*', mode: 'file' },
         { type: 'audio', pattern: 'src/audio/**/*', mode: 'file' },
         { type: 'fx', pattern: 'src/fx/**/*', mode: 'file' },
+        { type: 'debug', pattern: 'src/debug/**/*', mode: 'file' },
         { type: 'types', pattern: 'src/types/**/*', mode: 'file' },
         { type: 'timing', pattern: 'src/timing.{ts,tsx}', mode: 'file' },
+        { type: 'session', pattern: 'src/splashState.{ts,tsx}', mode: 'file' },
         { type: 'root', pattern: 'src/*.{ts,tsx}', mode: 'file' },
       ],
     },
@@ -68,6 +70,8 @@ export default defineConfig([
                 { to: { type: 'audio' } },
                 { to: { type: 'fx' } },
                 { to: { type: 'timing' } },
+                { to: { type: 'session' } },
+                { to: { type: 'debug' } },
               ],
             },
             {
@@ -88,6 +92,8 @@ export default defineConfig([
                 { to: { type: 'types' } },
                 { to: { type: 'fx' } },
                 { to: { type: 'timing' } },
+                { to: { type: 'session' } },
+                { to: { type: 'debug' } },
               ],
             },
             {
@@ -105,6 +111,19 @@ export default defineConfig([
             {
               from: { type: 'timing' },
               allow: [],
+            },
+            // session/ holds cross-cutting page-lifetime flags (splash
+            // dismissed, etc.). Leaf module — no imports of its own.
+            {
+              from: { type: 'session' },
+              allow: [],
+            },
+            // debug/ can read core + types (for store actions, GameEvent
+            // shapes) but nothing else — dev tooling is a leaf, not a
+            // dependency anyone else builds on top of.
+            {
+              from: { type: 'debug' },
+              allow: [{ to: { type: 'core' } }, { to: { type: 'types' } }],
             },
             // bootstrap (main.tsx etc.) may import anything
             {

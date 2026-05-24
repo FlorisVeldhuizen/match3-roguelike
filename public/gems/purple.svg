@@ -1,33 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <radialGradient id="pg-fill" cx="0.3" cy="0.22" r="0.95">
-      <stop offset="0" stop-color="#fdf6ff"/>
-      <stop offset="0.2" stop-color="#cf9bff"/>
-      <stop offset="0.55" stop-color="#7c3aed"/>
-      <stop offset="1" stop-color="#3a0e8a"/>
+    <radialGradient id="pg-fill" cx="0.5" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#fff0ff"/>
+      <stop offset="0.2" stop-color="#f3aaff"/>
+      <stop offset="0.55" stop-color="#d946ef"/>
+      <stop offset="1" stop-color="#6b1a8a"/>
     </radialGradient>
-    <radialGradient id="pg-bloom" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#f3e8ff" stop-opacity="0.3"/>
-      <stop offset="1" stop-color="#f3e8ff" stop-opacity="0"/>
+    <radialGradient id="pg-bloom" cx="0.5" cy="0.6" r="0.45">
+      <stop offset="0" stop-color="#fce7ff" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#fce7ff" stop-opacity="0"/>
     </radialGradient>
     <clipPath id="pg-clip">
-      <polygon points="32,3 57,17 57,47 32,61 7,47 7,17"/>
+      <polygon points="32,4 58,58 6,58"/>
     </clipPath>
   </defs>
-  <polygon points="32,3 57,17 57,47 32,61 7,47 7,17"
-           fill="url(#pg-fill)" stroke="#10031f" stroke-width="2.8" stroke-linejoin="round"/>
+  <polygon points="32,4 58,58 6,58"
+           fill="url(#pg-fill)" stroke="#1f0428" stroke-width="2.8" stroke-linejoin="round"/>
   <g clip-path="url(#pg-clip)">
-    <circle cx="32" cy="32" r="16" fill="url(#pg-bloom)"/>
-    <!-- Six-wedge facet seams (cut-hexagon) -->
-    <g stroke="#3a0e8a" stroke-width="0.6" fill="none" opacity="0.4">
-      <line x1="32" y1="32" x2="32" y2="3"/>
-      <line x1="32" y1="32" x2="57" y2="17"/>
-      <line x1="32" y1="32" x2="57" y2="47"/>
-      <line x1="32" y1="32" x2="32" y2="61"/>
-      <line x1="32" y1="32" x2="7" y2="47"/>
-      <line x1="32" y1="32" x2="7" y2="17"/>
-    </g>
-    <!-- Subtle top-left bright wedge -->
-    <polygon points="32,3 32,32 7,17" fill="#cf9bff" opacity="0.2"/>
+    <circle cx="32" cy="44" r="14" fill="url(#pg-bloom)"/>
+    <!-- Center facet seam -->
+    <line x1="32" y1="4" x2="32" y2="58" stroke="#4a0d6b" stroke-width="0.6" opacity="0.45"/>
+    <!-- Left bright facet -->
+    <polygon points="32,4 32,58 6,58" fill="#f3aaff" opacity="0.22"/>
   </g>
 </svg>

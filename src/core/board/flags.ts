@@ -133,6 +133,117 @@ export function pickRandomCellsWithoutFlag(
   return { cells: picked, rng: curRng }
 }
 
+// Pick N cells in a CLUSTER without `flag` — seed at a random unflagged
+// cell, then greedily pull in unflagged 4-neighbours (up/down/left/right)
+// in random order until `count` cells are picked or no more reachable
+// cells exist. Reads as "fireball lands HERE" rather than the spritzed
+// look of N independent random picks. Falls back to filling from the
+// rest of the unflagged pool at random if the cluster can't grow large
+// enough (e.g. seed picked in an isolated pocket of flagged cells).
+export function pickClusterCellsWithoutFlag(
+  board: readonly Cell[][],
+  flag: FlagKey,
+  count: number,
+  rng: RngState,
+): { cells: Pos[]; rng: RngState } {
+  // Build the unflagged candidate set up front (same scan as
+  // pickRandomCellsWithoutFlag) so we can fall back to random picks if
+  // the cluster growth gets stuck.
+  const candidates: Pos[] = []
+  for (let y = 0; y < board.length; y++) {
+    const row = board[y]
+    if (!row) continue
+    for (let x = 0; x < row.length; x++) {
+      if (!hasFlag(row[x], flag)) candidates.push({ x, y })
+    }
+  }
+  if (candidates.length === 0 || count <= 0) {
+    return { cells: [], rng }
+  }
+  let curRng = rng
+  const target = Math.min(count, candidates.length)
+  // Build a lookup for "is (x,y) unflagged candidate" so neighbour
+  // expansion can check membership in O(1).
+  const candidateSet = new Set(candidates.map((p) => `${p.x},${p.y}`))
+  const picked: Pos[] = []
+  const pickedSet = new Set<string>()
+  const frontier: Pos[] = []
+  // Seed: pick a random candidate.
+  const [seedIdx, afterSeed] = nextInt(curRng, candidates.length)
+  curRng = afterSeed
+  const seed = candidates[seedIdx]
+  if (!seed) return { cells: [], rng: curRng }
+  picked.push(seed)
+  pickedSet.add(`${seed.x},${seed.y}`)
+  pushNeighbours(seed, candidateSet, pickedSet, frontier)
+
+  // Cluster growth: repeatedly pick a random cell from the frontier
+  // (unflagged neighbours of already-picked cells). Random-from-frontier
+  // gives the cluster an irregular, organic shape rather than a tight
+  // BFS square — closer to how a real fireball would spread.
+  while (picked.length < target && frontier.length > 0) {
+    const [fIdx, afterPick] = nextInt(curRng, frontier.length)
+    curRng = afterPick
+    const next = frontier[fIdx]
+    // O(1) swap-pop removal preserves the random-pick distribution.
+    const lastF = frontier[frontier.length - 1]
+    if (lastF) frontier[fIdx] = lastF
+    frontier.pop()
+    if (!next) continue
+    const key = `${next.x},${next.y}`
+    if (pickedSet.has(key)) continue
+    picked.push(next)
+    pickedSet.add(key)
+    pushNeighbours(next, candidateSet, pickedSet, frontier)
+  }
+
+  // Fallback: cluster couldn't grow large enough (e.g. seed was
+  // surrounded by flagged cells). Fill the remaining slots with random
+  // unflagged cells from the rest of the board. Preserves the "we
+  // promised N tiles" contract while still favouring cluster shape
+  // when the board allows.
+  if (picked.length < target) {
+    const remaining = candidates.filter((p) => !pickedSet.has(`${p.x},${p.y}`))
+    while (picked.length < target && remaining.length > 0) {
+      const [rIdx, afterR] = nextInt(curRng, remaining.length)
+      curRng = afterR
+      const r = remaining[rIdx]
+      remaining.splice(rIdx, 1)
+      if (r) {
+        picked.push(r)
+        pickedSet.add(`${r.x},${r.y}`)
+      }
+    }
+  }
+  return { cells: picked, rng: curRng }
+}
+
+// Helper for pickClusterCellsWithoutFlag: push the 4-neighbours of
+// `p` onto `frontier` if they're unflagged and not already picked.
+// Duplicates within the frontier are allowed (cheap, harmless — the
+// picked-set check above filters them out at expansion time).
+function pushNeighbours(
+  p: Pos,
+  candidateSet: Set<string>,
+  pickedSet: Set<string>,
+  frontier: Pos[],
+): void {
+  const deltas = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const
+  for (const [dx, dy] of deltas) {
+    const nx = p.x + dx
+    const ny = p.y + dy
+    const key = `${nx},${ny}`
+    if (!candidateSet.has(key)) continue
+    if (pickedSet.has(key)) continue
+    frontier.push({ x: nx, y: ny })
+  }
+}
+
 // Apply a flag to multiple cells at once. Pure; returns a new board.
 export function applyFlagToCells<K extends FlagKey>(
   board: readonly Cell[][],

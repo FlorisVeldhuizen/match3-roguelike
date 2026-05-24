@@ -15,10 +15,24 @@ import { HoverTooltip } from './HoverTooltip'
 export function StatusBar({
   statuses,
   tickMarks,
+  cueMarks,
+  expiringKinds,
   className,
 }: {
   statuses: readonly StatusInstance[]
   tickMarks?: Partial<Record<StatusKind, number>>
+  // Pre-tick "winding up" cue: bumps per StatusKind when that status is
+  // about to deal proc damage (i.e. damage-taken/damage-dealt with
+  // source='burn'). Drives a brief glow on the chip so the proc has a
+  // "here it comes" tell before the chip→bar particle trail arrives.
+  // Different from tickMarks (which fires AFTER the tick lands and
+  // replays the `−1` popup).
+  cueMarks?: Partial<Record<StatusKind, number>>
+  // Kinds currently mid-fizzle (post-expire goodbye flash + fade).
+  // Chips remain in `statuses` during this window so the animation has
+  // something to play on; the parent removes them from displayedStatuses
+  // after the fizzle window closes. See HUD's status-expired handler.
+  expiringKinds?: ReadonlySet<StatusKind>
   className?: string
 }) {
   // Always render the container so callers can reserve vertical space via
@@ -30,6 +44,8 @@ export function StatusBar({
         const def = getStatusDef(s.kind)
         const body = formatStatusTooltip(s.kind, s.stacks)
         const tick = tickMarks?.[s.kind] ?? 0
+        const cue = cueMarks?.[s.kind] ?? 0
+        const expiring = expiringKinds?.has(s.kind) ?? false
         return (
           <HoverTooltip
             key={s.kind}
@@ -39,7 +55,7 @@ export function StatusBar({
             ariaLabel={`${def.name} — ${body}`}
           >
             <span
-              className={`status-chip status-${s.kind}`}
+              className={`status-chip status-${s.kind}${expiring ? ' is-expiring' : ''}`}
               // data-status-chip lets the FX layer find this exact chip
               // when its status procs (e.g. Burn ticking) — particles
               // fly chip → target, treating the chip as the attacker.
@@ -75,6 +91,17 @@ export function StatusBar({
                 >
                   −1
                 </span>
+              )}
+              {/* Pre-impact "wind up" glow on the chip when this status
+                  is about to deal proc damage. Mounted briefly via
+                  cueMarks; the React key forces a remount so the
+                  keyframe replays on each proc. */}
+              {cue > 0 && (
+                <span
+                  key={`cue-${cue}`}
+                  className="status-chip-cue"
+                  aria-hidden
+                />
               )}
             </span>
           </HoverTooltip>

@@ -14,9 +14,9 @@ export const ZERO_DELTAS: PoolDeltas = {
 
 // Walk a settled cascade event stream and tally per-color pool deltas.
 // Cascade-start events advance the multiplier; match-found events contribute
-// `match.size * multiplier` (floored) to their color. The split between
-// immediate (yellow/purple) and pooled (red/blue/green) crediting is handled
-// by the caller — this just totals deltas.
+// `match.size * cascade * (blessed ? 2 : 1)` (floored) to their color. The
+// split between immediate (yellow/purple) and pooled (red/blue/green)
+// crediting is handled by the caller — this just totals deltas.
 export function computeMatchPayouts(events: readonly GameEvent[]): PoolDeltas {
   const out: PoolDeltas = { ...ZERO_DELTAS }
   let level = 0
@@ -24,7 +24,8 @@ export function computeMatchPayouts(events: readonly GameEvent[]): PoolDeltas {
     if (event.kind === 'cascade-start') {
       level = event.level
     } else if (event.kind === 'match-found') {
-      const mult = getCascadeMultiplier(level)
+      const cascadeMult = getCascadeMultiplier(level)
+      const mult = event.blessed ? cascadeMult * 2 : cascadeMult
       out[event.color] += applyMultiplier(event.size, mult)
     }
   }
@@ -54,7 +55,8 @@ export function withPoolGainedEvents(
     if (event.kind === 'cascade-start') {
       level = event.level
     } else if (event.kind === 'match-found') {
-      const mult = getCascadeMultiplier(level)
+      const cascadeMult = getCascadeMultiplier(level)
+      const mult = event.blessed ? cascadeMult * 2 : cascadeMult
       const amount = applyMultiplier(event.size, mult)
       if (amount > 0) {
         out.push({ kind: 'pool-gained', color: event.color, amount })
