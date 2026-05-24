@@ -4,6 +4,7 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 
 export function GameOverOverlay() {
   const phase = useGameStore((s) => s.fight.phase)
+  const runPhase = useGameStore((s) => s.runPhase)
   // Gate on the animation-timed phase-changed event so the overlay waits
   // for the lethal-hit beat to play before appearing.
   const [reveal, setReveal] = useState(phase === 'game-over')
@@ -16,7 +17,9 @@ export function GameOverOverlay() {
     [],
   )
 
-  if (!reveal || phase !== 'game-over') return null
+  // H1: also require runPhase to be 'game-over' so a stale fight.phase from
+  // a previous run doesn't haunt the next one after restart.
+  if (!reveal || runPhase !== 'game-over') return null
 
   const handleRestart = () => useGameStore.getState().restart()
 

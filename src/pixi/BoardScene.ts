@@ -468,14 +468,27 @@ export class BoardScene {
   // Called either immediately (if started already) or via subscribeStarted
   // when the user dismisses the splash. Guarded so a late splashState flip
   // after destroy() doesn't crash.
+  //
+  // H1: boot lands on the map (runPhase==='map'), not directly in a fight.
+  // The sentinel board is hidden behind the map screen, so playing the
+  // intro animation here just leaks drop SFX into the splash-clearing
+  // moment without any visual payoff — and rebuildBoard() will play a
+  // fresh intro the moment the player enters their first fight node.
+  // Skip the boot intro in that case.
   private playPendingIntro(): void {
     if (this.disposed) return
     const sprites = this.pendingIntroSprites
     if (!sprites || !this.animator) return
-    for (const row of sprites) for (const s of row) s.alpha = 1
     this.pendingIntroSprites = null
     this.unsubscribeStarted?.()
     this.unsubscribeStarted = null
+    const runPhase = useGameStore.getState().runPhase
+    if (runPhase !== 'fight') {
+      // Sentinel board never becomes visible at this runPhase. Leave
+      // sprites at alpha 0; rebuildBoard on first enterNode replaces them.
+      return
+    }
+    for (const row of sprites) for (const s of row) s.alpha = 1
     void this.animator.playInitialFill()
   }
 
@@ -707,10 +720,22 @@ export class BoardScene {
   }
 
   private computeDragTarget(active: PointerState): Pos | null {
-    const hover = this.clientToCell(active.lastClientX, active.lastClientY)
-    if (!hover || samePos(hover, active.startCell)) return null
     const dx = active.lastClientX - active.startClientX
     const dy = active.lastClientY - active.startClientY
+    const hover = this.clientToCell(active.lastClientX, active.lastClientY)
+    if (hover && samePos(hover, active.startCell)) return null
+    // If the pointer slipped off the board (common on mobile when swiping
+    // a gem next to the border), fall back to the drag delta — a clear
+    // swipe direction is enough intent, no need to require the finger to
+    // stay inside the board. Gate it on a minimum drag distance so true
+    // taps that jitter off-edge still register as clicks.
+    if (!hover) {
+      const rect = this.getCanvasRect()
+      if (!rect || rect.width === 0) return null
+      const scale = rect.width / LOGICAL_SIZE
+      const logicalDrag = Math.max(Math.abs(dx), Math.abs(dy)) / scale
+      if (logicalDrag < CELL_SIZE / 3) return null
+    }
     const dir: Pos =
       Math.abs(dx) > Math.abs(dy)
         ? { x: dx > 0 ? 1 : -1, y: 0 }

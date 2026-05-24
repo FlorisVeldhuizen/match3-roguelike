@@ -3449,3 +3449,154 @@ body:has(.game-over-overlay) .intent-tooltip {
   }
 }
 
+/* H1 map screen — branching SVG node graph. Layered above the fight UI
+   via z-index; .game .game-board-hidden hides the board section while the
+   map is up so Pixi mount stays in the DOM but the canvas is offscreen. */
+.map-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--ink-1), var(--ink-0));
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.map-screen-inner {
+  text-align: center;
+  color: var(--parchment);
+}
+
+.map-title {
+  margin: 0 0 0.25rem;
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  text-shadow: 0 0 18px rgba(200, 163, 90, 0.45);
+}
+
+.map-sub {
+  margin: 0 0 1.5rem;
+  color: var(--parchment-dim);
+  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.map-canvas-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.map-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.map-edge {
+  stroke: var(--stone-2);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.55;
+}
+.map-edge-active {
+  stroke: var(--gold-1);
+  opacity: 0.85;
+}
+.map-edge-traversed {
+  stroke: var(--gold-3);
+  opacity: 0.4;
+}
+
+.map-node-circle {
+  fill: var(--ink-2);
+  stroke: var(--stone-2);
+  stroke-width: 2;
+  transition: fill 120ms, stroke 120ms, filter 120ms;
+}
+.map-node-icon {
+  fill: var(--parchment-dim);
+  font-size: 22px;
+  font-family: 'Cinzel', serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.map-node-reachable .map-node-circle {
+  stroke: var(--gold-1);
+  filter: drop-shadow(0 0 6px rgba(200, 163, 90, 0.5));
+}
+.map-node-reachable .map-node-icon {
+  fill: var(--gold-2);
+}
+.map-node-reachable:hover .map-node-circle {
+  fill: var(--stone-1);
+  filter: drop-shadow(0 0 10px rgba(200, 163, 90, 0.8));
+}
+
+.map-node-current .map-node-circle {
+  fill: var(--gold-3);
+  stroke: var(--gold-2);
+  filter: drop-shadow(0 0 10px rgba(200, 163, 90, 0.7));
+}
+.map-node-current .map-node-icon {
+  fill: var(--ink-1);
+}
+
+.map-node-completed .map-node-circle {
+  fill: var(--ink-2);
+  stroke: var(--gold-3);
+  opacity: 0.45;
+}
+.map-node-completed .map-node-icon {
+  opacity: 0.55;
+}
+
+/* Elite + boss get an ember tint so the danger nodes read at a glance. */
+.map-node-elite.map-node-reachable .map-node-circle {
+  stroke: var(--ember-1);
+  filter: drop-shadow(0 0 6px var(--ember-glow));
+}
+.map-node-elite.map-node-reachable .map-node-icon {
+  fill: var(--ember-2);
+}
+.map-node-boss .map-node-circle {
+  stroke: var(--ember-1);
+}
+.map-node-boss.map-node-reachable .map-node-circle {
+  filter: drop-shadow(0 0 12px var(--ember-glow));
+}
+.map-node-boss .map-node-icon {
+  fill: var(--ember-2);
+}
+
+.map-node-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: var(--ink-1);
+  border: 1px solid var(--gold-1);
+  color: var(--gold-2);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  border-radius: 0.25rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Hide the fight chrome behind the map without unmounting Pixi. */
+.game-fight-hidden .board-shell,
+.game-fight-hidden .game-header,
+.game-fight-hidden .enemy-frame,
+.game-fight-hidden .hud {
+  visibility: hidden;
+}
+

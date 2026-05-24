@@ -9,6 +9,7 @@ import { tryGetRelic } from '../../core/relics/registry'
 // acquireRelic and the store transitions to a fresh fight.
 export function RewardScreen() {
   const pendingReward = useGameStore((s) => s.pendingReward)
+  const runPhase = useGameStore((s) => s.runPhase)
   const phase = useGameStore((s) => s.fight.phase)
   const [reveal, setReveal] = useState(phase === 'victory')
 
@@ -23,6 +24,10 @@ export function RewardScreen() {
   )
 
   if (!reveal) return null
+  // H1: only mount during the reward run-phase. Boss-fight victory now
+  // routes to VictoryOverlay (run cleared), and the player might still
+  // be in the 'fight' runPhase mid-cascade when the kill event fires.
+  if (runPhase !== 'reward') return null
   if (pendingReward == null) return null
 
   const ids = pendingReward.offeredRelicIds

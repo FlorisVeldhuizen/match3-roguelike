@@ -36,13 +36,17 @@ import {
   type EnemyArchetype,
   type FightState,
   type GameEvent,
+  type MapState,
   type PendingReward,
   type Player,
   type Pos,
   type RelicInstance,
+  type RunPhase,
   type SpellId,
   type UltimateId,
 } from '../../types'
+import { generateMap } from '../map/generate'
+import { getReachableFrom } from '../map/paths'
 import { getArchetype } from '../combat/archetypeRegistry'
 import {
   applyStatusToList,
@@ -65,20 +69,29 @@ export type GameStore = {
   rng: RngStreams
   rootSeed: string
   fight: FightState
-  // Monotonic counter bumped each time a fresh fight starts (initial,
-  // acquireRelic, skipReward). UI layers (Pixi BoardScene, HUD displays)
+  // Monotonic counter bumped each time a fresh fight starts (enterNode for
+  // fight/elite/boss, restart). UI layers (Pixi BoardScene, HUD displays)
   // watch this for "rebuild from scratch" — wholesale board.cells swaps
   // are otherwise invisible to subscribers that compare references.
   fightCounter: number
-  // Rolled when a fight transitions to 'victory'; nulled by acquireRelic /
-  // skipReward. UI mounts RewardScreen when this is non-null.
+  // Rolled when a non-boss fight transitions to 'victory'; nulled by
+  // acquireRelic / skipReward. UI mounts RewardScreen on runPhase==='reward'.
   pendingReward: PendingReward | null
+  // H1: procedural map + run-level phase machine. runPhase drives the
+  // top-level screen (map / fight / reward / victory / game-over) while
+  // fight.phase still drives in-fight transitions.
+  map: MapState
+  runPhase: RunPhase
   selectCell: (pos: Pos | null) => void
   attemptSwap: (a: Pos, b: Pos) => { valid: boolean; events: GameEvent[] }
   castSpell: (id: SpellId) => { ok: boolean; events: GameEvent[] }
   castUltimate: (id: UltimateId) => { ok: boolean; events: GameEvent[] }
   acquireRelic: (id: string) => { ok: boolean; events: GameEvent[] }
   skipReward: () => void
+  // Map navigation. Validates against getReachableFrom; no-op on invalid
+  // target. Spins up a fresh fight for fight/elite/boss nodes; auto-
+  // completes shop/rest nodes for H1 (Phase I implements them).
+  enterNode: (nodeId: string) => void
   restart: () => void
   // Dev-only: rewrites board.cells to a safe (no-match) palette pattern
   // with a planted line-5 prereq, then returns the swap coords that
@@ -90,6 +103,10 @@ export type GameStore = {
 }
 
 const PLAYER_MAX_HP = 40
+// Flat HP restored when entering a rest node. Bosses heal to full; regular
+// fights carry HP forward (see enterNode). Rest sits between: a top-up that
+// doesn't make the map trivial.
+const REST_HEAL_AMOUNT = 10
 
 function freshPlayer(relics: RelicInstance[] = []): Player {
   return {
@@ -109,13 +126,19 @@ function freshPlayer(relics: RelicInstance[] = []): Player {
 function freshFight(
   enemyRng: RngState,
   relics: RelicInstance[] = [],
+  options: { archetype?: EnemyArchetype; isBoss?: boolean } = {},
 ): { fight: FightState; rng: RngState } {
-  // Phase F ships two archetypes (Brute, Smolder). Pick from rng.enemy
-  // so a given seed reproduces the same opponent across restarts.
-  // H1's map will replace this with archetype assignment per node.
-  const candidates: EnemyArchetype[] = ['brute', 'smolder']
-  const [archIdx, rngAfterPick] = nextInt(enemyRng, candidates.length)
-  const archetype = candidates[archIdx] ?? 'brute'
+  // H1: archetype is provided by the map node. If absent (boot sentinel,
+  // tests that bypass the map), fall back to the original rng pick over
+  // the Phase F archetype pool.
+  let archetype = options.archetype
+  let rngAfterPick = enemyRng
+  if (!archetype) {
+    const candidates: EnemyArchetype[] = ['brute', 'smolder']
+    const [archIdx, n] = nextInt(enemyRng, candidates.length)
+    archetype = candidates[archIdx] ?? 'brute'
+    rngAfterPick = n
+  }
   const def = getArchetype(archetype)
   const first = rollIntent(archetype, 0, rngAfterPick)
   const enemy: Enemy = {
@@ -132,13 +155,15 @@ function freshFight(
     nextIntentIndex: 0,
     statuses: [],
   }
+  const fight: FightState = {
+    phase: 'player-acting',
+    player: freshPlayer(resetFightFlags(relics)),
+    enemies: [enemy],
+    targetEnemyId: enemy.id,
+  }
+  if (options.isBoss) fight.isBoss = true
   return {
-    fight: {
-      phase: 'player-acting',
-      player: freshPlayer(resetFightFlags(relics)),
-      enemies: [enemy],
-      targetEnemyId: enemy.id,
-    },
+    fight,
     rng: first.rng,
   }
 }
@@ -150,10 +175,22 @@ function initialState(seed: string): {
   fight: FightState
   fightCounter: number
   pendingReward: PendingReward | null
+  map: MapState
+  runPhase: RunPhase
 } {
   const streams = forkStreams(seed)
+  // H1: map is rolled at boot; the fight roll is deferred to enterNode so
+  // each fight-node entry consumes rng.enemy in node-order. The sentinel
+  // board + fight below exist purely to satisfy non-null UI contracts —
+  // they are overwritten the moment the player picks a fight node.
   const { board, rng: nextBoardRng } = generateBoard(streams.board)
-  const { fight, rng: nextEnemyRng } = freshFight(streams.enemy)
+  const { map, rng: nextMapRng } = generateMap(streams.map)
+  const sentinelFight: FightState = {
+    phase: 'player-acting',
+    player: freshPlayer([]),
+    enemies: [],
+    targetEnemyId: null,
+  }
   return {
     board: {
       width: BOARD_WIDTH,
@@ -161,11 +198,13 @@ function initialState(seed: string): {
       cells: board,
       selected: null,
     },
-    rng: { ...streams, board: nextBoardRng, enemy: nextEnemyRng },
+    rng: { ...streams, board: nextBoardRng, map: nextMapRng },
     rootSeed: seed,
-    fight,
-    fightCounter: 1,
+    fight: sentinelFight,
+    fightCounter: 0,
     pendingReward: null,
+    map,
+    runPhase: 'map',
   }
 }
 
@@ -483,22 +522,38 @@ export const useGameStore = create<GameStore>()(
       }
 
       // On victory transition, roll the post-fight reward set
-      // deterministically from rng.loot. Phase G only rolls 'common'
-      // (no map-tier yet); H1+ will pass rarity from the node type.
+      // deterministically from rng.loot. Boss kills skip the reward roll
+      // — the run-victory screen is the celebration there.
       let nextLootRng = current.rng.loot
       let pendingReward = current.pendingReward
-      if (
-        phase === 'victory' &&
-        pendingReward == null
-      ) {
-        const rolled = rollReward(player.relics, 'common', nextLootRng, 0)
-        pendingReward = rolled.reward
-        nextLootRng = rolled.rng
-        tailEvents.push({
-          kind: 'reward-offered',
-          offeredRelicIds: rolled.reward.offeredRelicIds,
-          gold: rolled.reward.gold,
-        })
+      let nextRunPhase: RunPhase = current.runPhase
+      const completedNodeIds = current.map.completedNodeIds.slice()
+      const isBossFight = current.fight.isBoss === true
+      if (phase === 'victory') {
+        // Append the current map node to completedNodeIds once.
+        const cur = current.map.currentNodeId
+        if (cur != null && !completedNodeIds.includes(cur)) {
+          completedNodeIds.push(cur)
+        }
+        if (isBossFight) {
+          // Boss kill heals to full so the next map (future multi-act runs)
+          // starts topped up. Today the run-victory screen follows, so the
+          // heal is only observable if we ever continue past the boss.
+          player = { ...player, hp: player.maxHp }
+          nextRunPhase = 'victory'
+        } else if (pendingReward == null) {
+          const rolled = rollReward(player.relics, 'common', nextLootRng, 0)
+          pendingReward = rolled.reward
+          nextLootRng = rolled.rng
+          tailEvents.push({
+            kind: 'reward-offered',
+            offeredRelicIds: rolled.reward.offeredRelicIds,
+            gold: rolled.reward.gold,
+          })
+          nextRunPhase = 'reward'
+        }
+      } else if (phase === 'game-over') {
+        nextRunPhase = 'game-over'
       }
 
       set((s) => {
@@ -512,6 +567,8 @@ export const useGameStore = create<GameStore>()(
         s.fight.enemies = enemies
         s.fight.targetEnemyId = targetEnemyId
         s.pendingReward = pendingReward
+        s.runPhase = nextRunPhase
+        s.map.completedNodeIds = completedNodeIds
       })
 
       return {
@@ -619,13 +676,74 @@ export const useGameStore = create<GameStore>()(
       )
       events.push(...gainEvents)
 
-      // Spin up the next fight with the new relic inventory. Same run,
-      // so HP/mana/charge persist? Per Phase G slice scope it's a fresh
-      // fight (no map yet); preserve relics, reset combat state.
-      const enemyRoll = freshFight(current.rng.enemy, nextRelics)
+      // H1: relic pick returns to the map. The next fight (if any) is
+      // rolled by enterNode at node selection. Persist the new relic
+      // inventory on the lingering fight.player so the relic tray still
+      // shows the acquired relic while the player is on the map.
+      set((s) => {
+        s.pendingReward = null
+        s.fight.player.relics = nextRelics
+        s.runPhase = 'map'
+      })
+      return { ok: true, events }
+    },
+    skipReward: () => {
+      const current = get()
+      if (current.pendingReward == null) return
+      // H1: skipping the reward returns to the map. Gold-on-skip is a
+      // Phase I concern.
+      set((s) => {
+        s.pendingReward = null
+        s.runPhase = 'map'
+      })
+    },
+    enterNode: (nodeId: string) => {
+      const current = get()
+      // Only valid on the map screen.
+      if (current.runPhase !== 'map') return
+      // Validate the target is reachable from currentNodeId (or is a
+      // col-0 node when currentNodeId is null).
+      const reachable = getReachableFrom(current.map)
+      if (!reachable.has(nodeId)) return
+      const node = current.map.nodes.find((n) => n.id === nodeId)
+      if (!node) return
+
+      // Shop/rest in H1: auto-complete, mark visited, stay on map.
+      // Phase I builds the real screens. Rest nodes top up HP by a flat
+      // REST_HEAL_AMOUNT (clamped to maxHp) — boss kills heal fully, so
+      // rest sits between fight carry-over and boss reset.
+      if (node.kind === 'shop' || node.kind === 'rest') {
+        set((s) => {
+          s.map.currentNodeId = nodeId
+          if (!s.map.completedNodeIds.includes(nodeId)) {
+            s.map.completedNodeIds.push(nodeId)
+          }
+          if (node.kind === 'rest') {
+            const p = s.fight.player
+            p.hp = Math.min(p.maxHp, p.hp + REST_HEAL_AMOUNT)
+          }
+        })
+        return
+      }
+
+      // Fight / elite / boss: roll a fresh fight from the node's archetype.
+      // Player HP carries from the previous fight; freshFight resets to max
+      // and we overwrite below. Boss victory heals to full (see attemptSwap
+      // victory block), so the player enters the next map's run topped up.
+      const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics, {
+        archetype: node.archetype,
+        isBoss: node.kind === 'boss',
+      })
+      enemyRoll.fight.player.hp = Math.min(
+        enemyRoll.fight.player.maxHp,
+        current.fight.player.hp,
+      )
       const boardRoll = generateBoard(current.rng.board)
-      // Run onRoundStarted at the start of the new encounter.
-      const roundEvents = runOnRoundStarted(
+      // onRoundStarted fires for the new encounter. Events are dropped on
+      // the floor here — there's no animation queue between map clicks and
+      // the fight start, so listeners that emit visual cues won't pop until
+      // the next swap. (Phase G's onRoundStarted listeners are none.)
+      runOnRoundStarted(
         { fightId: 0 },
         enemyRoll.fight.player.relics,
         snapshotOf(
@@ -635,34 +753,16 @@ export const useGameStore = create<GameStore>()(
           0,
         ),
       )
-      events.push(...roundEvents)
 
       set((s) => {
-        s.pendingReward = null
+        s.map.currentNodeId = nodeId
         s.fight = enemyRoll.fight
         s.rng.enemy = enemyRoll.rng
         s.board.cells = boardRoll.board
         s.rng.board = boardRoll.rng
         s.board.selected = null
         s.fightCounter += 1
-      })
-      return { ok: true, events }
-    },
-    skipReward: () => {
-      const current = get()
-      if (current.pendingReward == null) return
-      // Skip → also start the next fight (no map yet). Gold-on-skip is a
-      // J2 / I concern; ignored in slice.
-      const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics)
-      const boardRoll = generateBoard(current.rng.board)
-      set((s) => {
-        s.pendingReward = null
-        s.fight = enemyRoll.fight
-        s.rng.enemy = enemyRoll.rng
-        s.board.cells = boardRoll.board
-        s.rng.board = boardRoll.rng
-        s.board.selected = null
-        s.fightCounter += 1
+        s.runPhase = 'fight'
       })
     },
     restart: () => {
@@ -673,6 +773,8 @@ export const useGameStore = create<GameStore>()(
         s.rootSeed = fresh.rootSeed
         s.fight = fresh.fight
         s.pendingReward = fresh.pendingReward
+        s.map = fresh.map
+        s.runPhase = fresh.runPhase
         s.fightCounter += 1
       })
     },

@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase G complete.** Working on Phase H1 next.
+Status: **Phase H1 complete.** Working on Phase H2 next.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 

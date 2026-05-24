@@ -299,4 +299,41 @@ export type FightState = {
   player: Player
   enemies: Enemy[]
   targetEnemyId: string | null
+  // True for the boss-column node. Used to route the post-fight transition
+  // to the run-victory screen instead of the reward roll.
+  isBoss?: boolean
 }
+
+// H1: branching procedural map. Layout per 02-scope §Map structure —
+// 4 encounter columns + boss column 5. Nodes are identified by stable
+// string ids so save state can reference them later (K).
+export type NodeKind = 'fight' | 'elite' | 'shop' | 'rest' | 'boss'
+
+export type MapNode = {
+  id: string
+  kind: NodeKind
+  column: number // 0..4 (0 = first encounter column, 4 = boss)
+  // Lane index within the column. Lets MapScreen lay out nodes
+  // vertically without re-deriving position from edges.
+  lane: number
+  // For fight/elite nodes only. Rolled at map-gen time so re-entering
+  // (impossible in H1, but reserved for K save/load) keeps the matchup.
+  archetype?: EnemyArchetype
+}
+
+export type MapEdge = { from: string; to: string }
+
+export type MapState = {
+  nodes: MapNode[]
+  edges: MapEdge[]
+  // null before the player picks their first node; set on enterNode.
+  currentNodeId: string | null
+  // Acquisition order. Includes the current node once a fight resolves.
+  completedNodeIds: string[]
+}
+
+// Run-level phase. Layered on top of CombatPhase: when runPhase==='fight',
+// FightState.phase drives in-fight transitions. 'reward' mounts the
+// existing RewardScreen modal. 'victory' is the run-cleared (boss-down)
+// terminal state; 'game-over' is run-failed.
+export type RunPhase = 'map' | 'fight' | 'reward' | 'victory' | 'game-over'

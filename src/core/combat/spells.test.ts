@@ -71,7 +71,7 @@ describe('Bulwark at end of phase', () => {
     expect(res.enemies[0]?.hp).toBe(16)
   })
 
-  it('Bulwark wins over Reinforce — Reinforce doubles zero block', () => {
+  it('Reinforce empowers Bulwark — strike hits at full blue, block 0, no carry', () => {
     const player = makePlayer({
       pendingSpells: ['bulwark', 'reinforce'],
       phasePools: { red: 0, blue: 6, green: 0 },
@@ -79,13 +79,19 @@ describe('Bulwark at end of phase', () => {
     const enemy = makeEnemy()
     const res = resolveEndOfPhase(player, [enemy], enemy.id)
     expect(res.player.block).toBe(0)
+    // full blue (6), not floor(6/2)=3, since Reinforce empowers the swing
+    expect(res.enemies[0]?.hp).toBe(14)
+    const dmgEvent = res.events.find((e) => e.kind === 'damage-dealt')
+    expect(dmgEvent).toMatchObject({ amount: 6, source: 'player-attack' })
+    // Reinforce is spent on the swing — no carry-over for next phase
+    expect(res.player.carryBlockNextPhase).toBe(false)
     // both pending effects resolve and are cleared (riposte not queued)
     const resolved = res.events.filter((e) => e.kind === 'pending-effect-resolved')
     expect(resolved.map((e) => (e.kind === 'pending-effect-resolved' ? e.spellId : '')).sort()).toEqual(['bulwark', 'reinforce'])
     expect(res.player.pendingSpells).toEqual([])
   })
 
-  it('Reinforce alone doubles block from blue pool', () => {
+  it('Reinforce alone doubles block from blue pool and carries it', () => {
     const player = makePlayer({
       pendingSpells: ['reinforce'],
       phasePools: { red: 0, blue: 4, green: 0 },
@@ -93,6 +99,7 @@ describe('Bulwark at end of phase', () => {
     const enemy = makeEnemy()
     const res = resolveEndOfPhase(player, [enemy], enemy.id)
     expect(res.player.block).toBe(8)
+    expect(res.player.carryBlockNextPhase).toBe(true)
   })
 
   it('keeps Riposte queued across the phase boundary', () => {

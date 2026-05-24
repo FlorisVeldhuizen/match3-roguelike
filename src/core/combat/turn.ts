@@ -36,10 +36,12 @@ export type EndOfPhaseResult = {
 // per-match by the store walker; this resolves the still-pooled blue pool
 // per Bulwark/Reinforce rules, then transitions to the enemy turn.
 //
-// Pending-spell precedence (01-design §Spells):
-// - Bulwark wins: blue pool → attack at floor(blue/2), block becomes 0.
-//   Reinforce, if also queued, doubles zero — wasted, no refund.
-// - Reinforce without Bulwark: block becomes (blue × 2).
+// Pending-spell resolution (01-design §Spells):
+// - Bulwark alone: blue pool → attack at floor(blue/2), block becomes 0.
+// - Reinforce alone: block becomes (blue × 2) and carries into next phase.
+// - Both queued (the synergy): Reinforce empowers the Bulwark swing —
+//   attack at full blue (not floor/2), block becomes 0, and Reinforce
+//   gives up its own double/carry. Both spells are spent on one strike.
 // - Neither queued: block = blue (the default).
 //
 // Riposte stays in pendingSpells across the enemy turn (it triggers on
@@ -61,7 +63,9 @@ export function resolveEndOfPhase(
   let nextBlock = pools.blue
   if (hasBulwark) {
     nextBlock = 0
-    const rawAttack = Math.floor(pools.blue / 2)
+    // Reinforce, if also queued, empowers the swing to full blue damage
+    // and gives up its own double/carry — both spells fire as one strike.
+    const rawAttack = hasReinforce ? pools.blue : Math.floor(pools.blue / 2)
     const target =
       targetEnemyId != null
         ? nextEnemies.find((e) => e.id === targetEnemyId && e.hp > 0)
@@ -119,8 +123,10 @@ export function resolveEndOfPhase(
     pendingSpells: nextPending,
     // Reinforce queues a one-shot block carry-over for the next phase
     // (01-design §Reinforce): normal "block zeros at next phase start"
-    // is overridden once.
-    carryBlockNextPhase: hasReinforce ? true : player.carryBlockNextPhase,
+    // is overridden once. When Reinforce is combined with Bulwark, it is
+    // spent empowering the swing instead — no carry.
+    carryBlockNextPhase:
+      hasReinforce && !hasBulwark ? true : player.carryBlockNextPhase,
   }
 
   const anyAlive = nextEnemies.some((e) => e.hp > 0)
