@@ -12,7 +12,7 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
-import type { Intent, StatusInstance, StatusKind } from '../../types'
+import type { Enemy, Intent, StatusInstance, StatusKind } from '../../types'
 import {
   applyStatusToList,
   statusKindFromDamageSource,
@@ -30,12 +30,18 @@ const INTENT_FIRE_MS = 460
 const KILL_PULSE_MS = 720
 
 function intentNumber(intent: Intent): number {
-  return intent.kind === 'tile-burn' ? intent.count : intent.amount
+  if (intent.kind === 'tile-burn') return intent.count
+  if (intent.kind === 'buff-ally') return intent.stacks
+  if (intent.kind === 'heal-ally' || intent.kind === 'shield-ally') return intent.amount
+  return intent.amount
 }
 
 function intentIcon(intent: Intent): string {
   if (intent.kind === 'attack') return '⚔'
   if (intent.kind === 'block') return '🛡'
+  if (intent.kind === 'heal-ally') return '❤️'
+  if (intent.kind === 'buff-ally') return '🔱'
+  if (intent.kind === 'shield-ally') return '🛡'
   return '🔥'
 }
 
@@ -48,6 +54,9 @@ function intentLabel(intent: Intent): string {
     return `${base} (applies ${onHit.stacks} ${def.name} on hit)`
   }
   if (intent.kind === 'block') return `Blocks for ${intent.amount}`
+  if (intent.kind === 'heal-ally') return `Heals ally for ${intent.amount}`
+  if (intent.kind === 'buff-ally') return `Buffs ally with ${intent.stacks} Strength`
+  if (intent.kind === 'shield-ally') return `Shields ally for ${intent.amount}`
   return `Sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire`
 }
 
@@ -70,6 +79,12 @@ function intentDescription(intent: Intent): ReactNode {
         <Keyword id="block">block</Keyword> first.
       </>
     )
+  if (intent.kind === 'heal-ally')
+    return `Restores ${intent.amount} HP to an ally next turn.`
+  if (intent.kind === 'buff-ally')
+    return `Grants ${intent.stacks} Strength to an ally — their attacks deal extra damage.`
+  if (intent.kind === 'shield-ally')
+    return `Adds ${intent.amount} block to an ally next turn.`
   return (
     <>
       Next turn, sets {intent.count} tile{intent.count === 1 ? '' : 's'} on
@@ -447,6 +462,7 @@ export function EnemyFrame() {
                 intent={intent}
                 tick={intentTick[enemy.id] ?? 0}
                 lethal={lethalIntent}
+                enemies={enemies}
               />
             )}
             <div className="enemy-sprite" aria-hidden>
@@ -503,10 +519,12 @@ function IntentBadge({
   intent,
   tick,
   lethal,
+  enemies,
 }: {
   intent: Intent
   tick: number
   lethal: boolean
+  enemies: Enemy[]
 }) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -538,6 +556,16 @@ function IntentBadge({
     return () => window.removeEventListener('resize', compute)
   }, [hovered])
 
+  // For ally-target intents, look up the target's name from the enemy list
+  // so the badge shows "❤️ 4 ➜ Brute" rather than a bare number.
+  const allyTargetId =
+    intent.kind === 'heal-ally' || intent.kind === 'buff-ally' || intent.kind === 'shield-ally'
+      ? intent.targetAllyId
+      : null
+  const allyTargetName = allyTargetId
+    ? (enemies.find((e) => e.id === allyTargetId)?.name ?? '?')
+    : null
+
   return (
     <>
       <div
@@ -547,7 +575,7 @@ function IntentBadge({
         key={`${intent.kind}-${intentNumber(intent)}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         role="img"
-        aria-label={`${intentLabel(intent)}${lethal ? ' — lethal!' : ''}`}
+        aria-label={`${intentLabel(intent)}${allyTargetName ? ` → ${allyTargetName}` : ''}${lethal ? ' — lethal!' : ''}`}
         tabIndex={0}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -570,6 +598,15 @@ function IntentBadge({
                 The chip will show the same number once it lands. */}
             <span className="intent-rider-amount">{intent.onHit.stacks}</span>
           </span>
+        )}
+        {/* Ally-target: show arrow + target ally name/silhouette */}
+        {allyTargetName && (
+          <>
+            <span className="intent-ally-arrow" aria-hidden>➜</span>
+            <span className="intent-ally-target" aria-hidden title={allyTargetName}>
+              {allyTargetName}
+            </span>
+          </>
         )}
       </div>
       {hovered &&

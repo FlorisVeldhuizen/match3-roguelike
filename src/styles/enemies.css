@@ -405,3 +405,50 @@
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
 }
 
+/* --- H4b: Ally-target intent badges --- */
+
+/* heal-ally: green accent (life/restore theme) */
+.enemy-intent.intent-heal-ally {
+  border-color: #4caf82;
+  color: #a8e6c3;
+  box-shadow: 0 0 14px rgba(76, 175, 130, 0.25), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.intent-tooltip.intent-heal-ally .intent-tooltip-title {
+  color: #a8e6c3;
+}
+
+/* buff-ally: gold/trident accent (strength theme) */
+.enemy-intent.intent-buff-ally {
+  border-color: var(--gold-2, #c8a35a);
+  color: var(--gold-3, #f0c870);
+  box-shadow: 0 0 14px rgba(200, 163, 90, 0.28), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.intent-tooltip.intent-buff-ally .intent-tooltip-title {
+  color: var(--gold-3, #f0c870);
+}
+
+/* shield-ally: blue accent (armor theme, matches block badges) */
+.enemy-intent.intent-shield-ally {
+  border-color: var(--arcane-1);
+  color: var(--arcane-2);
+  box-shadow: 0 0 14px rgba(122, 184, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.intent-tooltip.intent-shield-ally .intent-tooltip-title {
+  color: var(--arcane-2);
+}
+
+/* Arrow + target-name label shown between source icon and target name */
+.intent-ally-arrow {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.intent-ally-target {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  max-width: 6ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
