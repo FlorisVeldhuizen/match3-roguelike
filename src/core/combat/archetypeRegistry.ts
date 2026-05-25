@@ -21,6 +21,13 @@ export type ArchetypeDef = {
   // Optional rider on attack intents: applies a status to the player
   // when the attack lands (any hpDamage > 0). Smolder applies Burn.
   onHitStatus?: OnHitStatusDef
+  // Ally-support intent ranges. Required for archetypes whose pattern
+  // includes the corresponding ally-target kind.
+  healAllyRange?: IntentRange
+  shieldAllyRange?: IntentRange
+  // buff-ally applies a fixed stack count (no range — balance parity with
+  // standard status application).
+  buffAllyStacks?: number
 }
 
 // Registry pattern (per 03-architecture §11): core can't import from content,

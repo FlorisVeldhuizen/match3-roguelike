@@ -36,6 +36,14 @@ export function applyStatusToList(
         : s,
     )
   }
+  // Strength stacks additively (like Burn) — each application adds to the bonus.
+  if (incoming.kind === 'strength') {
+    return list.map((s) =>
+      s.kind === 'strength'
+        ? { kind: 'strength', stacks: s.stacks + incoming.stacks }
+        : s,
+    )
+  }
   // Vulnerable / Weak: refresh by taking the longer remaining.
   return list.map((s) =>
     s.kind === incoming.kind
@@ -64,6 +72,9 @@ export type TickResult = {
 // status decrements stacks by 1; statuses at stacks 0 are removed.
 // Decay-while-acting is the StS Burn pattern: the same number
 // represents intensity and remaining turns simultaneously.
+//
+// Strength is explicitly excluded from decay — it never ticks down.
+// It sticks until removed by an external effect.
 export function tickStatuses(
   ownerTag: 'player' | string,
   statuses: readonly StatusInstance[],
@@ -73,6 +84,11 @@ export function tickStatuses(
   let regenHeal = 0
   const next: StatusInstance[] = []
   for (const s of statuses) {
+    // Strength does not decay — keep it untouched and emit no tick event.
+    if (s.kind === 'strength') {
+      next.push(s)
+      continue
+    }
     if (s.kind === 'burn') burnDamage += s.stacks
     if (s.kind === 'regen') regenHeal += s.stacks
     const remaining = s.stacks - 1
@@ -152,6 +168,10 @@ export function statusKindFromDamageSource(
 // Compose the multipliers and floor the result. Used by both
 // player-attack (red pool damage) and enemy-attack (intent amount)
 // paths so the rounding rule (01-design §rounding) lives in one place.
+//
+// Strength applies as a flat additive bonus AFTER the Weak × Vulnerable
+// multipliers are floored. This matches 01-design §rounding: floor the
+// multiply, then add the flat bonus (no second floor needed — integers).
 export function composeDamage(
   rawAmount: number,
   sourceStatuses: readonly StatusInstance[],
@@ -159,5 +179,6 @@ export function composeDamage(
 ): number {
   if (rawAmount <= 0) return 0
   const m = weakMultiplier(sourceStatuses) * vulnerableMultiplier(targetStatuses)
-  return Math.floor(rawAmount * m)
+  const strengthBonus = sourceStatuses.find((s) => s.kind === 'strength')?.stacks ?? 0
+  return Math.floor(rawAmount * m) + strengthBonus
 }

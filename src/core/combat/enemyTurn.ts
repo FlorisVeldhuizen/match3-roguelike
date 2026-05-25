@@ -327,6 +327,69 @@ export function executeEnemyTurn(
       // but we surface the recovery so the empty turn reads as a reward
       // for breaking the guard rather than a dead beat.
       events.push({ kind: 'enemy-staggered', enemyId: updatedEnemy.id })
+    } else if (intent.kind === 'heal-ally') {
+      // Find the target ally in the current working list. If dead or missing,
+      // no-op silently — mid-turn ally death is legal (e.g. burn tick).
+      const target = nextEnemies.find(
+        (e) => e.id === intent.targetAllyId && e.hp > 0,
+      )
+      if (target) {
+        const healed = Math.min(intent.amount, target.maxHp - target.hp)
+        if (healed > 0) {
+          const healedTarget: Enemy = { ...target, hp: target.hp + healed }
+          nextEnemies = nextEnemies.map((e) =>
+            e.id === target.id ? healedTarget : e,
+          )
+          events.push({
+            kind: 'ally-healed',
+            sourceId: updatedEnemy.id,
+            targetId: target.id,
+            amount: healed,
+          })
+        }
+      }
+    } else if (intent.kind === 'buff-ally') {
+      // Apply strength stacks to the target ally.
+      const target = nextEnemies.find(
+        (e) => e.id === intent.targetAllyId && e.hp > 0,
+      )
+      if (target) {
+        const newStatus = { kind: 'strength' as const, stacks: intent.stacks }
+        const buffedTarget: Enemy = {
+          ...target,
+          statuses: applyStatusToList(target.statuses, newStatus),
+        }
+        nextEnemies = nextEnemies.map((e) =>
+          e.id === target.id ? buffedTarget : e,
+        )
+        events.push({
+          kind: 'status-applied',
+          target: target.id,
+          status: newStatus,
+          source: { kind: 'enemy', enemyId: updatedEnemy.id },
+        })
+      }
+    } else if (intent.kind === 'shield-ally') {
+      // Add block to the target ally. Enemies accumulate persistent block
+      // (depleted by incoming damage) — same stacking rule as self-block.
+      const target = nextEnemies.find(
+        (e) => e.id === intent.targetAllyId && e.hp > 0,
+      )
+      if (target) {
+        const shieldedTarget: Enemy = {
+          ...target,
+          block: target.block + intent.amount,
+        }
+        nextEnemies = nextEnemies.map((e) =>
+          e.id === target.id ? shieldedTarget : e,
+        )
+        events.push({
+          kind: 'ally-shielded',
+          sourceId: updatedEnemy.id,
+          targetId: target.id,
+          amount: intent.amount,
+        })
+      }
     }
 
     // Telegraph next intent for the *next* player phase. If it's a block
@@ -334,7 +397,16 @@ export function executeEnemyTurn(
     // attacks during their next phase. Skip if this enemy just died.
     if (updatedEnemy.hp > 0) {
       const nextIndex = updatedEnemy.nextIntentIndex + 1
-      const rolled = rollIntent(updatedEnemy.archetype, nextIndex, nextRng)
+      // Pass the current living enemies and roller's id so ally-target intents
+      // can pick a sibling deterministically. nextEnemies reflects mid-turn
+      // deaths (e.g. burn kills), so the target pool is always fresh.
+      const rolled = rollIntent(
+        updatedEnemy.archetype,
+        nextIndex,
+        nextRng,
+        nextEnemies,
+        updatedEnemy.id,
+      )
       nextRng = rolled.rng
       let updatedBlock = updatedEnemy.block
       if (rolled.intent.kind === 'block') {

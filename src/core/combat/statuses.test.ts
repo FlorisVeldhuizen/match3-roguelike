@@ -13,6 +13,7 @@ const vuln = (stacks: number): StatusInstance => ({
   stacks,
 })
 const weak = (stacks: number): StatusInstance => ({ kind: 'weak', stacks })
+const strength = (stacks: number): StatusInstance => ({ kind: 'strength', stacks })
 
 describe('applyStatusToList', () => {
   it('adds a fresh status when none of that kind exists', () => {
@@ -111,5 +112,37 @@ describe('hasStatus', () => {
   it('is true iff the kind is present', () => {
     expect(hasStatus([burn(1)], 'burn')).toBe(true)
     expect(hasStatus([burn(1)], 'vulnerable')).toBe(false)
+  })
+})
+
+describe('strength status', () => {
+  it('does not decay on tickStatuses — stacks stay unchanged', () => {
+    const res = tickStatuses('enemy-1', [strength(3)])
+    expect(res.statuses).toEqual([strength(3)])
+    expect(res.burnDamage).toBe(0)
+    expect(res.events).toHaveLength(0)
+  })
+
+  it('stacks additively on re-application', () => {
+    let list: StatusInstance[] = [strength(2)]
+    list = applyStatusToList(list, strength(3))
+    expect(list).toEqual([strength(5)])
+  })
+
+  it('composeDamage adds strength stacks as flat bonus after vuln/weak multipliers', () => {
+    // No multipliers: raw + strength
+    expect(composeDamage(5, [strength(3)], [])).toBe(8)
+    // Weak (×0.5) on source, then +strength: floor(5 × 0.5) + 2 = 4
+    expect(composeDamage(5, [weak(2), strength(2)], [])).toBe(4)
+    // Vulnerable (×1.5) on target, then +strength: floor(5 × 1.5) + 2 = 9
+    expect(composeDamage(5, [strength(2)], [vuln(2)])).toBe(9)
+  })
+
+  it('multi-stack strength applies the full bonus', () => {
+    expect(composeDamage(4, [strength(5)], [])).toBe(9)
+  })
+
+  it('strength on source does not affect zero-damage base', () => {
+    expect(composeDamage(0, [strength(5)], [])).toBe(0)
   })
 })

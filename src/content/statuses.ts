@@ -2,10 +2,12 @@ import type { StatusInstance, StatusKind } from '../types'
 import { registerStatusTemplate } from '../core/combat/statuses'
 
 // Canonical default magnitudes for each status — "how big is a fresh
-// Burn / Vulnerable / Weak". With the StS pattern (one number), stacks
-// is the only field: it decays by 1 each tick. Smolder's onHit rider
-// and any future relic that applies a status spread from these
+// Burn / Vulnerable / Weak / Strength". With the StS pattern (one number),
+// stacks is the only field: it decays by 1 each tick. Smolder's onHit
+// rider and any future relic that applies a status spread from these
 // templates, overriding stacks where the magnitude differs.
+// NOTE: Strength does NOT tick down — it sticks until removed. The
+// template stacks=2 is used as the default application magnitude.
 export const STATUS_TEMPLATES: Record<StatusKind, StatusInstance> = {
   // Burn 2 → ticks 2, then 1 (3 damage total over 2 turns).
   burn: { kind: 'burn', stacks: 2 },
@@ -15,6 +17,8 @@ export const STATUS_TEMPLATES: Record<StatusKind, StatusInstance> = {
   // Regen 3 → heals 3, then 2, then 1 (6 HP total over 3 turns).
   // Mirror of Burn's decay. Used by H4a Regenerate spell.
   regen: { kind: 'regen', stacks: 3 },
+  // Strength 2 → flat +2 to outgoing attacks. Stacks additively, never ticks.
+  strength: { kind: 'strength', stacks: 2 },
 }
 
 // Side-effect registration at module load (main.tsx imports this file
@@ -65,6 +69,13 @@ const defs: Record<StatusKind, StatusDef> = {
     icon: '🌿',
     tooltip:
       'Heals {stacks} HP at the start of your turn, then weakens by 1.',
+  },
+  strength: {
+    id: 'strength',
+    name: 'Strength',
+    icon: '🔱',
+    tooltip:
+      'Attacks deal {stacks} extra damage. Does not decay — sticks until removed.',
   },
 }
 

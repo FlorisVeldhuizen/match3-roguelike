@@ -48,11 +48,12 @@ export type DamageSource =
   | 'riposte'
   | 'thornmail'
 
-// H4a redesign: 'regen' joins the status list as the player-side
-// counterpart to Burn. Same shape: stacks decay −1 per tick, and on
-// the owner's turn-start tick `stacks` HP is healed (capped at maxHp).
-// Re-applying accumulates stacks the same way Burn does.
-export type StatusKind = 'burn' | 'vulnerable' | 'weak' | 'regen'
+// H4a: 'regen' is the player-side counterpart to Burn — stacks decay
+// −1 per tick, and on the owner's turn-start tick `stacks` HP is healed
+// (capped at maxHp). Re-applying accumulates stacks like Burn.
+// H4b: 'strength' is a flat outgoing-damage bonus that does NOT decay
+// per tick; sticks until removed by something else.
+export type StatusKind = 'burn' | 'vulnerable' | 'weak' | 'regen' | 'strength'
 
 // One number per status (Slay-the-Spire pattern). `stacks` is both
 // "magnitude" and "turns left" — every tick decrements stacks by 1, and
@@ -214,6 +215,9 @@ export type GameEvent =
   | { kind: 'block-broken'; targetId: 'player' | string }
   | { kind: 'healed'; amount: number }
   | { kind: 'enemy-killed'; enemyId: string }
+  // Ally-support events: emitted when an enemy heals or shields a sibling.
+  | { kind: 'ally-healed'; sourceId: string; targetId: string; amount: number }
+  | { kind: 'ally-shielded'; sourceId: string; targetId: string; amount: number }
   // Emitted at the start of an enemy turn when the enemy's current intent
   // was `block` and their block is now 0 — the player broke the shield, so
   // the enemy "spent" their turn recovering instead of acting. Drives the
@@ -251,7 +255,7 @@ export type CombatPhase =
   | 'victory'
   | 'game-over'
 
-export type IntentKind = 'attack' | 'block' | 'tile-burn'
+export type IntentKind = 'attack' | 'block' | 'tile-burn' | 'heal-ally' | 'buff-ally' | 'shield-ally'
 
 // Optional status rider carried on attack intents. Smolder uses this
 // to apply Burn on hit. Surfaced on the intent badge so the player
@@ -265,8 +269,13 @@ export type Intent =
   | { kind: 'attack'; amount: number; onHit?: IntentOnHit }
   | { kind: 'block'; amount: number }
   | { kind: 'tile-burn'; count: number }
+  // Ally-target intents: the source enemy supports a sibling enemy.
+  // `targetAllyId` is resolved at roll time (deterministic from rng).
+  | { kind: 'heal-ally'; amount: number; targetAllyId: string }
+  | { kind: 'buff-ally'; stacks: number; targetAllyId: string }
+  | { kind: 'shield-ally'; amount: number; targetAllyId: string }
 
-export type EnemyArchetype = 'brute' | 'smolder' | 'skirmisher'
+export type EnemyArchetype = 'brute' | 'smolder' | 'skirmisher' | 'rallier'
 
 export type PhasePools = {
   red: number
