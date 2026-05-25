@@ -404,13 +404,17 @@ export function HUD() {
       aria-label="Player status"
       data-player-hud="true"
     >
-      {/* H3-C v4: state + resources in ONE flat row — HP/block + statuses
-          on the left, mana pips + charge on the right. Statuses are
-          inline with HP because they're combat state (Burn ticks your
-          HP, Vulnerable amplifies incoming damage). Inline means no
-          separate row appearing/disappearing as statuses come and go —
-          when there are none, the row just has less in it; when there
-          are some, they sit next to the block badge. */}
+      {/* Status chips float ABOVE the HUD (mirrors the enemy frame's
+          intent-badge pattern). Absolute positioning means no layout
+          shift when chips appear/disappear — the resource row keeps a
+          stable single-row layout regardless of status presence. */}
+      <StatusBar
+        statuses={displayedStatuses}
+        tickMarks={statusTickMarks}
+        cueMarks={statusCueMarks}
+        expiringKinds={expiringStatusKinds}
+        className="player-statuses player-statuses-floating"
+      />
       <div className="hud-row hud-stat-resource-row">
         <div className="hud-stat-cluster">
           <div
@@ -443,13 +447,6 @@ export function HUD() {
               </span>
             </span>
           </div>
-          <StatusBar
-            statuses={displayedStatuses}
-            tickMarks={statusTickMarks}
-            cueMarks={statusCueMarks}
-            expiringKinds={expiringStatusKinds}
-            className="player-statuses player-statuses-inline"
-          />
         </div>
         <div className="hud-resource-cluster hud-mana-chips">
           <ManaChip
@@ -517,9 +514,6 @@ export function HUD() {
           />
         </div>
       </div>
-      {/* Statuses now render inline with the stat cluster above (next
-          to the block badge). No separate context row → no layout shift
-          when statuses appear / disappear. */}
     </section>
   )
 }

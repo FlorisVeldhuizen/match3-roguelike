@@ -134,7 +134,12 @@ export class OverlayScene {
     canvas.style.top = '0'
     canvas.style.left = '0'
     canvas.style.width = '100vw'
-    canvas.style.height = '100vh'
+    // dvh tracks the dynamic viewport (URL-bar collapse on iOS Safari),
+    // so the canvas display size matches window.innerHeight 1:1. With
+    // plain `100vh` the canvas is sized to the URL-bar-hidden height
+    // while Pixi's internal renderer matches innerHeight — particles
+    // aimed at DOM coords render stretched and visually overshoot.
+    canvas.style.height = '100dvh'
     canvas.style.pointerEvents = 'none'
     canvas.style.zIndex = '5'
     document.body.appendChild(canvas)

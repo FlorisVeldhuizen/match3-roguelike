@@ -2588,6 +2588,31 @@ body.vignette-burn::before {
   min-height: 1.6rem;
 }
 
+/* Floating status row above the HUD — mirrors the enemy frame's intent
+   badge pattern. Absolute so the chips can appear / disappear without
+   shifting the HP+block+mana row below. Centered on the HUD's top
+   edge; pointer-events stay enabled so chip tooltips work. The HUD's
+   ::before diamond divider sits at top: -0.55rem above the same edge,
+   so we offset further (-1.6rem) to clear it. */
+.player-statuses-floating {
+  position: absolute;
+  top: -1.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  min-height: 0;
+  justify-content: center;
+}
+
+/* Floating chips sit over the HUD's top edge + diamond divider, so the
+   default 35%-alpha background reads as see-through. Use a solid dark
+   gradient matching the enemy-intent badge so the chip is legible
+   against the busy chrome behind it. */
+.player-statuses-floating .status-chip {
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
 .enemy-effects-row {
   display: flex;
   align-items: center;
@@ -2628,11 +2653,13 @@ body.vignette-burn::before {
   aspect-ratio: 1 / 1;
 }
 
-/* Mobile portrait: the spell tray + status + HP rows take less stacked
-   space than on desktop, so the board can claim more vertical room. */
+/* Mobile portrait: budget for header (~36px) + enemy frame (~150px) +
+   HUD (~50px, now single-row since statuses float) + spell tray (~85px) +
+   gaps (~30px) + safe-area bottom (~30px). Single-row HUD freed ~25px
+   vs the earlier two-row layout, so the board can reclaim that. */
 @media (max-width: 760px) {
   .board-shell {
-    --board-chrome: 360px;
+    --board-chrome: 385px;
   }
 }
 
@@ -2655,10 +2682,10 @@ body.vignette-burn::before {
 
 @media (max-width: 760px) {
   .game {
-    gap: 0.55rem;
+    gap: 0.5rem;
   }
   .game-header {
-    padding: 0.45rem 0.7rem;
+    padding: 0.3rem 0.6rem;
     font-size: 0.82rem;
     gap: 0.4rem;
     flex-wrap: wrap;
@@ -2671,11 +2698,11 @@ body.vignette-burn::before {
     margin-right: 0.3rem;
   }
   .hud-title {
-    font-size: 0.9rem;
+    font-size: 0.78rem;
   }
   .hud-title::before,
   .hud-title::after {
-    margin: 0 0.25rem;
+    margin: 0 0.2rem;
   }
   .hud {
     padding: 0.55rem 0.7rem 0.65rem;
@@ -2689,7 +2716,12 @@ body.vignette-burn::before {
     justify-content: space-between;
   }
   .hp-bar {
-    min-width: 0;
+    /* Mobile: shrink, but not past the point where "XXX / XXX" clips.
+       96px fits 3-digit HP both sides with our 0.78rem Cinzel + 0.08em
+       letter-spacing. Without a floor, flex would squeeze "36/40" down
+       to "36/4" with the last digit cut off the right edge. */
+    min-width: 96px;
+    flex: 0 1 160px;
   }
 
   .enemy-row {
@@ -2697,7 +2729,26 @@ body.vignette-burn::before {
   }
   .enemy-frame {
     min-width: 130px;
-    padding: 0.4rem 0.7rem 0.5rem;
+    padding: 0.3rem 0.6rem 0.4rem;
+    gap: 0.2rem;
+  }
+  .enemy-sprite {
+    width: 42px;
+    height: 42px;
+  }
+  .enemy-glyph {
+    font-size: 1.25rem;
+  }
+  .enemy-name {
+    font-size: 0.76rem;
+    letter-spacing: 0.06em;
+  }
+  .enemy-hp-bar {
+    height: 12px;
+  }
+  .enemy-hp-text {
+    font-size: 0.64rem;
+    line-height: 12px;
   }
 
   .spell-tray {
@@ -2732,7 +2783,19 @@ body.vignette-burn::before {
     height: 16px;
   }
   .hud-resource-cluster {
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+  }
+  /* Statuses float above the HUD now, so the resource row holds just
+     HP+block (shrinkable) + mana chips. Force a single row and let the
+     HP bar shrink so the strip never wraps on mobile. */
+  .hud-stat-resource-row {
+    flex-wrap: nowrap;
     gap: 0.5rem;
+  }
+  .hud-stat-cluster {
+    gap: 0.35rem;
+    min-width: 0;
   }
   .hud-divider {
     height: 14px;
@@ -2776,14 +2839,14 @@ body.vignette-burn::before {
 
 @media (max-width: 420px) {
   .hud-title {
-    font-size: 0.82rem;
+    font-size: 0.72rem;
     letter-spacing: 0.14em;
   }
   .hud-seed {
     display: none;
   }
   .game-header {
-    padding: 0.4rem 0.55rem;
+    padding: 0.28rem 0.5rem;
   }
   .spell-btn {
     font-size: 0.66rem;
@@ -3937,18 +4000,36 @@ body:has(.game-over-overlay) .intent-tooltip {
   position: fixed;
   inset: 0;
   z-index: 9;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* `safe center` centers the map vertically when it fits, but falls
+     back to top-aligned when the map is taller than the viewport so the
+     top isn't pushed off-screen and unreachable. Chrome/Safari/FF all
+     support `safe`. */
+  justify-content: safe center;
   background:
     radial-gradient(ellipse at top, rgba(200, 163, 90, 0.08), transparent 60%),
     linear-gradient(180deg, var(--ink-1), var(--ink-0));
-  padding: 1.5rem;
-  overflow: auto;
+  padding: 1.5rem 0.75rem 2rem;
+  /* Vertical map can exceed the viewport on tall phones (5 floors ×
+     FLOOR_GAP_PX ≈ 500px + chrome). The screen itself is the scroll
+     container; MapScreen.tsx imperatively scrolls the current floor
+     into view on entry. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Vertical pan only, no rubber-band zoom on iOS. */
+  touch-action: pan-y;
 }
 
 .map-screen-inner {
   text-align: center;
   color: var(--parchment);
+  /* Don't let the title block stretch past the scroll viewport — keeps
+     the canvas comfortably narrow on tablets while still tight on phones. */
+  width: 100%;
+  max-width: 420px;
 }
 
 .map-title {

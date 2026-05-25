@@ -105,6 +105,11 @@ export type GameStore = {
   // BoardScene.performSwap. Bumps fightCounter so the BoardScene
   // rebuilds sprites against the new cells.
   debugForceMatch5: () => { from: Pos; to: Pos } | null
+  // Dev-only: force-start a fight against the given archetype, bypassing
+  // map navigation. HP + mana carry from the current fight state (same
+  // semantics as enterNode), but no map node is marked completed and
+  // currentNodeId is left untouched — purely a sandbox.
+  debugForceFight: (archetype: EnemyArchetype) => void
 }
 
 const PLAYER_MAX_HP = 40
@@ -848,6 +853,37 @@ export const useGameStore = create<GameStore>()(
         s.fightCounter += 1
       })
       return { from: { x: 3, y: 4 }, to: { x: 3, y: 3 } }
+    },
+    debugForceFight: (archetype: EnemyArchetype) => {
+      const current = get()
+      const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics, {
+        archetypes: [archetype],
+      })
+      enemyRoll.fight.player.hp = Math.min(
+        enemyRoll.fight.player.maxHp,
+        current.fight.player.hp,
+      )
+      enemyRoll.fight.player.mana = { ...current.fight.player.mana }
+      const boardRoll = generateBoard(current.rng.board)
+      runOnRoundStarted(
+        { fightId: 0 },
+        enemyRoll.fight.player.relics,
+        snapshotOf(
+          enemyRoll.fight.player,
+          enemyRoll.fight.enemies,
+          enemyRoll.fight.targetEnemyId,
+          0,
+        ),
+      )
+      set((s) => {
+        s.fight = enemyRoll.fight
+        s.rng.enemy = enemyRoll.rng
+        s.board.cells = boardRoll.board
+        s.rng.board = boardRoll.rng
+        s.board.selected = null
+        s.fightCounter += 1
+        s.runPhase = 'fight'
+      })
     },
   })),
 )

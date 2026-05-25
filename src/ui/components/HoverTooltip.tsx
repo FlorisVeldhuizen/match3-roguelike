@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -46,6 +47,33 @@ export function HoverTooltip({
   const [anchorHovered, setAnchorHovered] = useState(false)
   const hovered = autoShow || anchorHovered
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  // Mobile dismissal: touch opens via onTouchStart toggle, but there's no
+  // mouseleave to ever close it. While open, listen at the document level
+  // for a pointerdown outside both anchor + tooltip, and on scroll/resize.
+  // Tapping a different tooltip's anchor also lands here (the other anchor
+  // is outside our refs), so only one tooltip stays pinned at a time.
+  // autoShow tooltips opt out — they're sub-tooltips owned by a parent.
+  useEffect(() => {
+    if (!anchorHovered || autoShow) return
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null
+      if (!target) return
+      if (anchorRef.current?.contains(target)) return
+      if (tipRef.current?.contains(target)) return
+      setAnchorHovered(false)
+    }
+    const onScrollOrResize = () => setAnchorHovered(false)
+    // capture so we run before any handler that calls stopPropagation
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [anchorHovered, autoShow])
 
   useLayoutEffect(() => {
     if (!hovered) return

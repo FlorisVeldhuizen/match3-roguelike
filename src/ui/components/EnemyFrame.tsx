@@ -460,7 +460,7 @@ export function EnemyFrame() {
                 <span>{shownBlock}</span>
               </div>
               <StatusBar
-                statuses={displayedStatuses[enemy.id] ?? enemy.statuses}
+                statuses={dead ? [] : (displayedStatuses[enemy.id] ?? enemy.statuses)}
                 tickMarks={statusTickMarks[enemy.id]}
                 cueMarks={statusCueMarks[enemy.id]}
                 expiringKinds={expiringStatusKinds[enemy.id]}

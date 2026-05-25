@@ -196,23 +196,11 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-// Cushion between the end of all combat animation (AC drain + optional
-// end-of-fight sweep) and the `gameplay-settled` event. The sweep
-// already absorbs ~870ms of trailing-FX time (damage popups drift
-// 1070ms past damage-dealt; sweep runs alongside that). The cushion
-// covers the final ~200ms tail so the modal lands cleanly on a settled
-// scene with a small breathing beat — not right on the frame the last
-// popup faded.
-const GAMEPLAY_SETTLED_CUSHION_MS = 350
 
 export class BoardScene {
   private readonly mountEl: HTMLElement
   private app: Application | null = null
   private animator: AnimationController | null = null
-  // Timer for emitting `gameplay-settled` after the AC drains. Held on
-  // the instance so a follow-up swap (which shouldn't be possible while
-  // animating, but defensively) can cancel a stale settle.
-  private gameplaySettledTimer: number | null = null
   private selectionRing: Graphics | null = null
   private ghostRing: Graphics | null = null
   // Keyboard cursor: persists across uses so arrow keys resume from the
@@ -1043,26 +1031,15 @@ export class BoardScene {
     const result = useGameStore.getState().attemptSwap(from, to)
     await animator.play(result.events)
     // If this swap ended the fight, sweep the board: every remaining gem
-    // falls off the bottom. The sweep doubles as natural pacing into the
-    // terminal-state modal — trailing FX (damage popup drift, kill pulse)
-    // play out alongside it instead of needing a fixed cushion. Skipped
-    // when the user prefers reduced motion: no big falling animation.
+    // falls off the bottom. Awaited so the modal lands AFTER the board
+    // has cleared, not while gems are still in flight. Skipped when the
+    // user prefers reduced motion.
     const fightPhase = useGameStore.getState().fight.phase
     const fightEnded = fightPhase === 'victory' || fightPhase === 'game-over'
     if (fightEnded && !prefersReducedMotion()) {
-      // Fire-and-forget: the sweep runs concurrently with the cushion
-      // and the modal reveal. The player sees the board emptying *as*
-      // the win/loss screen lands — better pacing than making the modal
-      // wait for every last gem to disappear off-screen.
-      void animator.sweepBoard()
+      await animator.sweepBoard()
     }
-    if (this.gameplaySettledTimer != null) {
-      window.clearTimeout(this.gameplaySettledTimer)
-    }
-    this.gameplaySettledTimer = window.setTimeout(() => {
-      this.gameplaySettledTimer = null
-      emitGameEvent({ kind: 'gameplay-settled' })
-    }, GAMEPLAY_SETTLED_CUSHION_MS)
+    emitGameEvent({ kind: 'gameplay-settled' })
   }
 
   // Soft glow halo: concentric white circles with stepped alpha fake a

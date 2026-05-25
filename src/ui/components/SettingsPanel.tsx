@@ -94,6 +94,11 @@ export function SettingsPanel() {
     window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
   }
 
+  const forceFight = (archetype: 'skirmisher' | 'brute' | 'smolder') => {
+    useGameStore.getState().debugForceFight(archetype)
+    setOpen(false)
+  }
+
   return (
     <div className="settings-panel" ref={rootRef}>
       <button
@@ -160,6 +165,32 @@ export function SettingsPanel() {
               >
                 Force match-5
               </button>
+              <div className="settings-row settings-row-chips">
+                <span className="settings-label">Force fight</span>
+                <div className="settings-chips">
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={() => forceFight('skirmisher')}
+                  >
+                    Skirm
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={() => forceFight('brute')}
+                  >
+                    Brute
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={() => forceFight('smolder')}
+                  >
+                    Smolder
+                  </button>
+                </div>
+              </div>
               <div className="settings-row settings-row-chips">
                 <span className="settings-label">Speed</span>
                 <div className="settings-chips">
