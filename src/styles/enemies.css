@@ -1,0 +1,407 @@
+/* --- Enemies --- */
+
+.enemy-row {
+  width: 100%;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.enemy-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 0.85rem 0.55rem;
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.06), transparent 40%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--stone-2);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.06),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+  min-width: 150px;
+  transition: border-color 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
+}
+
+@keyframes intent-pop-in {
+  0% {
+    transform: translateX(-50%) translateY(6px) scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: translateX(-50%) translateY(-2px) scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.enemy-intent {
+  position: absolute;
+  top: -0.95rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 0.3rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--stone-2);
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  z-index: 2;
+  animation: intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+  transform-origin: center bottom;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  cursor: help;
+}
+
+.enemy-intent.intent-attack {
+  border-color: var(--ember-1);
+  color: #ffb0ad;
+  box-shadow: 0 0 14px rgba(238, 94, 87, 0.25), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Lethal warning — pulse and ring on attack badges that exceed hp + block. */
+.enemy-intent.intent-attack.lethal {
+  animation:
+    intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05),
+    intent-lethal 1100ms ease-in-out 320ms infinite;
+  color: #ffe1de;
+  border-color: #ff5550;
+}
+
+@keyframes intent-lethal {
+  0%, 100% {
+    background: linear-gradient(180deg, #4a1a1a, #2a0d0d);
+    box-shadow: 0 0 14px rgba(238, 94, 87, 0.45), 0 2px 8px rgba(0, 0, 0, 0.55);
+    border-color: #ff5550;
+  }
+  50% {
+    background: linear-gradient(180deg, #7a2222, #4a1010);
+    box-shadow:
+      0 0 26px 4px rgba(238, 94, 87, 0.85),
+      0 0 0 2px rgba(238, 94, 87, 0.55),
+      0 2px 8px rgba(0, 0, 0, 0.55);
+    border-color: #ff8a85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enemy-intent.intent-attack.lethal {
+    animation: intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+    background: linear-gradient(180deg, #6a1c1c, #3a0d0d);
+    box-shadow: 0 0 18px rgba(238, 94, 87, 0.65), 0 2px 8px rgba(0, 0, 0, 0.55);
+    border-color: #ff5550;
+  }
+}
+
+.enemy-intent.intent-block {
+  border-color: var(--arcane-1);
+  color: var(--arcane-2);
+  box-shadow: 0 0 14px rgba(122, 184, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.enemy-intent .intent-icon {
+  font-size: 0.95rem;
+}
+
+/* Tooltip is portalled to <body> and positioned with JS so it can't clip the
+   viewport edges. Top/left are set as inline styles; CSS only handles look. */
+.intent-tooltip {
+  position: fixed;
+  width: max-content;
+  max-width: 240px;
+  padding: 0.6rem 0.8rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.3rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.1),
+    0 6px 18px rgba(0, 0, 0, 0.55);
+  color: var(--parchment);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-align: left;
+  /* pointer-events:none so the cursor never traps inside the tooltip
+     and never blocks its badge's mouseleave. Inline <Keyword> uses
+     autoShow to appear alongside the parent — the user doesn't need
+     to traverse into the tooltip. */
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 100;
+}
+
+.intent-tooltip-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.intent-tooltip.intent-attack .intent-tooltip-title {
+  color: var(--ember-2);
+}
+
+.intent-tooltip.intent-block .intent-tooltip-title {
+  color: var(--arcane-2);
+}
+
+.intent-tooltip-body {
+  opacity: 0.95;
+}
+
+@keyframes enemy-firing-attack {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: brightness(1);
+    border-color: var(--stone-2);
+  }
+  /* Anticipation: brief squash-down + droop. Reads as the enemy
+     coiling/winding up before the strike. ~50ms of dwell here is what
+     makes the subsequent forward pop feel like a release rather than a
+     standalone scale jump. */
+  14% {
+    transform: translate3d(0, 2px, 0) scaleX(1.05) scaleY(0.9);
+    filter: brightness(0.85);
+    border-color: var(--stone-2);
+  }
+  /* Strike: spring forward + upward + bright. */
+  32% {
+    transform: translate3d(0, -4px, 0) scale(1.1);
+    filter: brightness(2) saturate(1.5);
+    border-color: #ff7a72;
+    box-shadow: 0 0 24px rgba(238, 94, 87, 0.6);
+  }
+  65% {
+    transform: translate3d(2px, 4px, 0) scale(1.02);
+    filter: brightness(1.3);
+    border-color: #ff7a72;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: brightness(1);
+    border-color: var(--stone-2);
+  }
+}
+
+@keyframes enemy-firing-block {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
+    border-color: var(--stone-2);
+  }
+  35% {
+    transform: scale(1.04);
+    box-shadow: 0 0 28px 4px rgba(122, 184, 255, 0.45);
+    border-color: #7ab8ff;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
+    border-color: var(--stone-2);
+  }
+}
+
+.enemy-frame.firing-attack {
+  /* cubic-bezier eases out of the anticipation hold and into the spring
+     forward — keyword `ease-out` rushed past the squash too fast to feel
+     like a wind-up. */
+  animation: enemy-firing-attack 460ms cubic-bezier(0.32, 0, 0.18, 1);
+}
+
+.enemy-frame.firing-block {
+  animation: enemy-firing-block 420ms ease-out;
+}
+
+.enemy-block-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--arcane-2);
+  background: rgba(91, 143, 209, 0.18);
+  border: 1px solid rgba(91, 143, 209, 0.55);
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  box-shadow: 0 0 10px rgba(91, 143, 209, 0.18);
+}
+
+/* The row itself reserves vertical space via .enemy-effects-row min-height,
+   so we can collapse the empty badge out of horizontal flow — otherwise a
+   lone status chip (e.g. Burn applied by Riposte) sits off-center. */
+.enemy-block-badge.empty {
+  display: none;
+}
+
+.enemy-frame.targeted {
+  border-color: var(--gold-1);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-1),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(200, 163, 90, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* Click-to-target affordance. Non-target living enemies during the
+   player's turn get a pointer cursor and a soft hover ring so the
+   "you can switch target" surface is discoverable without making the
+   resting state busy. */
+.enemy-frame.selectable {
+  cursor: pointer;
+}
+.enemy-frame.selectable:hover,
+.enemy-frame.selectable:focus-visible {
+  border-color: rgba(200, 163, 90, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.3),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 0 14px rgba(200, 163, 90, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+  outline: none;
+}
+
+.enemy-frame.dead {
+  opacity: 0.4;
+  filter: grayscale(0.4);
+}
+
+/* Kill moment — flash up, settle into the static .dead look. Duration
+   must match KILL_PULSE_MS in EnemyFrame.tsx. */
+.enemy-frame.killed {
+  animation: enemy-kill 720ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes enemy-kill {
+  0% {
+    transform: scale(1);
+    filter: brightness(1) grayscale(0);
+    opacity: 1;
+  }
+  12% {
+    transform: scale(1.18) rotate(-2deg);
+    filter: brightness(2.4) saturate(1.8);
+    opacity: 1;
+  }
+  28% {
+    transform: scale(1.08) rotate(2deg);
+    filter: brightness(1.6) saturate(1.4);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(0.96);
+    filter: brightness(1) grayscale(0);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(0.98);
+    filter: grayscale(0.4);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enemy-frame.killed {
+    animation-duration: 240ms;
+    animation-timing-function: ease-out;
+  }
+}
+
+.enemy-sprite {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  /* summoning-circle: ember core, ringed by gold and shadow */
+  background:
+    radial-gradient(circle at 50% 50%, rgba(238, 94, 87, 0.25), transparent 55%),
+    radial-gradient(circle at 30% 30%, #5a3a4e, #2a1a30 70%);
+  display: grid;
+  place-items: center;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.4),
+    inset 0 0 12px rgba(0, 0, 0, 0.6),
+    0 0 14px rgba(108, 74, 184, 0.25);
+  position: relative;
+}
+
+.enemy-sprite::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(200, 163, 90, 0.35);
+  pointer-events: none;
+  animation: sigil-spin 24s linear infinite;
+}
+
+@keyframes sigil-spin {
+  to { transform: rotate(360deg); }
+}
+
+.enemy-glyph {
+  font-size: 1.55rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(238, 94, 87, 0.35));
+}
+
+.enemy-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--parchment);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.enemy-hp-bar {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  background: var(--ink-0);
+  border: 1px solid var(--stone-2);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.enemy-hp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #7a1f1c, var(--ember-1), var(--ember-2));
+  box-shadow: 0 0 8px rgba(238, 94, 87, 0.35) inset;
+  transition: width 200ms ease;
+}
+
+.enemy-hp-text {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 14px;
+  color: var(--parchment);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
+}
+

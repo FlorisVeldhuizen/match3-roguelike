@@ -355,14 +355,18 @@ export function EnemyFrame() {
       const freshHp: Record<string, number> = {}
       const freshBlock: Record<string, number> = {}
       const freshStatuses: Record<string, StatusInstance[]> = {}
+      const freshIntent: Record<string, Intent> = {}
       for (const e of s.fight.enemies) {
         freshHp[e.id] = e.hp
         freshBlock[e.id] = e.block
         freshStatuses[e.id] = e.statuses
+        freshIntent[e.id] = e.currentIntent
       }
       setDisplayedHp(freshHp)
       setDisplayedBlock(freshBlock)
       setDisplayedStatuses(freshStatuses)
+      setDisplayedIntent(freshIntent)
+      setIntentTick({})
       setStatusTickMarks({})
       setStatusCueMarks({})
       setExpiringStatusKinds({})

@@ -1,0 +1,163 @@
+/* font-display: block (not swap) — Pixi.Text bakes a fallback into the
+   texture on construction and never re-renders, so swap is worse than
+   block for popup glyphs. */
+@font-face {
+  font-family: 'Paytone One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/paytone-one-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Visually-hidden — used for aria-live regions. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:root {
+  /* Fantasy palette: ink-stained midnight, parchment, tarnished gold, ember red,
+     arcane blue, mossy green, royal purple. Tuned to read as "tome on a stone
+     altar" rather than the previous neutral indigo. */
+  --ink-0: #0b0805;
+  --ink-1: #15110b;
+  --ink-2: #1e1812;
+  --stone-1: #2a2118;
+  --stone-2: #3a2e22;
+  --gold-1: #c8a35a;
+  --gold-2: #f0d089;
+  --gold-3: #8b6a2c;
+  --parchment: #ede0c4;
+  --parchment-dim: #c9b896;
+  --ember-1: #c4423c;
+  --ember-2: #ee5e57;
+  --ember-glow: rgba(238, 94, 87, 0.55);
+  --arcane-1: #5b8fd1;
+  --arcane-2: #9ec5ff;
+  --arcane-glow: rgba(122, 184, 255, 0.45);
+  --moss-1: #2ea65c;
+  --moss-2: #4dd581;
+  --moss-glow: rgba(77, 213, 129, 0.55);
+  --royal-1: #6c4ab8;
+  --royal-2: #b89dff;
+
+  /* Body text is sans for legibility; Cinzel stays opted-in per element for
+     the short uppercase display labels (HUD title, banner text, etc.).
+     Italic-Cormorant body copy was hard to parse — replaced wholesale. */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+  color: var(--parchment);
+  background: var(--ink-0);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Allow the page to scroll when the HUD/board don't fit vertically
+     (small phones, landscape on short screens). The board-mount canvas
+     sets touch-action: none so gem drags don't accidentally scroll the
+     page. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Transparent so the .arcane-bg WebGL canvas (z-index: -1) shows through;
+     the ink-0 backstop on :root prevents any flash during load. */
+  background: transparent;
+}
+
+/* Fullscreen WebGL shader behind everything. The canvas is rendered at half
+   res internally and upscaled — the soft noise hides the resample. */
+.arcane-bg {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+
+/* Fullscreen CRT scanline + grain + vignette overlay. Sits above all UI
+   (including modals + tooltips) so the whole composition reads through
+   the same "old screen" lens. pointer-events:none keeps the canvas inert. */
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  pointer-events: none;
+  display: block;
+}
+
+
+/* Grain + edge vignette overlay — sits above the shader (z-index: 0) but
+   below all UI (auto z-index inside #root, which is on top via document
+   order). Keeps the shader feeling painterly rather than too clean. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.55) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.014) 0 1px,
+      transparent 1px 3px
+    );
+}
+
+#root {
+  min-height: 100vh;
+  /* dvh handles the shrinking address bar on iOS Safari — fallback above. */
+  min-height: 100dvh;
+  display: grid;
+  place-items: start center;
+  padding:
+    max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+  /* Stacks above body::before (grain veil at z-index: 0). */
+  position: relative;
+  z-index: 1;
+}
+
+@media (min-width: 760px) {
+  #root {
+    padding: 1rem 1rem 1.25rem;
+  }
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: 760px;
+  width: 100%;
+  position: relative;
+  /* No iOS tap-zoom delay on UI controls; no accidental text selection
+     while dragging gems on touch. (.hud-seed re-enables user-select.) */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+

@@ -122,13 +122,3 @@ registerRelic(sharpEdge)
 registerRelic(thornmail)
 registerRelic(cascadeCrystal)
 registerRelic(stoneheart)
-
-// Re-export the definitions list so callers (UI tooltip, reward roll)
-// can iterate without going through the registry for typing reasons.
-export const RELIC_DEFS: readonly RelicDef[] = [
-  ironBuckler,
-  sharpEdge,
-  thornmail,
-  cascadeCrystal,
-  stoneheart,
-]

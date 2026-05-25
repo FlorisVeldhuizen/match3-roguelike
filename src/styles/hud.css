@@ -1,0 +1,478 @@
+/* --- HUD --- */
+
+.hud {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem 0.9rem 0.7rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 50%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.4rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    inset 0 0 22px rgba(0, 0, 0, 0.5),
+    0 6px 18px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+/* Decorative HUD top divider — a thin gold rule with a centered diamond. */
+.hud::before {
+  content: '◆';
+  position: absolute;
+  top: -0.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-1);
+  padding: 0 0.5rem;
+  font-size: 0.6rem;
+  color: var(--gold-1);
+  letter-spacing: 0.3em;
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hp-bar {
+  position: relative;
+  flex: 0 1 240px;
+  min-width: 180px;
+  max-width: 280px;
+  height: 20px;
+  background: var(--ink-0);
+  border: 1px solid var(--gold-3);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 2px 6px rgba(0, 0, 0, 0.75);
+}
+
+.hp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 50%),
+    linear-gradient(90deg, #1f6a3a, var(--moss-1), var(--moss-2));
+  transition: width 200ms ease;
+}
+
+.hp-text {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+  color: var(--parchment);
+}
+
+.block-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.25rem;
+  background: rgba(40, 50, 80, 0.4);
+  border: 1px solid var(--stone-2);
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  opacity: 0.45;
+  transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.block-badge.active {
+  background: rgba(91, 143, 209, 0.22);
+  border-color: var(--arcane-1);
+  opacity: 1;
+  box-shadow: 0 0 12px rgba(91, 143, 209, 0.25);
+}
+
+.block-icon {
+  font-size: 0.95rem;
+}
+
+.block-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* H3-C: combined "state + resources" row. On desktop the row holds two
+   clusters side-by-side — HP/block on the left, mana/charge on the
+   right. On narrow viewports `flex-wrap: wrap` lets the right cluster
+   drop below, recreating the mobile-first vertical stack without a
+   media-query branch. */
+.hud-stat-resource-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  width: 100%;
+}
+
+.hud-stat-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.hud-resource-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+}
+
+/* H3: multi-colour mana chips. One chip per colour (R/B/G/Y) — purple
+   stays on the .resource path because it's ultimate charge, not mana.
+   Each chip carries its gem dot, current value, and cap (e.g. "3/8").
+   Yellow is the wild colour — visually distinct so the player reads it
+   as "the substitute that fits anywhere." Capped chips pulse to nudge
+   "spend me." Per-chip `.pulsing` (on pool-gained timing) keeps the
+   trail-landing beat. */
+.hud-mana-chips {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* H3-C v2 (Option 1): lightweight mana "pips" — gem icon + number, no
+   chip background or border. Reads as a slim resource strip in line
+   with HP/block instead of a row of chunky chips. Visual weight is
+   carried by the gem dot's saturation; the number sits next to it in
+   the existing Cinzel display style. */
+.mana-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.15rem;
+  border-radius: 0.3rem;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  min-width: 0;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+/* Wild yellow: a subtle gold glow on the dot so the player notices
+   "this colour does something special" without the heavy prismatic
+   border the chip version had. */
+.mana-chip.mana-wild .mana-dot {
+  filter: drop-shadow(0 0 4px rgba(245, 209, 90, 0.5))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+
+.mana-dot {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 4px rgba(200, 163, 90, 0.25));
+}
+.mana-dot[data-color='red'] {
+  background-image: url('/gems/red.svg');
+}
+.mana-dot[data-color='blue'] {
+  background-image: url('/gems/blue.svg');
+}
+.mana-dot[data-color='green'] {
+  background-image: url('/gems/green.svg');
+}
+.mana-dot[data-color='yellow'] {
+  background-image: url('/gems/yellow.svg');
+}
+
+.mana-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.05rem;
+}
+
+/* Cap text is dimmed and smaller — "3/8" reads as "3 (of 8 max)" at
+   a glance. The current value is the loud number. */
+.mana-cap {
+  opacity: 0.5;
+  font-size: 0.7em;
+  font-weight: 500;
+  margin-left: 0.05em;
+  color: var(--parchment-dim);
+}
+
+/* Pool-gained pulse: pip pops + brightens when a trail arrives. The
+   gem dot is the loud signal — a brief scale + brightness on the whole
+   pip reads as "this just received something" without needing the
+   chunky box-shadow glow the chip version had. */
+.mana-chip.pulsing {
+  animation: mana-pip-pulse 540ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes mana-pip-pulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.18);
+    filter: brightness(1.4);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Capped state: a continuous slow brightness pulse so the player
+   notices "spend me — I won't grow further." Soft nudge, not a warning. */
+.mana-chip.is-capped {
+  animation: mana-capped-breathe 2400ms ease-in-out infinite;
+}
+.mana-chip.is-capped .mana-dot {
+  filter: drop-shadow(0 0 5px rgba(240, 208, 137, 0.65))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+
+@keyframes mana-capped-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
+/* Faint vertical divider between the mana cluster and the charge pip.
+   Slim so it doesn't shout in the lightweight pip row. */
+.hud-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  margin: 0 0.35rem;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(200, 163, 90, 0.28),
+    transparent
+  );
+}
+
+/* Charge pip — same lightweight treatment as mana pips. Identity
+   carried by the purple gem dot's saturation + a soft purple
+   drop-shadow. .is-ready upgrades the glow to gold when the ultimate
+   is castable so the player notices across the screen. */
+.charge-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.15rem;
+  border-radius: 0.3rem;
+  background: transparent;
+  border: 1px solid transparent;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  min-width: 0;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+.charge-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  background-image: url('/gems/purple.svg');
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 4px rgba(168, 130, 220, 0.4));
+}
+.charge-chip.pulsing {
+  animation: mana-pip-pulse 540ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.charge-chip.is-ready {
+  animation: charge-ready-breathe 1800ms ease-in-out infinite;
+}
+.charge-chip.is-ready .charge-icon {
+  filter: drop-shadow(0 0 6px rgba(240, 208, 137, 0.7))
+    drop-shadow(0 0 4px rgba(168, 130, 220, 0.5))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+@keyframes charge-ready-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.2);
+  }
+}
+
+/* Spell-button cost pips: colour-coded mana dots + count. Sits in the
+   bottom-right corner of the spell button slot the old "3" number
+   used to occupy. For multi-colour costs (future content), the row
+   wraps naturally. */
+.spell-cost-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  /* Push pips to the bottom of the spell card, like the ultimate's charge cost. */
+  margin-top: auto;
+}
+.spell-cost-pip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  padding: 0.02rem 0.18rem;
+  border-radius: 0.25rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(200, 163, 90, 0.18);
+  font-size: 0.78em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.spell-cost-pip.pip-red {
+  border-color: rgba(238, 94, 87, 0.5);
+}
+.spell-cost-pip.pip-blue {
+  border-color: rgba(122, 184, 255, 0.5);
+}
+.spell-cost-pip.pip-green {
+  border-color: rgba(115, 198, 138, 0.5);
+}
+.spell-cost-pip.pip-yellow {
+  border-color: rgba(245, 209, 90, 0.55);
+}
+.spell-cost-pip.pip-purple {
+  border-color: rgba(168, 130, 220, 0.55);
+}
+.spell-cost-dot {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+.spell-cost-dot[data-color='red'] {
+  background-image: url('/gems/red.svg');
+}
+.spell-cost-dot[data-color='blue'] {
+  background-image: url('/gems/blue.svg');
+}
+.spell-cost-dot[data-color='green'] {
+  background-image: url('/gems/green.svg');
+}
+.spell-cost-dot[data-color='yellow'] {
+  background-image: url('/gems/yellow.svg');
+}
+.spell-cost-dot[data-color='purple'] {
+  background-image: url('/gems/purple.svg');
+}
+.spell-cost-amount {
+  color: var(--gold-2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+.spell-cost-free {
+  font-size: 0.72em;
+  font-style: italic;
+  opacity: 0.65;
+}
+
+/* Mana-chip tooltip: same look as spell tooltip, slightly tighter.
+   The .hover-tooltip-aside line is the "caps at X" subtext. */
+.hover-tooltip-aside {
+  margin-top: 0.4rem;
+  font-size: 0.85em;
+  opacity: 0.72;
+  font-style: italic;
+}
+
+/* Pool is still up for grabs (Bulwark etc. can siphon before commit).
+   Phase end → class drops, badge settles to .active. */
+.block-badge.pending {
+  background: rgba(58, 90, 138, 0.5);
+  border-color: var(--arcane-2);
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(164, 202, 254, 0.55) inset, 0 0 14px rgba(122, 184, 255, 0.25);
+}
+
+/* Red gem trail just arrived on the targeted enemy: brief outline pulse. */
+.enemy-frame.trail-pulsing {
+  animation: enemy-trail-pulse 380ms ease-out;
+}
+
+@keyframes enemy-trail-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+  40% {
+    box-shadow: 0 0 16px 4px rgba(238, 94, 87, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+}
+
+/* Stagger recoil: tilt-and-settle wobble + an arcane glow that fades over
+   the stagger beat. Reads as "the enemy is reeling and exposed". */
+.enemy-frame.staggered {
+  animation: enemy-stagger 520ms cubic-bezier(0.22, 0.7, 0.3, 1);
+}
+
+@keyframes enemy-stagger {
+  0% {
+    transform: translateX(0) rotate(0);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+  }
+  18% {
+    transform: translateX(-5px) rotate(-2.2deg);
+    box-shadow: 0 0 20px 4px rgba(184, 157, 255, 0.55);
+  }
+  38% {
+    transform: translateX(4px) rotate(1.6deg);
+    box-shadow: 0 0 22px 5px rgba(184, 157, 255, 0.5);
+  }
+  58% {
+    transform: translateX(-2px) rotate(-0.8deg);
+    box-shadow: 0 0 16px 3px rgba(184, 157, 255, 0.4);
+  }
+  78% {
+    transform: translateX(1px) rotate(0.3deg);
+    box-shadow: 0 0 10px 2px rgba(184, 157, 255, 0.25);
+  }
+  100% {
+    transform: translateX(0) rotate(0);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+  }
+}
+

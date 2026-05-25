@@ -1,0 +1,544 @@
+/* --- Burning tile overlay (Smolder verb) ---
+   Sits inside .board-mount alongside the Pixi canvas (which Pixi
+   appendChild's). board-mount and the canvas share the same CSS box,
+   so insetting by BOARD_PADDING / LOGICAL_SIZE = 8/528 lines the 8×8
+   grid up with the gem grid inside the canvas. */
+.burning-overlay {
+  position: absolute;
+  top: calc(8 / 528 * 100%);
+  left: calc(8 / 528 * 100%);
+  right: calc(8 / 528 * 100%);
+  bottom: calc(8 / 528 * 100%);
+  /* No grid — flames absolute-position via inline left/top % so they
+     can transition smoothly when the gem they sit on swaps or falls. */
+  pointer-events: none;
+  z-index: 3;
+}
+
+.burning-cell {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  font-size: clamp(1rem, 4.5vmin, 1.7rem);
+  filter: drop-shadow(0 0 6px var(--ember-glow));
+  animation: burning-pulse 1.3s ease-in-out infinite;
+  /* `transition` is set inline per-instance by BurningOverlay so the
+     flame slides on the same window as the gem sprite (swap = SWAP_MS,
+     fall = fallDurationMs(distance) — see useAnimatedCellPositions). */
+  /* Click-through: the overlay must not block pointer events to the
+     Pixi canvas underneath, or burning tiles become unselectable.
+     The persistent Burn chip on the HUD owns the "what does this do"
+     tooltip; the flame is a board marker, not an interactive element. */
+  pointer-events: none;
+}
+
+/* Red wash behind the flame so the *whole cell* reads as "hot", not
+   just the emoji. Inset 6% keeps the gradient from bleeding into the
+   neighbour cells. The pulse runs slightly slower than the flame's
+   own transform pulse so the two layers feel like a single heart-
+   beat instead of competing. screen blend lets the gem texture below
+   show through while still picking up red. */
+.burning-cell::before {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 14%;
+  background: radial-gradient(
+    circle at center,
+    rgba(238, 94, 87, 0.45) 0%,
+    rgba(238, 94, 87, 0.22) 50%,
+    rgba(238, 94, 87, 0) 80%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: -1;
+  animation: burning-cell-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes burning-cell-glow {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+.burning-flame {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 70%;
+  height: 70%;
+  /* Per-instance scale set inline by BurningOverlay (--flame-scale).
+     Eases between values so a tick visibly shrinks the flame rather
+     than snapping. The cell's pulse animation compounds with this
+     scale through nested transforms. */
+  transform: scale(var(--flame-scale, 1));
+  transition: transform 320ms cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+
+.burning-flame svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes burning-pulse {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 4px var(--ember-glow));
+  }
+  50% {
+    transform: translateY(-1.5px) scale(1.08);
+    filter: drop-shadow(0 0 9px rgba(238, 94, 87, 0.85));
+  }
+}
+
+/* Final turn: faster, flickerier — opacity dips like a candle about to
+   go out, with a tighter scale pulse. Players who only see the small
+   flame still get a strong "about to fizz out" read. The cell wash
+   underneath gets the same flicker so the whole tile reads "guttering",
+   not just the emoji. */
+.burning-cell.is-fizzling {
+  animation: burning-fizzle 620ms ease-in-out infinite;
+}
+
+/* Hover lift — matches the gem hover beat (Pixi scales the gem
+   underneath; here the flame and its wash get a parallel breath).
+   Multiplied onto the duration-driven --flame-scale so a fizzling
+   tile still reads small-but-alive when hovered. */
+.burning-cell.is-hovered .burning-flame {
+  transform: scale(calc(var(--flame-scale, 1) * 1.18));
+  filter: drop-shadow(0 0 10px rgba(255, 184, 110, 0.95));
+}
+
+.burning-cell.is-hovered::before {
+  opacity: 1;
+  transform: scale(1.12);
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 184, 110, 0.55) 0%,
+    rgba(238, 94, 87, 0.3) 50%,
+    rgba(238, 94, 87, 0) 80%
+  );
+  transition:
+    opacity 140ms ease,
+    transform 140ms cubic-bezier(0.2, 0.6, 0.2, 1),
+    background 140ms ease;
+}
+
+.burning-cell.is-fizzling::before {
+  animation: burning-cell-glow-fizzle 620ms ease-in-out infinite;
+}
+
+@keyframes burning-cell-glow-fizzle {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 0.25;
+    transform: scale(0.88);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  78% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+}
+
+@keyframes burning-fizzle {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px var(--ember-glow));
+  }
+  30% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 2px rgba(238, 94, 87, 0.35));
+  }
+  55% {
+    transform: translateY(-1.5px) scale(1.05);
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(238, 94, 87, 0.95));
+  }
+  78% {
+    opacity: 0.6;
+  }
+}
+
+/* Burst plays once when a burning tile is cleared by a match. The
+   core flame scales up while four sparks fly outward + fade. */
+.burning-burst {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.burst-core {
+  position: absolute;
+  width: 80%;
+  height: 80%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: burst-core-anim 720ms cubic-bezier(0.18, 0.84, 0.32, 1) forwards;
+}
+
+.burst-core svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes burst-core-anim {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(238, 94, 87, 0.7));
+  }
+  35% {
+    transform: scale(1.7);
+    opacity: 1;
+    filter: drop-shadow(0 0 22px rgba(238, 94, 87, 1));
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+    filter: drop-shadow(0 0 0 rgba(238, 94, 87, 0));
+  }
+}
+
+.burst-spark {
+  position: absolute;
+  width: 32%;
+  height: 32%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  filter: drop-shadow(0 0 4px rgba(255, 184, 110, 0.95));
+}
+
+.burst-spark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.burst-spark.spark-1 {
+  animation: burst-spark-up 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.burst-spark.spark-2 {
+  animation: burst-spark-right 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.burst-spark.spark-3 {
+  animation: burst-spark-down 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.burst-spark.spark-4 {
+  animation: burst-spark-left 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes burst-spark-up {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(-32%, -95%) scale(1.15) rotate(-22deg); opacity: 0; }
+}
+@keyframes burst-spark-right {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(100%, -28%) scale(1.15) rotate(38deg); opacity: 0; }
+}
+@keyframes burst-spark-down {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(38%, 90%) scale(1.15) rotate(14deg); opacity: 0; }
+}
+@keyframes burst-spark-left {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(-100%, 32%) scale(1.15) rotate(-52deg); opacity: 0; }
+}
+
+/* Smoke-puff "fizzle" overlay — plays when a burning tile's countdown
+   reaches 0 without being matched into. Distinct from the .is-fizzling
+   modifier on the *flame* (which flickers the still-present flame on
+   its final turn). This is the post-expiry beat: tiny grey wisp drifts
+   up-and-out so the player notices the threat passed. */
+.burning-fizzle {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.fizzle-smoke {
+  position: absolute;
+  width: 60%;
+  height: 60%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Cool-tinted shadow so the wisp reads colder than the flame's
+     warm palette. */
+  filter: drop-shadow(0 0 4px rgba(200, 200, 200, 0.4));
+  opacity: 0;
+  animation: fizzle-smoke-anim 1200ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.fizzle-smoke svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes fizzle-smoke-anim {
+  /* SVG wisp is natively vertical (no rotation needed). Drifts up and
+     slightly to the right while expanding + fading. Longer than the
+     burst (650→1200ms) because the player should have time to see
+     "the threat passed" — at 650ms the puff was gone before the eye
+     landed on it. Peak opacity now lands a touch later (22→18%) so
+     the eye-catch is brighter; the long fade-out tail makes the
+     "passed without firing" beat readable. Final translate held to
+     -55% (was -68%) so the wisp doesn't leave the cell. */
+  0% {
+    transform: translate(0, 0) scale(0.55);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(2%, -16%) scale(0.95);
+    opacity: 0.9;
+  }
+  45% {
+    transform: translate(5%, -32%) scale(1.05);
+    opacity: 0.75;
+  }
+  75% {
+    transform: translate(8%, -45%) scale(1.1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(10%, -55%) scale(1.15);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .burning-cell,
+  .burning-cell.is-fizzling,
+  .burning-cell::before,
+  .burning-cell.is-fizzling::before,
+  .burst-core,
+  .burst-spark,
+  .fizzle-smoke {
+    animation: none;
+  }
+}
+
+/* Blessed cells — match-5 reward flag. Gold additive rim that pulses
+   on a slow breath cadence, plus three drifting sparkles staggered out
+   of phase so peripheral vision picks them up during cascades. Mirrors
+   .burning-overlay's geometry so flags align with the gem grid inside
+   the Pixi canvas. Z-index above burning (defensive — the two flags
+   are mutually exclusive per design, but if both ever co-occur the
+   reward should be the readable layer). */
+.blessed-overlay {
+  position: absolute;
+  top: calc(8 / 528 * 100%);
+  left: calc(8 / 528 * 100%);
+  right: calc(8 / 528 * 100%);
+  bottom: calc(8 / 528 * 100%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.blessed-cell {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  pointer-events: none;
+}
+
+/* Soft gold halo — a radial gradient (no hard rim) layered over the gem
+   so the cell reads as "lit from within" rather than UI-boxed. Inset 6%
+   keeps the glow inside the cell's footprint so neighbours don't bleed.
+   screen blend keeps the gem color underneath readable while warm gold
+   layers on top. */
+.blessed-cell::before {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 22%;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 222, 140, 0.42) 0%,
+    rgba(255, 200, 90, 0.2) 45%,
+    rgba(255, 190, 70, 0) 75%
+  );
+  mix-blend-mode: screen;
+  animation: blessed-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes blessed-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+
+/* Sparkles. Three small ✦ chars per blessed cell, drifting upward +
+   fading. Position (left/top), delay, and duration are randomized
+   per-cell at flag-place time by BlessedOverlay and passed in via
+   inline style — adjacent blessed cells never tick in sync. drop-
+   shadow on the glyph gives a soft golden halo without the harsh
+   text-shadow ringing that emojis pick up. */
+.blessed-spark {
+  position: absolute;
+  color: rgba(255, 238, 175, 1);
+  font-size: clamp(0.42rem, 1.4vmin, 0.7rem);
+  filter: drop-shadow(0 0 4px rgba(255, 200, 90, 0.95));
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-name: blessed-spark-drift;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+  /* animation-duration + animation-delay are set inline per-spark. */
+}
+
+@keyframes blessed-spark-drift {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(-6%) scale(1);
+  }
+  70% {
+    opacity: 0.65;
+    transform: translateY(-32%) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-55%) scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blessed-cell::before,
+  .blessed-spark {
+    animation: none;
+  }
+  .blessed-spark {
+    opacity: 0.6;
+  }
+}
+
+/* Cast flash — quick glow + scale pulse on the spell button at the
+   moment the spell is queued. Sells "the click landed" before the
+   button drops into its disabled .queued state. */
+.spell-btn.just-cast {
+  animation: spell-cast-flash 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.spell-btn.ultimate.just-cast {
+  animation: ultimate-cast-flash 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes spell-cast-flash {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(240, 208, 137, 0);
+    filter: brightness(1);
+  }
+  30% {
+    transform: scale(1.08);
+    box-shadow: 0 0 22px 4px rgba(240, 208, 137, 0.55);
+    filter: brightness(1.45);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(240, 208, 137, 0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes ultimate-cast-flash {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+    filter: brightness(1);
+  }
+  30% {
+    transform: scale(1.1);
+    box-shadow: 0 0 28px 6px rgba(184, 157, 255, 0.7);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spell-btn.just-cast,
+  .spell-btn.ultimate.just-cast {
+    animation: none;
+  }
+}
+
+/* Status rider on an attack intent badge — e.g. Smolder's attack
+   carries a Burn icon. Faint divider rule + small leading gap so the
+   badge reads as "amount | rider" rather than two unrelated tokens.
+   Smaller than the amount so the number stays the headline. */
+.intent-rider {
+  margin-left: 0.35rem;
+  padding-left: 0.35rem;
+  border-left: 1px solid rgba(200, 163, 90, 0.35);
+  font-size: 0.72em;
+  line-height: 1;
+  opacity: 0.95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+/* Rider stacks number — sits tight with the rider icon so the eye reads
+   them as one token ("🔥2") rather than two separate things. Same font
+   family as the main intent amount; slightly smaller so the primary
+   damage number still dominates. */
+.intent-rider-amount {
+  font-family: 'Cinzel', serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 1em;
+}
+
+.intent-rider.rider-burn {
+  filter: drop-shadow(0 0 5px var(--ember-glow));
+}
+
+.intent-rider.rider-vulnerable {
+  filter: drop-shadow(0 0 5px rgba(196, 126, 60, 0.5));
+}
+
+.intent-rider.rider-weak {
+  filter: drop-shadow(0 0 5px rgba(201, 184, 150, 0.45));
+}
+

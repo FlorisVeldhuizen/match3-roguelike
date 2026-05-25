@@ -167,6 +167,21 @@ describe('Riposte', () => {
     expect(res.events.some((e) => e.kind === 'riposte-counter')).toBe(true)
   })
 
+  it('transitions to victory (not player-acting) when the counter kills the last enemy', () => {
+    // Without this, Riposte killing the only living enemy would hand the
+    // player a pointless extra turn before EOP detected the victory.
+    const player = makePlayer({ pendingSpells: ['riposte'] })
+    const enemy = makeEnemy({ hp: 3, currentIntent: { kind: 'attack', amount: 6 } })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
+    expect(res.enemies[0]?.hp).toBeLessThanOrEqual(0)
+    expect(res.phase).toBe('victory')
+    expect(
+      res.events.some(
+        (e) => e.kind === 'phase-changed' && e.phase === 'victory',
+      ),
+    ).toBe(true)
+  })
+
   it('expires unused at end of enemy turn when no attack came', () => {
     // Brute pattern index 2 = block, so currentIntent=block: Riposte never
     // sees an attack this turn and should expire.
@@ -217,6 +232,22 @@ describe('Burn at turn start', () => {
     // Player took no damage — the enemy died before attacking.
     expect(res.player.hp).toBe(60)
     expect(res.events.some((e) => e.kind === 'enemy-killed')).toBe(true)
+  })
+
+  it('transitions to victory when burn tick kills the last enemy', () => {
+    const player = makePlayer()
+    const enemy = makeEnemy({
+      hp: 2,
+      statuses: [{ kind: 'burn', stacks: 5 }],
+      currentIntent: { kind: 'attack', amount: 10 },
+    })
+    const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
+    expect(res.phase).toBe('victory')
+    expect(
+      res.events.some(
+        (e) => e.kind === 'phase-changed' && e.phase === 'victory',
+      ),
+    ).toBe(true)
   })
 
   // FX-pipeline contract: damage-dealt (burn proc on enemy) must come

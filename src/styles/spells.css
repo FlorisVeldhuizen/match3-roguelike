@@ -1,0 +1,485 @@
+/* --- Phase F: spells, statuses, pending strip --- */
+
+/* H3-C: spell tray as a row of "card slots". Each spell is a vertical
+   card with icon ↑, name, cost pips at the bottom. The card metaphor
+   tells the player "here is your kit" — slots have presence even when
+   the spell is unaffordable or queued. */
+.spell-tray {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.spell-btn {
+  /* Card layout: vertical stack, FIXED dimensions so every spell takes
+     the same UI space regardless of cost shape, label length, or cast
+     state. Consistent silhouette = the row reads as a kit of equal
+     slots. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0.5rem 0.55rem 0.45rem;
+  width: 104px;
+  height: 88px;
+  flex: 0 0 104px;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.05), transparent 60%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+  color: var(--parchment);
+  border: 1px solid var(--gold-3);
+  border-radius: 0.5rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  transition: filter 120ms ease, transform 80ms ease, box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+.spell-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 14px rgba(0, 0, 0, 0.55);
+}
+
+.spell-btn:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+.spell-btn:disabled,
+.spell-btn.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.spell-btn.ready {
+  border-color: var(--gold-2);
+  box-shadow:
+    inset 0 0 0 1px rgba(240, 208, 137, 0.18),
+    0 0 14px rgba(240, 208, 137, 0.22),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.ultimate {
+  background:
+    linear-gradient(180deg, rgba(168, 130, 220, 0.12), transparent 60%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+}
+
+.spell-btn.ultimate.ready {
+  border-color: var(--royal-2);
+  box-shadow:
+    inset 0 0 0 1px rgba(184, 157, 255, 0.25),
+    0 0 18px rgba(184, 157, 255, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  background:
+    linear-gradient(180deg, rgba(184, 157, 255, 0.22), transparent 60%),
+    linear-gradient(180deg, #3a2b66, var(--ink-2));
+}
+
+/* Queued: spell is cast and locked in for the phase. Strong visual
+   delta from idle/ready: card desaturates, a gold rim signals "locked
+   in," and a small ✓ stamp lands in the top-right corner so the cast
+   state is readable at a glance. Card silhouette is unchanged — same
+   width, same height — so the row doesn't shift when you cast. */
+.spell-btn.queued {
+  filter: grayscale(0.55) brightness(0.65);
+  opacity: 0.65;
+  cursor: default;
+  border-color: rgba(200, 163, 90, 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
+    inset 0 0 14px rgba(0, 0, 0, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.queued::after {
+  content: '✓';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--gold-1);
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-2);
+  border-radius: 50%;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 6px rgba(240, 208, 137, 0.4);
+  filter: none;
+  opacity: 1;
+}
+
+/* Icon stays top, bigger than before to anchor the card visually. */
+.spell-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.spell-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  /* Allow names to wrap on narrow widths instead of overflowing the
+     card. Most spell names are one word; multi-word names get two
+     lines. */
+  text-wrap: balance;
+}
+
+/* Generic .spell-cost (used by ultimates' "8⚡" text) — sits at the
+   bottom-center of the card. The ManaCostBadges variant gets its own
+   .spell-cost-pips styling (already defined). */
+.spell-cost {
+  margin-top: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-2);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.pending-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px dashed var(--gold-3);
+  border-radius: 0.3rem;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.pending-pip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.95rem;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
+}
+
+.pending-pip.pending-riposte {
+  filter: drop-shadow(0 0 4px var(--royal-2));
+}
+
+.status-bar {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.status-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--stone-2);
+  font-size: 0.72rem;
+  font-family: 'Cinzel', serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  /* One-shot scale-in on mount — fires when a status first lands (chip
+     joins the DOM). Number updates re-render the inner text without
+     unmounting the chip, so the animation doesn't replay on every
+     tick. Expire → reapply will replay it, which is the intent. */
+  animation: status-chip-enter 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform-origin: center;
+}
+
+/* Pulse on the new stack count when a tick lands. Re-mounted via React
+   key on every tick so the keyframe replays. Inline-block so transform
+   works without disturbing the chip's flex layout. */
+.status-stacks-pulse {
+  display: inline-block;
+  animation: status-stacks-pulse 280ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
+  transform-origin: center;
+}
+
+@keyframes status-stacks-pulse {
+  /* Was scale 1.35 — too bouncy when firing alongside the popup,
+     vignette, and HP drain at the resolve moment. 1.18 is enough to
+     register "the number just changed" without making the chip
+     visibly wobble in the same frame as everything else. */
+  0% {
+    transform: scale(1);
+    color: inherit;
+  }
+  35% {
+    transform: scale(1.18);
+    color: var(--parchment, #f4ead8);
+  }
+  100% {
+    transform: scale(1);
+    color: inherit;
+  }
+}
+
+/* "You survived it" goodbye flash on a chip whose final tick just
+   landed. A brief ember peak (the "last lick" of the fire) followed
+   by a fade + shrink + blur as the chip dissolves. Driven by the
+   parent component (HUD / EnemyFrame) holding the chip in
+   displayedStatuses for an extra ~480ms past status-expired so the
+   animation has something to play on. Without this beat the chip
+   used to vanish silently the instant the HP drain landed — losing
+   the resolution feedback. */
+.status-chip.is-expiring {
+  animation: status-chip-fizzle 480ms cubic-bezier(0.4, 0, 0.7, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes status-chip-fizzle {
+  /* Layout-collapse rationale: the chip used to unmount at full width
+     once the fade finished, snapping neighbouring elements (block
+     badge on the enemy frame, sibling chips on either frame) leftward
+     in a single frame. The fizzle now also collapses max-width,
+     padding-inline, and margin-inline-end (eating the parent flex
+     gap) so neighbours slide back smoothly while the chip fades.
+     Width hold across 0% → 18% keeps the ember flare at full size;
+     collapse runs 18% → 100% (~390ms) for a readable slide. */
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    max-width: 8rem;
+    padding-inline: 0.35rem;
+    margin-inline-end: 0;
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow:
+      0 0 16px 4px rgba(255, 156, 74, 0.75),
+      inset 0 0 12px 2px rgba(255, 156, 74, 0.45);
+    max-width: 8rem;
+    padding-inline: 0.35rem;
+    margin-inline-end: 0;
+  }
+  55% {
+    opacity: 0.55;
+    transform: scale(0.94);
+    filter: blur(0.5px);
+    max-width: 4rem;
+    padding-inline: 0.18rem;
+    margin-inline-end: -0.15rem;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.72);
+    filter: blur(2px);
+    max-width: 0;
+    padding-inline: 0;
+    margin-inline-end: -0.3rem;
+  }
+}
+
+/* "Here it comes" pre-impact cue on the chip — fires when this status
+   is about to deal proc damage. Builds in intensity while the chip→bar
+   particle trail flies (700ms travel), peaking right before the
+   resolve hits. Previously the keyframe peaked at 20% and decayed
+   over the rest — so the bright moment fired at 140ms and was gone
+   by the time the resolve landed at 700ms, making the cue read as
+   a disconnected flicker. Rebalanced: dim start, steady build, peak
+   at 85% (~595ms), snap off at 100% (700ms) right as the impact lands
+   — the cue now culminates with the resolve rather than preceding it.
+   No scale transform — scale on the chip itself competed visually
+   with the inner number's pulse at resolve time. */
+.status-chip-cue {
+  position: absolute;
+  inset: -2px;
+  border-radius: 0.32rem;
+  pointer-events: none;
+  animation: status-chip-cue 700ms cubic-bezier(0.4, 0, 0.7, 1) forwards;
+}
+
+@keyframes status-chip-cue {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(255, 156, 74, 0),
+      inset 0 0 0 0 rgba(255, 156, 74, 0);
+  }
+  35% {
+    box-shadow:
+      0 0 6px 2px rgba(255, 156, 74, 0.25),
+      inset 0 0 4px 1px rgba(255, 156, 74, 0.15);
+  }
+  70% {
+    box-shadow:
+      0 0 11px 3px rgba(255, 156, 74, 0.5),
+      inset 0 0 7px 1.5px rgba(255, 156, 74, 0.3);
+  }
+  85% {
+    box-shadow:
+      0 0 15px 4px rgba(255, 156, 74, 0.8),
+      inset 0 0 11px 2px rgba(255, 156, 74, 0.5);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 156, 74, 0),
+      inset 0 0 0 0 rgba(255, 156, 74, 0);
+  }
+}
+
+/* "−1" floater that peels off the chip when it ticks down. Anchored to
+   the chip via position:absolute (chip is position:relative). */
+.status-chip-tick {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.3rem;
+  font-family: 'Paytone One', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #ffd9a8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  animation: status-chip-tick 640ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes status-chip-tick {
+  0% {
+    opacity: 0;
+    transform: translateY(2px) scale(0.85);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.95);
+  }
+}
+
+@keyframes status-chip-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-chip,
+  .status-stacks-pulse,
+  .status-chip-tick {
+    animation: none;
+  }
+  .status-chip-tick {
+    /* Without the float-up motion the popup would just sit on top of
+       the chip forever; keep it invisible to avoid a static "−1". */
+    display: none;
+  }
+}
+
+.status-burn {
+  border-color: var(--ember-1);
+  background: rgba(196, 66, 60, 0.18);
+}
+
+.status-vulnerable {
+  border-color: #c47e3c;
+  background: rgba(196, 126, 60, 0.18);
+}
+
+.status-weak {
+  border-color: var(--parchment-dim);
+  background: rgba(201, 184, 150, 0.12);
+}
+
+.status-icon {
+  font-size: 0.85rem;
+}
+
+.enemy-statuses {
+  /* No margin/min-height: the chips ride in the always-reserved
+     .enemy-effects-row alongside the block badge, so the slot height
+     already exists whether or not any status is active. */
+}
+
+/* Player-side equivalent: the chips sit in .hud-row alongside the phase
+   label + PendingStrip. PendingStrip is conditionally null (no spell
+   queued), and the phase label is shorter than a chip, so when the
+   last chip resolves and unmounts the row collapses — a small but
+   visible vertical jolt that drags the HP bar below it. Reserve the
+   chip slot's height here so the row stays the same height regardless
+   of whether any status is active.
+
+   The 1.6rem value comes from the chip's natural rendered height: the
+   tallest inner child is .status-icon at font-size: 0.85rem, and
+   Cinzel's default line-height (~1.45) plus 0.2rem vertical padding +
+   2×1px border lands around 1.55rem. 1.6rem gives a small buffer so
+   font-loading flicker or minor metric drift between browsers can't
+   reintroduce the shift. */
+.player-statuses {
+  min-height: 1.6rem;
+}
+
+/* Floating status row above the HUD — mirrors the enemy frame's intent
+   badge pattern. Absolute so the chips can appear / disappear without
+   shifting the HP+block+mana row below. Centered on the HUD's top
+   edge; pointer-events stay enabled so chip tooltips work. The HUD's
+   ::before diamond divider sits at top: -0.55rem above the same edge,
+   so we offset further (-1.6rem) to clear it. */
+.player-statuses-floating {
+  position: absolute;
+  top: -1.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  min-height: 0;
+  justify-content: center;
+}
+
+/* Floating chips sit over the HUD's top edge + diamond divider, so the
+   default 35%-alpha background reads as see-through. Use a solid dark
+   gradient matching the enemy-intent badge so the chip is legible
+   against the busy chrome behind it. */
+.player-statuses-floating .status-chip {
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.enemy-effects-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  /* Reserve one badge's worth of height even when row is empty, so the
+     HP bar doesn't shift up/down based on whether block or statuses exist.
+     Matches the rendered block-badge height (~0.78rem font + padding + border). */
+  min-height: 1.4rem;
+}
+

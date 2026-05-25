@@ -1,0 +1,145 @@
+/* --- Hover tooltip (shared portal-rendered) --- */
+
+.tooltip-anchor {
+  display: inline-flex;
+  /* So the anchor's bounding rect tightly fits the button it wraps; no
+     extra whitespace around the trigger. */
+  align-items: stretch;
+}
+
+/* Inline keyword (Burn / Vulnerable / Block / ...) embedded in a longer
+   tooltip body or label. Highlighted in the mechanic's palette; a dotted
+   underline on hover signals "this has its own info tooltip" without
+   competing with regular link styles. */
+.kw {
+  cursor: help;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px dotted transparent;
+  transition: border-color 120ms ease;
+}
+
+.kw:hover,
+.kw:focus {
+  border-bottom-color: currentColor;
+}
+
+.kw.kw-burn {
+  color: #ff9c4a;
+}
+
+.kw.kw-vulnerable {
+  color: #d49158;
+}
+
+.kw.kw-weak {
+  color: #d6c298;
+}
+
+.kw.kw-block {
+  color: #9ec5ff;
+}
+
+.kw.kw-riposte {
+  color: #c9a8ff;
+}
+
+/* Keyword sub-tooltips: same shell as the regular hover-tooltip, but
+   with a left-edge accent in the keyword's palette so the nested
+   tooltip immediately reads as "extra info about that highlighted
+   word." z-index above the intent tooltip (100) so any pixel overlap
+   during repositioning still renders the sub-tooltip on top. */
+.hover-tooltip[class*='tooltip-kw-'] {
+  z-index: 110;
+  border-left-width: 3px;
+}
+
+.hover-tooltip.tooltip-kw-burn {
+  border-left-color: #ff9c4a;
+}
+
+.hover-tooltip.tooltip-kw-vulnerable {
+  border-left-color: #d49158;
+}
+
+.hover-tooltip.tooltip-kw-weak {
+  border-left-color: #d6c298;
+}
+
+.hover-tooltip.tooltip-kw-block {
+  border-left-color: #9ec5ff;
+}
+
+.hover-tooltip.tooltip-kw-riposte {
+  border-left-color: #c9a8ff;
+}
+
+/* When a fullscreen overlay (reward / victory / game-over) is mounted,
+   any spell-tray / relic tooltip pinned open by a touch tap would float
+   above the modal and look stuck. Hide them while the modal is up — the
+   tooltips are non-essential and reopen on the next interaction. */
+body:has(.reward-overlay) .hover-tooltip,
+body:has(.victory-overlay) .hover-tooltip,
+body:has(.game-over-overlay) .hover-tooltip,
+body:has(.reward-overlay) .intent-tooltip,
+body:has(.victory-overlay) .intent-tooltip,
+body:has(.game-over-overlay) .intent-tooltip {
+  display: none;
+}
+
+.hover-tooltip {
+  position: fixed;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 0.55rem 0.75rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.35rem;
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(200, 163, 90, 0.18);
+  color: var(--parchment);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  /* pointer-events:none so the tooltip never traps the cursor and never
+     blocks its own anchor's mouseleave. Inline keywords are shown via
+     autoShow alongside the parent, so the cursor doesn't need to enter
+     a tooltip — it stays on the original anchor. */
+  pointer-events: none;
+  transition: opacity 90ms ease;
+}
+
+.hover-tooltip-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  color: var(--gold-2);
+  margin-bottom: 0.25rem;
+}
+
+.hover-tooltip-body {
+  color: var(--parchment-dim);
+}
+
+.hover-tooltip-reason {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--stone-2);
+  color: var(--ember-2);
+  font-size: 0.72rem;
+}
+
+.hover-tooltip.tooltip-ultimate {
+  border-color: var(--royal-2);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(184, 157, 255, 0.25),
+    inset 0 0 0 1px rgba(184, 157, 255, 0.25);
+}
+
+.hover-tooltip.tooltip-ultimate .hover-tooltip-title {
+  color: var(--royal-2);
+}
+

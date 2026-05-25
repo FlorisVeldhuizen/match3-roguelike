@@ -372,13 +372,20 @@ export function executeEnemyTurn(
     events.push({ kind: 'pending-effect-resolved', spellId: 'riposte' })
   }
 
-  const phase: CombatPhase = nextPlayer.hp <= 0 ? 'game-over' : 'player-acting'
-  // Only emit phase-changed for the terminal game-over case here.
-  // The player-acting transition is deferred to the caller (store.ts),
-  // which emits it AFTER beginPlayerPhase has run — so that the
-  // HUD-side block-zeroing (driven by phase-changed:player-acting)
+  // Phase precedence: game-over (player died) > victory (all enemies
+  // dead) > player-acting. Enemies can die DURING the enemy turn from
+  // Riposte counter, Thornmail reflect, or their own burn tick at turn
+  // start — if that empties the field, we must route to victory here
+  // rather than handing the player another (pointless) turn.
+  const anyEnemyAlive = nextEnemies.some((e) => e.hp > 0)
+  const phase: CombatPhase =
+    nextPlayer.hp <= 0 ? 'game-over' : anyEnemyAlive ? 'player-acting' : 'victory'
+  // Emit phase-changed for terminal transitions (game-over, victory)
+  // directly. The player-acting transition is deferred to the caller
+  // (store.ts), which emits it AFTER beginPlayerPhase has run — so that
+  // the HUD-side block-zeroing (driven by phase-changed:player-acting)
   // lands after the player's burn-tick events resolve, not before.
-  if (phase === 'game-over') {
+  if (phase === 'game-over' || phase === 'victory') {
     events.push({ kind: 'phase-changed', phase })
   }
 

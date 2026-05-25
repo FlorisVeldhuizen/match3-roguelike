@@ -1,0 +1,269 @@
+/* --- Phase F: layout / mobile responsiveness ---
+   Goal: everything visible on a 360px-wide phone without horizontal scroll.
+   Strategy:
+   - Scale the Pixi canvas to its container while preserving aspect ratio.
+     Pixi sets inline width/height on the canvas, so we need !important to
+     override on narrow viewports. Input math (clientToCell) already
+     normalises via getBoundingClientRect, so visual scaling is enough.
+   - Collapse header chrome that's nice-to-have but consumes width.
+   - Let the spell tray and HUD rows wrap. Keep touch targets ≥ 40px high.
+*/
+
+/* Board sizing: the Pixi canvas is 528 logical px square, but we let CSS
+   scale it down when the viewport is short. --board-chrome is everything
+   above + below the board (header, enemy frame, HUD) that we need to leave
+   room for. The min() picks the limiting axis. aspect-ratio + content-box
+   keep the square shape regardless of which axis won. */
+.board-shell {
+  --board-chrome: 440px;
+  /* Cap a hair above the Pixi logical size (528). CSS upscales the canvas
+     when the viewport allows; the gems still antialias cleanly because
+     autoDensity bakes the canvas at devicePixelRatio.
+     dvh covers iOS's shrinking address bar; vh remains as fallback. */
+  /* max() guards against negative min() results on very short landscape
+     phones — the page can scroll instead of the board collapsing. */
+  width: max(280px, min(640px, calc(100dvh - var(--board-chrome)), 100%));
+  aspect-ratio: 1 / 1;
+}
+
+/* Mobile portrait: budget for header (~36px) + enemy frame (~150px) +
+   HUD (~50px, now single-row since statuses float) + spell tray (~85px) +
+   gaps (~30px) + safe-area bottom (~30px). Single-row HUD freed ~25px
+   vs the earlier two-row layout, so the board can reclaim that. */
+@media (max-width: 760px) {
+  .board-shell {
+    --board-chrome: 385px;
+  }
+}
+
+@media (max-width: 760px) {
+  .game {
+    gap: 0.5rem;
+  }
+  .game-header {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.82rem;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .hud-build {
+    display: none;
+  }
+  .hud-seed {
+    font-size: 0.62rem;
+    margin-right: 0.3rem;
+  }
+  .hud-title {
+    font-size: 0.78rem;
+  }
+  .hud-title::before,
+  .hud-title::after {
+    margin: 0 0.2rem;
+  }
+  .hud {
+    padding: 0.55rem 0.7rem 0.65rem;
+    gap: 0.4rem;
+  }
+  .hud-row {
+    gap: 0.5rem;
+  }
+  .hp-bar {
+    /* Mobile: shrink, but not past the point where "XXX / XXX" clips.
+       96px fits 3-digit HP both sides with our 0.78rem Cinzel + 0.08em
+       letter-spacing. Without a floor, flex would squeeze "36/40" down
+       to "36/4" with the last digit cut off the right edge. */
+    min-width: 96px;
+    flex: 0 1 160px;
+  }
+
+  .enemy-row {
+    gap: 0.6rem;
+  }
+  .enemy-frame {
+    min-width: 130px;
+    padding: 0.3rem 0.6rem 0.4rem;
+    gap: 0.2rem;
+  }
+  .enemy-sprite {
+    width: 42px;
+    height: 42px;
+  }
+  .enemy-glyph {
+    font-size: 1.25rem;
+  }
+  .enemy-name {
+    font-size: 0.76rem;
+    letter-spacing: 0.06em;
+  }
+  .enemy-hp-bar {
+    height: 12px;
+  }
+  .enemy-hp-text {
+    font-size: 0.64rem;
+    line-height: 12px;
+  }
+
+  .spell-tray {
+    gap: 0.4rem;
+  }
+  .spell-btn {
+    /* Mobile: keep the fixed-slot identity but a touch smaller. WCAG
+       44px touch target still satisfied by the 80px height. The row
+       wraps naturally when not enough cards fit. */
+    padding: 0.45rem 0.5rem 0.4rem;
+    font-size: 0.7rem;
+    width: 88px;
+    height: 80px;
+    flex: 0 0 88px;
+  }
+  .spell-label {
+    font-size: 0.68rem;
+  }
+  .spell-icon {
+    font-size: 1.3rem;
+  }
+  /* Lightweight pips already have no chip background. On mobile we only
+     tighten font + dot sizes so the strip fits the narrower viewport. */
+  .mana-chip,
+  .charge-chip {
+    font-size: 0.78rem;
+    gap: 0.18rem;
+  }
+  .mana-dot,
+  .charge-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .hud-resource-cluster {
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+  }
+  /* Statuses float above the HUD now, so the resource row holds just
+     HP+block (shrinkable) + mana chips. Force a single row and let the
+     HP bar shrink so the strip never wraps on mobile. */
+  .hud-stat-resource-row {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+  .hud-stat-cluster {
+    gap: 0.35rem;
+    min-width: 0;
+  }
+  .hud-divider {
+    height: 14px;
+    margin: 0 0.2rem;
+  }
+  /* Keep statuses + pending pips on their own row so the phase label
+     doesn't get shoved off-screen at narrow widths. */
+  .status-chip,
+  .pending-pip {
+    font-size: 0.7rem;
+  }
+}
+
+/* Mobile modal sizing — the desktop cards have generous padding/min-width
+   that overflow a 360px viewport. Tighten everything and let the reward
+   grid stack vertically. */
+@media (max-width: 760px) {
+  .victory-card,
+  .game-over-card {
+    padding: 1.5rem 1.25rem;
+  }
+  .victory-title,
+  .game-over-title {
+    font-size: 1.7rem;
+    letter-spacing: 0.12em;
+  }
+  .reward-card {
+    padding: 1.25rem 1rem;
+  }
+  .reward-title {
+    font-size: 1.5rem;
+    letter-spacing: 0.12em;
+  }
+  .reward-grid {
+    gap: 0.6rem;
+  }
+  .reward-relic {
+    padding: 0.9rem 0.85rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .hud-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+  }
+  .hud-seed {
+    display: none;
+  }
+  .game-header {
+    padding: 0.28rem 0.5rem;
+  }
+  .spell-btn {
+    font-size: 0.66rem;
+    padding: 0.4rem 0.35rem 0.35rem;
+    width: 76px;
+    height: 74px;
+    flex: 0 0 76px;
+  }
+  /* At very-narrow widths the label competes with cost pips for vertical
+     space; drop the label, the icon + cost pip are still legible. */
+  .spell-label {
+    display: none;
+  }
+  .spell-icon {
+    font-size: 1.4rem;
+  }
+  /* Tiny viewports: shrink pips a touch and drop the "/cap" text — it
+     stays in the tooltip. */
+  .mana-chip,
+  .charge-chip {
+    gap: 0.15rem;
+    font-size: 0.72rem;
+  }
+  .mana-dot,
+  .charge-icon {
+    width: 14px;
+    height: 14px;
+  }
+  .mana-cap {
+    display: none;
+  }
+  .enemy-frame {
+    min-width: 110px;
+  }
+  .hp-text {
+    font-size: 0.76rem;
+  }
+  .enemy-sprite {
+    width: 44px;
+    height: 44px;
+  }
+  .enemy-glyph {
+    font-size: 1.3rem;
+  }
+}
+
+/* Landscape phones / short laptops: the board chrome dominates vertical
+   space; tighten everything and let the page scroll when needed. */
+@media (max-height: 520px) {
+  .board-shell {
+    --board-chrome: 320px;
+  }
+  .enemy-row {
+    gap: 0.4rem;
+  }
+  .enemy-frame {
+    min-width: 110px;
+    padding: 0.35rem 0.6rem 0.4rem;
+  }
+  .enemy-sprite {
+    width: 42px;
+    height: 42px;
+  }
+  .enemy-glyph {
+    font-size: 1.25rem;
+  }
+}
+

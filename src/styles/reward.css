@@ -1,0 +1,271 @@
+/* --- Reward overlay --- */
+
+.reward-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 6, 4, 0.86);
+  display: grid;
+  place-items: center;
+  z-index: 11;
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.reward-card {
+  padding: 2rem 2.5rem;
+  background:
+    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.18), transparent 60%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-1);
+  border-radius: 0.5rem;
+  text-align: center;
+  width: min(880px, 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    0 24px 80px rgba(0, 0, 0, 0.7),
+    0 0 80px rgba(200, 163, 90, 0.22);
+}
+
+.reward-title {
+  margin: 0 0 0.25rem;
+  font-family: 'Cinzel', serif;
+  font-size: 2rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  text-shadow: 0 0 18px rgba(200, 163, 90, 0.55);
+}
+
+.reward-sub {
+  margin: 0 0 1.2rem;
+  color: var(--parchment-dim);
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.reward-grid {
+  display: grid;
+  /* auto-fit + minmax gives 3 columns on desktop and gracefully collapses
+     to 2 then 1 as the viewport narrows — no separate mobile rule needed
+     to avoid the 3 cards getting crammed into ~80px each on phones. */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.reward-relic {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1.2rem 1rem;
+  border: 1px solid var(--gold-1);
+  background: rgba(24, 18, 12, 0.7);
+  color: var(--parchment);
+  cursor: pointer;
+  border-radius: 0.4rem;
+  font-family: inherit;
+  transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.reward-relic:hover {
+  background: rgba(50, 38, 22, 0.85);
+  box-shadow: 0 0 22px rgba(200, 163, 90, 0.5);
+  transform: translateY(-2px);
+}
+
+.reward-relic.rarity-uncommon {
+  border-color: #7ea8d1;
+}
+.reward-relic.rarity-uncommon:hover {
+  box-shadow: 0 0 22px rgba(126, 168, 209, 0.55);
+}
+.reward-relic.rarity-rare {
+  border-color: #d99c5c;
+}
+.reward-relic.rarity-rare:hover {
+  box-shadow: 0 0 26px rgba(217, 156, 92, 0.6);
+}
+
+.reward-relic-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.reward-relic-name {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+}
+
+.reward-relic-rarity {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.reward-relic-desc {
+  font-size: 0.85rem;
+  color: var(--parchment-dim);
+  line-height: 1.35;
+}
+
+.reward-relic-hint {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--parchment-dim);
+  opacity: 0.7;
+}
+
+.reward-empty {
+  grid-column: 1 / -1;
+  color: var(--parchment-dim);
+}
+
+.reward-skip {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  border: 1px solid var(--gold-1);
+  background: transparent;
+  color: var(--parchment-dim);
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.reward-skip:hover {
+  background: rgba(200, 163, 90, 0.1);
+  color: var(--parchment);
+}
+
+/* Splash overlay — sits above everything except global toast/aria-live, so
+   it covers HUD, board, banners. Behind it, ArcaneBackground keeps running
+   so the smoke is already animated when the splash dismisses. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Semi-opaque ink veil so the running background reads as "atmospheric"
+     rather than visible game-state behind a transparent overlay. */
+  background: radial-gradient(
+      ellipse at center,
+      rgba(11, 8, 5, 0.55) 0%,
+      rgba(11, 8, 5, 0.88) 70%
+    ),
+    rgba(11, 8, 5, 0.5);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  animation: splash-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.splash.is-leaving {
+  animation: splash-out 260ms ease-in forwards;
+  pointer-events: none;
+}
+
+.splash-inner {
+  text-align: center;
+  padding: 1.5rem;
+  /* Bouncy entry (ζ≈0.42 feel) on the inner block — title and tagline
+     ride along with one transform so the cluster moves together. */
+  animation: splash-title-in 700ms cubic-bezier(0.18, 1.4, 0.4, 1) both;
+}
+
+.splash-title {
+  font-family: 'Paytone One', system-ui, sans-serif;
+  font-size: clamp(2.6rem, 8vw, 5.5rem);
+  letter-spacing: 0.04em;
+  margin: 0 0 0.4rem;
+  color: var(--gold-2);
+  text-shadow: 0 0 24px rgba(200, 163, 90, 0.35),
+    0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.splash-tagline {
+  font-size: clamp(0.85rem, 2.2vw, 1.05rem);
+  margin: 0 0 2rem;
+  color: var(--parchment-dim);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.splash-prompt {
+  font-size: clamp(0.9rem, 2.4vw, 1.1rem);
+  margin: 0;
+  color: var(--gold-1);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  animation: splash-prompt-pulse 2.2s ease-in-out infinite;
+}
+
+/* Touch-only hint. Subtle enough that desktop users wouldn't notice it
+   even if it weren't gated, but the JS only renders it on touch devices. */
+.splash-hint {
+  font-size: clamp(0.7rem, 1.7vw, 0.82rem);
+  margin: 1.2rem 0 0;
+  color: var(--parchment-dim);
+  opacity: 0.65;
+  letter-spacing: 0.04em;
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes splash-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes splash-title-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-prompt-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .splash-inner,
+  .splash-prompt {
+    animation-duration: 0ms;
+  }
+}
+

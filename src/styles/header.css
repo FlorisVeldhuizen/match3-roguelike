@@ -1,0 +1,287 @@
+/* --- Header / title --- */
+
+.game-header {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1.1rem;
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 18px rgba(0, 0, 0, 0.5),
+    0 6px 18px rgba(0, 0, 0, 0.4);
+  font-size: 0.95rem;
+}
+
+.hud-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  text-shadow:
+    0 0 12px rgba(200, 163, 90, 0.35),
+    0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.hud-title::before,
+.hud-title::after {
+  content: '✦';
+  display: inline-block;
+  margin: 0 0.5rem;
+  color: var(--gold-1);
+  opacity: 0.7;
+  font-size: 0.85em;
+  transform: translateY(-1px);
+}
+
+.hud-build {
+  opacity: 0.55;
+  font-size: 0.78rem;
+  text-align: right;
+  color: var(--parchment-dim);
+}
+
+/* Run seed — monospace, click-to-select for easy copy. */
+.hud-seed {
+  opacity: 0.4;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  color: var(--parchment-dim);
+  user-select: all;
+  transition: opacity 120ms ease;
+}
+.hud-seed:hover {
+  opacity: 0.8;
+}
+
+/* Right-clustered controls (relics + settings). margin-left:auto on the
+   group pushes the whole bundle to the right edge regardless of which
+   children are conditionally rendered (RelicTray only mounts when relics
+   exist). */
+.game-header-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Unified settings popover. Single ⚙ button in the header opens a
+   panel containing all runtime toggles (sound, FX, dev tools). The
+   button + popover share the relative-positioned wrapper so the
+   popover anchors to the button without an extra layer. */
+.settings-panel {
+  position: relative;
+  display: inline-flex;
+}
+
+.settings-button {
+  background: transparent;
+  border: 1px solid var(--gold-3);
+  border-radius: 0.3rem;
+  color: var(--gold-2);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.settings-button:hover,
+.settings-button[aria-expanded='true'] {
+  border-color: var(--gold-2);
+  background: rgba(200, 163, 90, 0.12);
+}
+
+.settings-popover {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 20;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 0.55rem 0.75rem 0.7rem;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.4rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.settings-section {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.settings-section + .settings-section {
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(200, 163, 90, 0.14);
+}
+
+.settings-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  opacity: 0.85;
+  padding-bottom: 0.15rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.2rem 0.1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--parchment);
+  user-select: none;
+}
+
+.settings-row:hover {
+  color: var(--gold-2);
+}
+
+.settings-row input[type='checkbox'] {
+  accent-color: var(--gold-1);
+  cursor: pointer;
+}
+
+.settings-row-slider {
+  gap: 0.5rem;
+}
+
+.settings-row-slider input[type='range'] {
+  flex: 1;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 18px;
+}
+
+.settings-row-slider input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
+  border: 1px solid var(--stone-2);
+  border-radius: 3px;
+}
+.settings-row-slider input[type='range']::-moz-range-track {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold-3), var(--ink-0));
+  border: 1px solid var(--stone-2);
+  border-radius: 3px;
+}
+.settings-row-slider input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--gold-1);
+  border: 1px solid var(--ink-1);
+  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+.settings-row-slider input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold-1);
+  border: 1px solid var(--ink-1);
+  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+
+.settings-row-slider input[type='range']:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-label {
+  letter-spacing: 0.02em;
+  min-width: 3.5rem;
+}
+
+.settings-value {
+  font-size: 0.75rem;
+  color: var(--gold-2);
+  opacity: 0.8;
+  min-width: 2.4rem;
+  text-align: right;
+}
+
+.settings-btn {
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(200, 163, 90, 0.35);
+  color: var(--parchment);
+  border-radius: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.settings-btn:hover:not(:disabled) {
+  background: rgba(71, 85, 105, 0.55);
+  border-color: var(--gold-2);
+}
+
+.settings-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-row-chips {
+  cursor: default;
+}
+
+.settings-chips {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.settings-chip {
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(200, 163, 90, 0.3);
+  color: var(--parchment);
+  border-radius: 0.25rem;
+  padding: 0.18rem 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  min-width: 2rem;
+}
+
+.settings-chip:hover {
+  background: rgba(71, 85, 105, 0.55);
+  border-color: var(--gold-2);
+}
+
+.settings-chip.is-active {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: var(--gold-1);
+  color: var(--gold-2);
+}
+
+.settings-section-dev .settings-title {
+  color: #fbbf24;
+}
+

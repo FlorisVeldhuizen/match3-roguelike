@@ -1,0 +1,365 @@
+/* --- Feedback animations (unchanged tuning) --- */
+
+@keyframes shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10% { transform: translate3d(calc(-7px * var(--shake-mag, 1)), calc(2px * var(--shake-mag, 1)), 0) rotate(calc(-0.3deg * var(--shake-mag, 1))); }
+  25% { transform: translate3d(calc(6px * var(--shake-mag, 1)), calc(-3px * var(--shake-mag, 1)), 0) rotate(calc(0.35deg * var(--shake-mag, 1))); }
+  40% { transform: translate3d(calc(-5px * var(--shake-mag, 1)), calc(3px * var(--shake-mag, 1)), 0) rotate(calc(-0.25deg * var(--shake-mag, 1))); }
+  55% { transform: translate3d(calc(4px * var(--shake-mag, 1)), calc(-2px * var(--shake-mag, 1)), 0); }
+  70% { transform: translate3d(calc(-3px * var(--shake-mag, 1)), calc(2px * var(--shake-mag, 1)), 0); }
+  85% { transform: translate3d(calc(2px * var(--shake-mag, 1)), calc(-1px * var(--shake-mag, 1)), 0); }
+}
+
+/* Shake scope: only the .game-scene wrapper around enemies + board
+   transforms during a screen shake. HUD, spell tray, and modals
+   sit outside this wrapper and stay anchored — way less disorienting
+   during cascade chains where multiple shakes fire back-to-back. */
+.game-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+}
+
+.game-scene.shake {
+  animation: shake var(--shake-dur, 320ms) cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-scene.shake {
+    animation: none;
+  }
+}
+
+@keyframes pool-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+  35% {
+    transform: scale(1.15);
+    box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.45);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+.resource.pulsing {
+  animation: pool-pulse 380ms ease-out;
+  border-radius: 999px;
+}
+
+/* Green gem trail just landed on the HP bar: glow-only pulse (no scale,
+   since the bar is wide and scaling would push neighbors). */
+.hp-bar.pulsing {
+  animation: hp-bar-pulse 420ms ease-out;
+}
+
+@keyframes hp-bar-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+  40% {
+    box-shadow: 0 0 16px 3px rgba(77, 213, 129, 0.65);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+}
+
+@keyframes block-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 152, 247, 0);
+  }
+  40% {
+    transform: scale(1.12);
+    box-shadow: 0 0 18px 4px rgba(99, 152, 247, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 152, 247, 0);
+  }
+}
+
+.block-badge.pulsing {
+  animation: block-pulse 500ms ease-out;
+}
+
+@keyframes hp-glow {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+  40% {
+    box-shadow: inset 0 0 22px 4px rgba(77, 213, 129, 0.55);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(77, 213, 129, 0);
+  }
+}
+
+.hp-bar.glow {
+  animation: hp-glow 500ms ease-out;
+}
+
+@keyframes vignette-damage-flash {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+  20% {
+    box-shadow: inset 0 0 160px 40px rgba(238, 94, 87, 0.55);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+}
+
+body.vignette-damage::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  animation: vignette-damage-flash 500ms ease-out;
+}
+
+/* Burn-tick vignette: softer + ember-tinted so a DoT tick doesn't read
+   as the same gut-punch a Smolder *attack* delivers. Same shape as the
+   damage vignette, dimmer alpha and orange hue (ff8540) to match the
+   `-N` popup and chip-trail palette. */
+@keyframes vignette-burn-flash {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+  20% {
+    box-shadow: inset 0 0 120px 30px rgba(255, 133, 64, 0.32);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+}
+
+body.vignette-burn::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  animation: vignette-burn-flash 520ms ease-out;
+}
+
+@keyframes hp-hit {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+  20% {
+    box-shadow: inset 0 0 20px 4px rgba(238, 94, 87, 0.7);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(238, 94, 87, 0);
+  }
+}
+
+.hp-bar.hit {
+  animation: hp-hit 420ms ease-out;
+}
+
+/* Burn-tick HP-bar flash: orange glow instead of red. The bar still
+   pulses (the player IS taking damage), but the color tells them which
+   kind. Slightly longer/softer to read as "the fire ate at you", not
+   "you got punched". */
+@keyframes hp-burn-hit {
+  0% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+  25% {
+    box-shadow: inset 0 0 22px 4px rgba(255, 133, 64, 0.65);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(255, 133, 64, 0);
+  }
+}
+
+.hp-bar.burn-hit {
+  animation: hp-burn-hit 520ms ease-out;
+}
+
+/* "This attack carried fire" halo — pulses on the HUD frame at the
+   moment of impact for any enemy attack that applies Burn. Pairs with
+   the in-place ember burst spawned by AC.spawnBurnImpactBurst; the
+   burst sells the moment, the halo lingers a beat so the eye reads
+   "the frame is now glowing orange" before the chip drops in. Shorter
+   than the burn-tick vignette so it doesn't bleed into the chip
+   appearance at +700ms. */
+/* Two-peak flicker (15% → 50% → 100%) so the halo doesn't just decay
+   linearly; the second pulse mirrors the delayed lingering-flame burst
+   spawned by AC.spawnBurnImpactBurst at +120ms. Longer total ride
+   (640ms) gives the flame more presence on the frame. */
+@keyframes hud-burn-impact {
+  0% {
+    box-shadow:
+      inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+      inset 0 0 22px rgba(0, 0, 0, 0.5),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 0 0 rgba(255, 133, 64, 0);
+  }
+  15% {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 200, 130, 0.7),
+      inset 0 0 38px rgba(255, 133, 64, 0.55),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 32px 6px rgba(255, 133, 64, 0.65);
+  }
+  35% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 175, 100, 0.45),
+      inset 0 0 26px rgba(255, 133, 64, 0.35),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 18px 3px rgba(255, 133, 64, 0.4);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1.2px rgba(255, 190, 120, 0.55),
+      inset 0 0 32px rgba(255, 133, 64, 0.45),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 22px 4px rgba(255, 175, 100, 0.5);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+      inset 0 0 22px rgba(0, 0, 0, 0.5),
+      0 6px 18px rgba(0, 0, 0, 0.4),
+      0 0 0 0 rgba(255, 133, 64, 0);
+  }
+}
+
+.hud.burn-impact {
+  animation: hud-burn-impact 640ms ease-out;
+}
+
+
+/* Low-HP urgency pulse via ::after so it doesn't stomp the .hit/.glow
+   box-shadow animations on the main element. */
+.hp-bar.low::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  animation: hp-low-pulse 1500ms ease-in-out infinite;
+}
+
+@keyframes hp-low-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 10px 1px rgba(238, 94, 87, 0.32),
+      0 0 6px rgba(238, 94, 87, 0.18);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 22px 2px rgba(238, 94, 87, 0.72),
+      0 0 18px rgba(238, 94, 87, 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-bar.low::after {
+    animation: none;
+    box-shadow:
+      inset 0 0 16px 2px rgba(238, 94, 87, 0.55),
+      0 0 10px rgba(238, 94, 87, 0.35);
+  }
+}
+
+.value-pop {
+  display: inline-block;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@keyframes value-pop-up {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+  35% {
+    transform: scale(1.35);
+    color: #b6ffcb;
+    text-shadow:
+      0 0 10px rgba(127, 255, 161, 0.85),
+      0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@keyframes value-pop-down {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+  30% {
+    transform: scale(1.3) translateY(1px);
+    color: #ffb0ad;
+    text-shadow:
+      0 0 10px rgba(255, 122, 114, 0.85),
+      0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+}
+
+.value-pop-up {
+  animation: value-pop-up 380ms cubic-bezier(0.2, 0.8, 0.3, 1.05);
+}
+
+.value-pop-down {
+  animation: value-pop-down 380ms cubic-bezier(0.2, 0.8, 0.3, 1.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .value-pop-up,
+  .value-pop-down {
+    animation: none;
+  }
+  .enemy-sprite::before {
+    animation: none;
+  }
+}
+
+@keyframes enemy-hit {
+  0% {
+    transform: translate3d(0, 0, 0);
+    filter: brightness(1);
+  }
+  25% {
+    transform: translate3d(-4px, 0, 0);
+    filter: brightness(2.2) saturate(1.6);
+    border-color: #ff7a72;
+  }
+  50% {
+    transform: translate3d(3px, 0, 0);
+    filter: brightness(1.8) saturate(1.4);
+  }
+  75% {
+    transform: translate3d(-2px, 0, 0);
+    filter: brightness(1.3);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+    filter: brightness(1);
+  }
+}
+
+.enemy-frame.hit {
+  animation: enemy-hit 280ms ease-out;
+}
+
+
