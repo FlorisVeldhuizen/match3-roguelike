@@ -7,8 +7,26 @@ import {
 } from '../../core/combat/spellRegistry'
 import { canAffordSpell } from '../../core/combat/mana'
 import { emitGameEvent } from '../../core/events/emitter'
-import type { ManaCost } from '../../types'
+import { MANA_CAPS, type ManaCost, type SpellId, type StatusKind } from '../../types'
 import { HoverTooltip } from './HoverTooltip'
+import { PurifyPickerModal } from './PurifyPickerModal'
+import { FocusPickerModal } from './FocusPickerModal'
+import { VolleyTargetModal } from './VolleyTargetModal'
+import { useBoardSettled } from '../hooks/useBoardSettled'
+
+// Spells whose cast needs args; clicking the tray button opens a picker
+// modal rather than dispatching castSpell. Each modal calls its own
+// store action (castPurify / castFocus / castVolley) on confirm.
+const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
+  'purify',
+  'focus',
+  'volley',
+])
+
+// Purify only acts on harmful statuses. Regen is beneficial; the
+// player would never want to strip it, so the spell-tray gate
+// excludes Regen-only state.
+const PURIFIABLE: ReadonlySet<StatusKind> = new Set(['burn', 'vulnerable', 'weak'])
 
 // Human-readable cost summary, e.g. "3 blue", "2 red, 1 yellow". Used in
 // tooltips so the player knows the colour break-down at a glance.
@@ -67,9 +85,20 @@ export function SpellTray() {
   const mana = useGameStore((s) => s.fight.player.mana)
   const charge = useGameStore((s) => s.fight.player.skillCharge)
   const pending = useGameStore((s) => s.fight.player.pendingSpells)
+  const statuses = useGameStore((s) => s.fight.player.statuses)
+  const enemies = useGameStore((s) => s.fight.enemies)
   const castSpell = useGameStore((s) => s.castSpell)
   const castUltimate = useGameStore((s) => s.castUltimate)
   const onPlayerPhase = phase === 'player-acting'
+  // 01-design §Spell-timing: "cast window = player phase + board
+  // settled + can pay cost". Without this gate, the spell-tray button
+  // could be clicked during a cascade — the store's mana already
+  // reflects the new match's gain but the HUD chip is still mid-trail
+  // (700ms behind), so the player sees "0 yellow" and casts anyway.
+  const boardSettled = useBoardSettled()
+  // Which picker modal is currently open (null = none). Set on button
+  // click for picker-spells; cleared by the modal on confirm/cancel.
+  const [pickerOpen, setPickerOpen] = useState<SpellId | null>(null)
 
   // Per-button "just cast" flash. Single concurrent timer per button id;
   // a re-cast (can't happen now, but reserved for relics that refund
@@ -90,15 +119,57 @@ export function SpellTray() {
       {listSpells().map((def) => {
         const queued = pending.includes(def.id)
         const canPay = canAffordSpell(mana, def.cost)
-        const blocked = !onPlayerPhase || !canPay || queued
+        // H4a per-spell extra gates beyond mana/queued:
+        // - Purify: needs at least one harmful status (Regen doesn't count)
+        // - Focus: needs at least one source colour with mana AND one
+        //   non-source colour with cap headroom
+        // - Volley / Ignite / Brittle / Cinder Lash: need a living target
+        const livingEnemy = enemies.some((e) => e.hp > 0)
+        let extraBlock = false
+        let extraReason: string | null = null
+        if (
+          def.id === 'purify' &&
+          !statuses.some((s) => PURIFIABLE.has(s.kind))
+        ) {
+          extraBlock = true
+          extraReason = 'No curses to purify.'
+        } else if (def.id === 'focus') {
+          const haveSource =
+            mana.red >= 1 ||
+            mana.blue >= 1 ||
+            mana.green >= 1 ||
+            mana.yellow >= 1
+          const haveTarget =
+            MANA_CAPS.red - mana.red >= 1 ||
+            MANA_CAPS.blue - mana.blue >= 1 ||
+            MANA_CAPS.green - mana.green >= 1 ||
+            MANA_CAPS.yellow - mana.yellow >= 1
+          if (!haveSource || !haveTarget) {
+            extraBlock = true
+            extraReason = 'Nothing useful to convert right now.'
+          }
+        } else if (
+          (def.id === 'volley' ||
+            def.id === 'ignite' ||
+            def.id === 'brittle' ||
+            def.id === 'cinder-lash') &&
+          !livingEnemy
+        ) {
+          extraBlock = true
+          extraReason = 'No targets left.'
+        }
+        const blocked =
+          !onPlayerPhase || !boardSettled || !canPay || queued || extraBlock
         const costSummary = describeCost(def.cost)
         const reason = queued
           ? 'Already cast this turn.'
           : !onPlayerPhase
             ? "Wait for your turn."
-            : !canPay
-              ? `Not enough mana — needs ${costSummary}.`
-              : null
+            : !boardSettled
+              ? 'Wait for the board to settle.'
+              : !canPay
+                ? `Not enough mana — needs ${costSummary}.`
+                : extraReason
         return (
           <HoverTooltip
             key={def.id}
@@ -121,6 +192,14 @@ export function SpellTray() {
               aria-disabled={blocked}
               onClick={() => {
                 if (blocked) return
+                // Picker-arg spells open a modal; the modal dispatches
+                // the dedicated cast action (castCleanse / castFocus /
+                // castVolley) on confirm. Cast-flash plays only on the
+                // direct-cast path; picker flow runs through the modal.
+                if (PICKER_SPELLS.has(def.id)) {
+                  setPickerOpen(def.id)
+                  return
+                }
                 const res = castSpell(def.id)
                 if (res.ok) {
                   for (const ev of res.events) emitGameEvent(ev)
@@ -140,14 +219,16 @@ export function SpellTray() {
       {listUltimates().map((def) => {
         const queued = pending.includes(def.id)
         const canPay = charge >= def.chargeCost
-        const blocked = !onPlayerPhase || !canPay || queued
+        const blocked = !onPlayerPhase || !boardSettled || !canPay || queued
         const reason = queued
           ? 'Already armed — waiting for them to attack.'
           : !onPlayerPhase
             ? "Wait for your turn."
-            : !canPay
-              ? `Not charged up yet — needs ${def.chargeCost}, you have ${charge}.`
-              : null
+            : !boardSettled
+              ? 'Wait for the board to settle.'
+              : !canPay
+                ? `Not charged up yet — needs ${def.chargeCost}, you have ${charge}.`
+                : null
         return (
           <HoverTooltip
             key={def.id}
@@ -192,6 +273,15 @@ export function SpellTray() {
           </HoverTooltip>
         )
       })}
+      {pickerOpen === 'purify' && (
+        <PurifyPickerModal onClose={() => setPickerOpen(null)} />
+      )}
+      {pickerOpen === 'focus' && (
+        <FocusPickerModal onClose={() => setPickerOpen(null)} />
+      )}
+      {pickerOpen === 'volley' && (
+        <VolleyTargetModal onClose={() => setPickerOpen(null)} />
+      )}
     </div>
   )
 }

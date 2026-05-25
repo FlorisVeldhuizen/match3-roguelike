@@ -42,9 +42,11 @@ export type EndOfPhaseResult = {
   events: GameEvent[]
 }
 
-// End of player phase. Damage (red) and heal (green) are already committed
-// per-match by the store walker; this resolves the still-pooled blue pool
-// per Bulwark/Reinforce rules, then transitions to the enemy turn.
+// End of player phase. Heal (green) is committed per-match by the store
+// walker; red damage normally fires per-match too unless Bash/Volley is
+// pending (which defers red into phasePools.red for this resolver). Blue
+// is resolved here per Bulwark/Reinforce rules. After resolution the
+// phase transitions to the enemy turn.
 //
 // Pending-spell resolution (01-design §Spells):
 // - Bulwark alone: blue pool → attack at floor(blue/2), block becomes 0.
@@ -53,9 +55,12 @@ export type EndOfPhaseResult = {
 //   attack at full blue (not floor/2), block becomes 0, and Reinforce
 //   gives up its own double/carry. Both spells are spent on one strike.
 // - Neither queued: block = blue (the default).
+// - Volley queued: red pool splits into 3 chunks distributed across
+//   the player's chosen targets; each chunk goes through composeDamage
+//   + applyDamage. (H4a; Volley is the sole red-pool consumer.)
 //
 // Riposte stays in pendingSpells across the enemy turn (it triggers on
-// incoming attacks); Bulwark/Reinforce are cleared here.
+// incoming attacks); everything else is cleared here.
 export function resolveEndOfPhase(
   player: Player,
   enemies: Enemy[],
@@ -69,6 +74,7 @@ export function resolveEndOfPhase(
 
   const hasBulwark = player.pendingSpells.includes('bulwark')
   const hasReinforce = player.pendingSpells.includes('reinforce')
+  const hasVolley = player.pendingSpells.includes('volley')
 
   let nextBlock = pools.blue
   if (hasBulwark) {
@@ -118,12 +124,63 @@ export function resolveEndOfPhase(
     events.push({ kind: 'pending-effect-resolved', spellId: 'reinforce' })
   }
 
+  // H4a Volley: split the deferred red pool into 3 chunks, applied
+  // across the chosen targets. floor(pool/3) per chunk; remainder lands
+  // on the LAST chunk so no damage is lost. Empty pool = no hits emitted.
+  if (hasVolley && player.volleyTargets && player.volleyTargets.length === 3) {
+    const total = pools.red
+    if (total > 0) {
+      const base = Math.floor(total / 3)
+      const last = total - base * 2
+      const chunks = [base, base, last]
+      for (let i = 0; i < 3; i++) {
+        const chunk = chunks[i]
+        const targetIdAt = player.volleyTargets[i]
+        if (chunk === undefined || chunk <= 0 || targetIdAt === undefined) {
+          continue
+        }
+        const enemy = nextEnemies.find((e) => e.id === targetIdAt && e.hp > 0)
+        if (!enemy) continue
+        const dmg = composeDamage(chunk, player.statuses, enemy.statuses)
+        const res = applyDamage(enemy.block, enemy.hp, dmg)
+        if (res.blocked + res.hpDamage <= 0) continue
+        nextEnemies = nextEnemies.map((e) =>
+          e.id === enemy.id
+            ? { ...e, block: res.blockAfter, hp: res.hpAfter }
+            : e,
+        )
+        events.push({
+          kind: 'damage-dealt',
+          targetId: enemy.id,
+          amount: res.hpDamage,
+          blocked: res.blocked,
+          source: 'player-attack',
+        })
+        if (res.blockBroken) {
+          events.push({ kind: 'block-broken', targetId: enemy.id })
+        } else if (res.blockAbsorbed) {
+          events.push({ kind: 'block-absorbed', targetId: enemy.id })
+        }
+        if (res.killed) {
+          events.push({ kind: 'enemy-killed', enemyId: enemy.id })
+          if (enemy.id === nextTargetId) {
+            const nextLiving = nextEnemies.find(
+              (e) => e.id !== enemy.id && e.hp > 0,
+            )
+            nextTargetId = nextLiving?.id ?? null
+          }
+        }
+      }
+    }
+    events.push({ kind: 'pending-effect-resolved', spellId: 'volley' })
+  }
+
   if (nextBlock > 0) {
     events.push({ kind: 'block-gained', amount: nextBlock })
   }
 
   const nextPending = player.pendingSpells.filter(
-    (id) => id !== 'bulwark' && id !== 'reinforce',
+    (id) => id !== 'bulwark' && id !== 'reinforce' && id !== 'volley',
   )
 
   const updatedPlayer: Player = {
@@ -137,6 +194,10 @@ export function resolveEndOfPhase(
     // spent empowering the swing instead — no carry.
     carryBlockNextPhase:
       hasReinforce && !hasBulwark ? true : player.carryBlockNextPhase,
+    // H4a: Volley's target list lives until EOP resolves it. Clear once
+    // consumed so it can't leak into a later phase (which would let a
+    // second Volley re-use a stale list before the player picks again).
+    volleyTargets: hasVolley ? undefined : player.volleyTargets,
   }
 
   const anyAlive = nextEnemies.some((e) => e.hp > 0)
@@ -221,6 +282,17 @@ export function beginPlayerPhase(
       events.push({ kind: 'block-broken', targetId: 'player' })
     } else if (res.blockAbsorbed) {
       events.push({ kind: 'block-absorbed', targetId: 'player' })
+    }
+  }
+  // H4a Regen tick: heal AFTER burn damage so burn-then-regen pairs
+  // resolve damage first then heal. If burn killed and Stoneheart
+  // pinned HP to 1, regen lifts off the floor.
+  if (ticked.regenHeal > 0 && hp > 0) {
+    const before = hp
+    hp = Math.min(player.maxHp, hp + ticked.regenHeal)
+    const healed = hp - before
+    if (healed > 0) {
+      events.push({ kind: 'healed', amount: healed })
     }
   }
   events.push(...ticked.events)

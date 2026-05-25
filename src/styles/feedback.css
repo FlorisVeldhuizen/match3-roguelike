@@ -70,18 +70,21 @@
   }
 }
 
+/* drop-shadow (not box-shadow) so the glow follows the shield's SVG
+   alpha rather than the element's rectangular bounding box. Matches the
+   approach already used on .block-badge.active. */
 @keyframes block-pulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(99, 152, 247, 0);
+    filter: drop-shadow(0 0 0 rgba(99, 152, 247, 0));
   }
   40% {
     transform: scale(1.12);
-    box-shadow: 0 0 18px 4px rgba(99, 152, 247, 0.6);
+    filter: drop-shadow(0 0 10px rgba(99, 152, 247, 0.85));
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(99, 152, 247, 0);
+    filter: drop-shadow(0 0 0 rgba(99, 152, 247, 0));
   }
 }
 

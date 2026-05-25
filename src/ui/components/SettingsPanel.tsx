@@ -99,6 +99,11 @@ export function SettingsPanel() {
     setOpen(false)
   }
 
+  const forceTrio = () => {
+    useGameStore.getState().debugForceFight(['skirmisher', 'brute', 'smolder'])
+    setOpen(false)
+  }
+
   return (
     <div className="settings-panel" ref={rootRef}>
       <button
@@ -188,6 +193,13 @@ export function SettingsPanel() {
                     onClick={() => forceFight('smolder')}
                   >
                     Smolder
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={forceTrio}
+                  >
+                    Trio
                   </button>
                 </div>
               </div>

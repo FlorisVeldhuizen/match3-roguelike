@@ -1,7 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
+import { useBoardWipe } from '../hooks/useBoardWipe'
+import { useFightReset } from '../hooks/useFightReset'
+import { CellAnchor } from './CellAnchor'
 
 // Animation-timed overlay for the `blessed` cell flag (match-5 reward).
 // Mirrors BurningOverlay's pattern but simpler — blessed is a 1-bit flag
@@ -13,8 +16,8 @@ import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
 //   - blessed-match-triggered:  the listed cells just cleared, so drop them
 //                               from the overlay (the gold rim vanishes with
 //                               the matched gem).
-//   - board-shuffled:           wipe (board reset wipes all flags).
-//   - fightCounter change:      reseed from store (new fight = fresh board).
+//   - board-wipe (shuffle/sweep): clear all (handled via useBoardWipe).
+//   - fight reset:              reseed from store (new fight = fresh board).
 //
 // Position tracking lives in useAnimatedCellPositions so the rim slides in
 // lockstep with the gem sprite underneath during swap / gravity.
@@ -104,15 +107,19 @@ export function BlessedOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    let prevFightCounter = useGameStore.getState().fightCounter
-    return useGameStore.subscribe((s) => {
-      if (s.fightCounter === prevFightCounter) return
-      prevFightCounter = s.fightCounter
-      positions.clear()
-      setSparks(seedBlessedFromStore(positions.set, idCounterRef))
-    })
+  const wipeAll = useCallback(() => {
+    positions.clear()
+    setSparks(new Map())
   }, [positions])
+
+  useFightReset(
+    useCallback(() => {
+      wipeAll()
+      setSparks(seedBlessedFromStore(positions.set, idCounterRef))
+    }, [wipeAll, positions]),
+  )
+
+  useBoardWipe(wipeAll)
 
   useEffect(() => {
     return subscribeGameEvents((event) => {
@@ -151,9 +158,6 @@ export function BlessedOverlay() {
           for (const id of removed) next.delete(id)
           return next
         })
-      } else if (event.kind === 'board-shuffled') {
-        positions.clear()
-        setSparks(new Map())
       }
     })
   }, [positions])
@@ -163,23 +167,18 @@ export function BlessedOverlay() {
       {Array.from(positions.positions.entries()).map(([id, p]) => {
         const cellSparks = sparks.get(id)
         if (!cellSparks) return null
-        const transitionStyle = p.transition
-          ? `left ${p.transition.durationMs}ms ${p.transition.bezier}, top ${p.transition.durationMs}ms ${p.transition.bezier}`
-          : 'none'
         return (
-          <span
+          <CellAnchor
             key={id}
+            x={p.x}
+            y={p.y}
+            transition={p.transition}
             className="blessed-cell"
-            style={{
-              left: `${p.x * 12.5}%`,
-              top: `${p.y * 12.5}%`,
-              transition: transitionStyle,
-            }}
           >
             {cellSparks.map((s, i) => (
               <BlessedSpark key={i} initial={s} />
             ))}
-          </span>
+          </CellAnchor>
         )
       })}
     </div>

@@ -14,9 +14,10 @@ import type {
 export const BURN_FROM_TILE_BONUS = 1
 
 // Apply / re-apply rules (StS pattern — one number per status):
-// - Burn: stacks += incoming.stacks. Each tick deals stacks damage, then
-//   stacks decrements by 1. So Burn 3 deals 3 → 2 → 1 (6 total). A
-//   fresh Burn 2 on top of an existing Burn 3 = Burn 5 (5+4+3+2+1=15).
+// - Burn / Regen: stacks += incoming.stacks. Each tick deals/heals
+//   stacks, then stacks decrements by 1. So Burn 3 deals 3 → 2 → 1
+//   (6 total); Regen 3 heals 3 → 2 → 1 the same way. A fresh Burn 2
+//   on top of an existing Burn 3 = Burn 5 (5+4+3+2+1=15).
 // - Vulnerable / Weak: stacks = max(current, incoming.stacks). The
 //   multiplier is binary (active iff stacks > 0); stacks doubles as
 //   "turns left", which we refresh to the longer remaining.
@@ -28,10 +29,10 @@ export function applyStatusToList(
   if (!existing) {
     return [...list, { kind: incoming.kind, stacks: incoming.stacks }]
   }
-  if (incoming.kind === 'burn') {
+  if (incoming.kind === 'burn' || incoming.kind === 'regen') {
     return list.map((s) =>
-      s.kind === 'burn'
-        ? { kind: 'burn', stacks: s.stacks + incoming.stacks }
+      s.kind === incoming.kind
+        ? { kind: incoming.kind, stacks: s.stacks + incoming.stacks }
         : s,
     )
   }
@@ -49,15 +50,19 @@ export type TickResult = {
   // the normal damage pipeline (caller calls applyDamage) so block can
   // absorb it and `damage-taken`/`damage-dealt` events fire as usual.
   burnDamage: number
+  // Healing to apply to the owner from Regen. Capped at maxHp by the
+  // caller (this layer doesn't see hp). Applied AFTER burnDamage so a
+  // burn-then-regen pair always resolves damage first, then heal.
+  regenHeal: number
   // Lifecycle events. Damage events come from the caller after applying
   // burnDamage through the pipeline — we don't see hp/block here.
   events: GameEvent[]
 }
 
-// Tick once at the owner's phase/turn start. For Burn, capture
-// `stacks` as the damage this tick BEFORE decrementing. Then every
+// Tick once at the owner's phase/turn start. For Burn/Regen, capture
+// `stacks` as the damage/heal this tick BEFORE decrementing. Then every
 // status decrements stacks by 1; statuses at stacks 0 are removed.
-// Decay-while-damaging is the StS Burn pattern: the same number
+// Decay-while-acting is the StS Burn pattern: the same number
 // represents intensity and remaining turns simultaneously.
 export function tickStatuses(
   ownerTag: 'player' | string,
@@ -65,9 +70,11 @@ export function tickStatuses(
 ): TickResult {
   const events: GameEvent[] = []
   let burnDamage = 0
+  let regenHeal = 0
   const next: StatusInstance[] = []
   for (const s of statuses) {
     if (s.kind === 'burn') burnDamage += s.stacks
+    if (s.kind === 'regen') regenHeal += s.stacks
     const remaining = s.stacks - 1
     if (remaining > 0) {
       next.push({ kind: s.kind, stacks: remaining })
@@ -85,7 +92,7 @@ export function tickStatuses(
       })
     }
   }
-  return { statuses: next, burnDamage, events }
+  return { statuses: next, burnDamage, regenHeal, events }
 }
 
 export function hasStatus(

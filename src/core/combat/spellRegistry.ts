@@ -2,6 +2,7 @@ import type {
   ManaCost,
   PendingSpellId,
   SpellId,
+  SpellResolution,
   UltimateId,
 } from '../../types'
 
@@ -25,8 +26,15 @@ export type SpellDef = {
   // when other colours are short.
   cost: ManaCost
   description: string
+  // H4a: 'pending' = effect resolves later (EOP, or on a trigger); the
+  // spell enters `player.pendingSpells` on cast. 'immediate' = effect
+  // applies inline at cast time and the spell never enters pendingSpells.
+  // Drives castSpell's branching in core/state/store.ts.
+  resolution: SpellResolution
   // Short verb shown next to the name when this spell sits in the
-  // pending strip (e.g. "queued" — "Bulwark — queued").
+  // pending strip (e.g. "queued" — "Bulwark — queued"). For immediate
+  // spells this field is unused but still populated (registry shape
+  // stays uniform).
   pendingLabel: string
   // Short description shown in the pending-strip tooltip. Distinct from
   // `description` because once a spell is queued, the player only needs

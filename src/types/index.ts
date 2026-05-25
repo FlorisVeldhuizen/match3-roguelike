@@ -48,7 +48,11 @@ export type DamageSource =
   | 'riposte'
   | 'thornmail'
 
-export type StatusKind = 'burn' | 'vulnerable' | 'weak'
+// H4a redesign: 'regen' joins the status list as the player-side
+// counterpart to Burn. Same shape: stacks decay −1 per tick, and on
+// the owner's turn-start tick `stacks` HP is healed (capped at maxHp).
+// Re-applying accumulates stacks the same way Burn does.
+export type StatusKind = 'burn' | 'vulnerable' | 'weak' | 'regen'
 
 // One number per status (Slay-the-Spire pattern). `stacks` is both
 // "magnitude" and "turns left" — every tick decrements stacks by 1, and
@@ -61,9 +65,28 @@ export type StatusInstance = {
   stacks: number
 }
 
-export type SpellId = 'bulwark' | 'reinforce'
+export type SpellId =
+  | 'bulwark'
+  | 'reinforce'
+  | 'volley'
+  | 'focus'
+  | 'ignite'
+  | 'regenerate'
+  | 'purify'
+  | 'skewer'
+  | 'brittle'
+  | 'surge'
+  | 'cinder-lash'
 export type UltimateId = 'riposte'
 export type PendingSpellId = SpellId | UltimateId
+
+// H4a: spell resolution timing. 'pending' = effect resolves at EOP (or
+// on a later trigger like an enemy attack); the spell sits in
+// `pendingSpells` after cast. 'immediate' = effect applies inline at
+// cast time; spell does NOT enter `pendingSpells`. Bulwark/Reinforce/
+// Riposte/Bash/Volley are pending; Steel Heart/Cleanse/Focus are
+// immediate.
+export type SpellResolution = 'pending' | 'immediate'
 
 export type GameEvent =
   | { kind: 'swap'; from: Pos; to: Pos }
@@ -92,6 +115,11 @@ export type GameEvent =
   | { kind: 'gems-fell'; movements: { from: Pos; to: Pos }[] }
   | { kind: 'gems-spawned'; spawns: { at: Pos; color: GemColor }[] }
   | { kind: 'board-shuffled'; cells: { at: Pos; color: GemColor }[] }
+  // Fired by the AnimationController when the board sweeps gems off after
+  // a fight ends (victory or game-over). Cell-anchored overlays (e.g.
+  // BurningOverlay's flames) listen and clear their decorations so they
+  // don't linger after the gems they were sitting on have dropped away.
+  | { kind: 'board-swept' }
   // Fires once per column during the level-start intro animation, scheduled
   // to land with that column's visual touchdown. Purely cosmetic — audio
   // subscribes to play a drop thunk; gameplay subscribers should ignore it.
@@ -311,7 +339,25 @@ export type Player = {
   // EOP/ultimate effects queued this phase. Bulwark/Reinforce fire and
   // are cleared at EOP; Riposte persists across the enemy turn until it
   // triggers on an incoming attack or expires at the end of that turn.
+  // H4a: Bash/Volley join this list — both consume the red pool at EOP
+  // (defer per-match red damage during the phase). They're mutually
+  // exclusive (castSpell gates the second one).
   pendingSpells: PendingSpellId[]
+  // H4a Volley arg payload: the 3 enemy ids the player chose at cast
+  // time, one per hit. Lives on Player rather than the pending list
+  // because PendingSpellId is just a discriminator. Cleared on EOP
+  // resolution along with the pending entry.
+  volleyTargets?: string[]
+  // H4a redesign one-shot match modifiers. Both are consumed by the
+  // next match the player makes (NOT cascades from that match — only
+  // the first link). Cleared after the consuming match's deltas are
+  // applied so a chain reaction can't burn through them.
+  //   skewerArmed: red damage from the next match is doubled
+  //   surgeArmed: the next match treats its cascadeLevel as level+2
+  //               (so relic onMatch hooks like Cascade Crystal fire
+  //               on a match that would normally be level 0)
+  skewerArmed?: boolean
+  surgeArmed?: boolean
   // Reinforce sets this at EOP. Next beginPlayerPhase preserves the
   // remaining block (instead of zeroing it) and clears the flag — the
   // phase *after* that zeros normally per 01-design §Reinforce.

@@ -14,7 +14,6 @@ import { BlessedOverlay } from './components/BlessedOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
 import { MapScreen } from './components/MapScreen'
-import { Splash } from './components/Splash'
 import { useGameStore } from '../core/state/store'
 
 // Duck-typed handle for the Pixi overlay (lives on window.__overlay).
@@ -26,6 +25,10 @@ export const BOARD_MOUNT_ID = 'board-mount'
 export function App() {
   const seed = useGameStore((s) => s.rootSeed)
   const runPhase = useGameStore((s) => s.runPhase)
+
+  useEffect(() => {
+    ;(window as unknown as { __store?: typeof useGameStore }).__store = useGameStore
+  }, [])
 
   // Only wipe the overlay when entering the map. During victory/reward/
   // game-over the cascade is still resolving its trailing FX (damage
@@ -100,7 +103,6 @@ export function App() {
       <PhaseBanner />
       <AriaLiveAnnouncer />
       <CRTOverlay />
-      <Splash />
     </>
   )
 }

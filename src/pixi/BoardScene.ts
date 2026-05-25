@@ -13,7 +13,6 @@ import { createBoardInteraction } from './input'
 import { AnimationController } from './AnimationController'
 import { BoardEffects } from './BoardEffects'
 import { emitGameEvent } from '../core/events/emitter'
-import { isStarted, subscribeStarted } from '../splashState'
 import {
   getTimeScale,
   onDebugSwap,
@@ -218,9 +217,9 @@ export class BoardScene {
   private detachVisibility: (() => void) | null = null
   private detachTimeScale: (() => void) | null = null
   private detachDebugSwap: (() => void) | null = null
-  private unsubscribeStarted: (() => void) | null = null
-  // Sprites built by the initial buildSprites pass. Stashed so the splash-
-  // gated intro can flip their alpha back to 1 right before playInitialFill.
+  // Sprites built by the initial buildSprites pass. Stashed so
+  // playPendingIntro can flip their alpha back to 1 right before
+  // playInitialFill runs.
   private pendingIntroSprites: Sprite[][] | null = null
   private activePointer: PointerState | null = null
   // Canvas rect cached across calls; getBoundingClientRect is a sync layout
@@ -445,17 +444,11 @@ export class BoardScene {
       cellScreenCenter: (pos) => this.cellScreenCenter(pos),
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
-    // Hide gems until the splash dismisses — they sit at their cell centers
-    // post-buildSprites, but we don't want them visible while the splash
-    // overlay is up. playPendingIntro flips alpha back to 1 right before
-    // running the waterfall.
+    // Hide gems briefly so playPendingIntro can run the waterfall — it
+    // flips alpha back to 1 just before playInitialFill animates them in.
     for (const row of sprites) for (const s of row) s.alpha = 0
     this.pendingIntroSprites = sprites
-    if (isStarted()) {
-      this.playPendingIntro()
-    } else {
-      this.unsubscribeStarted = subscribeStarted(() => this.playPendingIntro())
-    }
+    this.playPendingIntro()
     this.subscribeSelection()
     this.attachPointerEvents(app.canvas)
     this.attachKeyboardEvents()
@@ -472,24 +465,18 @@ export class BoardScene {
     this.startEffectsTicker()
   }
 
-  // Splash-gated intro: restore gem visibility and trigger the waterfall.
-  // Called either immediately (if started already) or via subscribeStarted
-  // when the user dismisses the splash. Guarded so a late splashState flip
-  // after destroy() doesn't crash.
+  // Intro waterfall: restore gem visibility and trigger the fall.
   //
   // H1: boot lands on the map (runPhase==='map'), not directly in a fight.
   // The sentinel board is hidden behind the map screen, so playing the
-  // intro animation here just leaks drop SFX into the splash-clearing
-  // moment without any visual payoff — and rebuildBoard() will play a
-  // fresh intro the moment the player enters their first fight node.
-  // Skip the boot intro in that case.
+  // intro animation here leaks drop SFX with no visual payoff — and
+  // rebuildBoard() plays a fresh intro the moment the player enters
+  // their first fight node. Skip the boot intro in that case.
   private playPendingIntro(): void {
     if (this.disposed) return
     const sprites = this.pendingIntroSprites
     if (!sprites || !this.animator) return
     this.pendingIntroSprites = null
-    this.unsubscribeStarted?.()
-    this.unsubscribeStarted = null
     const runPhase = useGameStore.getState().runPhase
     if (runPhase !== 'fight') {
       // Sentinel board never becomes visible at this runPhase. Leave
@@ -504,8 +491,6 @@ export class BoardScene {
     this.disposed = true
     this.unsubscribeSelection?.()
     this.unsubscribeSelection = null
-    this.unsubscribeStarted?.()
-    this.unsubscribeStarted = null
     this.unsubscribeRestart?.()
     this.unsubscribeRestart = null
     this.detachPointer?.()
@@ -1293,7 +1278,7 @@ export class BoardScene {
   private tickNudge(dtMs: number, animating: boolean): void {
     const phase = useGameStore.getState().fight.phase
     const canHint =
-      !animating && phase === 'player-acting' && isStarted()
+      !animating && phase === 'player-acting'
     if (!canHint) {
       // Suppress immediately — animator owns sprite scale during anims and
       // an eased fade would just fight its tweens.

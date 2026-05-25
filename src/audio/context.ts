@@ -151,9 +151,10 @@ export function out(c: AudioContext): AudioNode {
 // buffer kick: play a 1-sample zero-amplitude buffer inside the gesture.
 // Once that lands, every subsequent sound works normally.
 //
-// MUST be called synchronously from a touch/pointer/click handler. The
-// Splash dismiss is the primary caller; the window-level fallback below
-// covers HMR-reload edge cases where the splash is bypassed.
+// MUST be called synchronously from a touch/pointer/click handler.
+// The window-level fallback below covers every entry path — it fires
+// on the player's first pointerdown/keydown/touchstart anywhere on
+// the page and self-removes after it succeeds.
 export function unlockAudio(): void {
   userInteracted = true
   const c = getCtx()
@@ -173,10 +174,11 @@ export function unlockAudio(): void {
 }
 
 if (typeof window !== 'undefined') {
-  // Fallback unlock for any gesture path that bypasses Splash (HMR reloads
-  // that preserve `started=true`, or future flows where the splash is
-  // skipped). Splash.handleDismiss is the primary unlock — once it fires,
-  // these listeners self-remove.
+  // First-gesture audio unlock. iOS Safari and iOS Chrome require both
+  // resume() and a silent-buffer kick to be issued inside a synchronous
+  // user-gesture handler — we listen at the window so the player's first
+  // tap/click/key anywhere on the page unblocks audio. Self-removing
+  // once unlockAudio fires.
   const onFirstGesture = (): void => {
     unlockAudio()
     window.removeEventListener('pointerdown', onFirstGesture)

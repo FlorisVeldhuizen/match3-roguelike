@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase H2a complete.** Working on H3 (multi-color mana economy) next. H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer is **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents + hero power** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued but happen *after* H3/H4 because the spell-economy work elevates the verb work.
+Status: **Phase H3 complete.** Working on H4a (spell roster expansion) next. H4 split into H4a (spells) / H4b (ally-target intents + new compositions) / H4c (hero power, **deferred** — re-evaluate after H4a/b ship; expanded spell roster may make a hero power feel redundant). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents + hero power** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued but happen *after* H4 because the spell-economy work elevates the verb work.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
@@ -300,7 +300,9 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-## Phase H3 — Multi-color mana economy
+## Phase H3 — Multi-color mana economy ✅ COMPLETE
+
+**Status:** shipped 2026-05-24 (commit `f7250bd`). Per-color mana pools, wild substitution, 4-chip HUD, mana persistence across fights, all wired. 186 tests passing.
 
 **Goal:** every match contributes to both an immediate effect (today's behaviour) *and* a persistent color mana pool that spells will cost from. Yellow becomes wild mana (universal 1:1 substitute). Purple stays as ultimate charge. Designed before H4 so spells are built into the new economy from day 1, not retrofitted. Full spec in `08-multi-color-mana-proposal.md`.
 
@@ -330,39 +332,96 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ## Phase H4 — Spell roster expansion + ally-target intents + hero power
 
-**Goal:** broaden response heterogeneity (player side) and threat heterogeneity (enemy side). Add 3-5 new spells with multi-color costs. Add ally-target enemy intents (heal-ally, buff-ally, shield-ally) so enemy compositions can be role-mixed (healer + tank, rally brute + minions, shielder + squishy mage) — but **also keep simple block/attack compositions in the pool** so multi-enemy variety doesn't require role-based units in every fight. Introduce a class hero power with a cooldown framing.
+> **Split (2026-05-25):** Original single-phase H4 estimated at 8-10h. Split into H4a/H4b/(H4c deferred) so each ends at a runnable, demoable state and the hero-power decision can be re-litigated after the spell roster is in play. With 5 new spells covering offence / defence / heal / cleanse / mana conversion, a Knight hero power risks redundancy with the expanded spell list; defer the decision until the new spells have been played against multi-enemy fights and a clear gap (or none) emerges.
+
+**Goal (parent phase):** broaden response heterogeneity (player side) and threat heterogeneity (enemy side). Add 3-5 new spells with multi-color costs. Add ally-target enemy intents (heal-ally, buff-ally, shield-ally) so enemy compositions can be role-mixed (healer + tank, rally brute + minions, shielder + squishy mage) — but **also keep simple block/attack compositions in the pool** so multi-enemy variety doesn't require role-based units in every fight. Introduce a class hero power with a cooldown framing.
+
+### Phase H4a — Spell roster expansion
+
+> **Design pivot (2026-05-25):** Initial pass shipped 7 spells but design review (with the user) flagged 3 as too plain — Bash mirrored Bulwark, Steel Heart duplicated green-match healing, Cleanse's "−1 stack" was too marginal to be worth casting. Replaced with: **Ignite** (3R, apply Burn 3 to target), **Regenerate** (3G, regen 3 self → 6 HP over 3 turns), **Purify** (2G, remove a status entirely; +3 HP if it was Burn). Added 4 new spells for synergy depth: **Skewer** (2R, next match deals 2× damage), **Brittle** (3B, target Vulnerable 2), **Surge** (3Y, next match counts as cascade level +2), **Cinder Lash** (2R+1G, apply Burn 2 + heal 2 — first multi-cost spell). Final pool: 10 spells + 1 ultimate.
+
+**Goal:** the Knight's spell list grows from 2 → 10 (+1 ultimate). All spells respect the multi-color mana economy from H3.
+
+**Spells (final list):**
+- **Bulwark** (3B, pending) — blue pool → attack at floor/2, block zeroed.
+- **Reinforce** (4B, pending) — block doubled + carries to next phase. Pairs with Bulwark.
+- **Volley** (4R, pending, picker) — 3-hit AOE, player allocates targets at cast. Defers red damage during the phase; EOP splits the pool.
+- **Focus** (2Y explicit, immediate, picker) — move up to 3 mana from source colour → target colour. Yellow can't fund itself.
+- **Ignite** (3R, immediate, auto-target) — Burn 3 to current target.
+- **Regenerate** (3G, immediate, self) — Regen 3 to self → heals 3/2/1 over 3 turns (6 HP total).
+- **Purify** (2G, immediate, picker) — remove a player status entirely. If Burn, also heal 3.
+- **Skewer** (2R, pending one-shot) — next match's red damage is doubled. Cleared by the next match (NOT EOP).
+- **Brittle** (3B, immediate, auto-target) — Vulnerable 2 to current target.
+- **Surge** (3Y, pending one-shot) — next match counts as cascade level +2 (triggers Cascade Crystal & future cascade relics on level-0 matches).
+- **Cinder Lash** (2R+1G, immediate, auto-target) — Burn 2 to target + heal 2 self.
+- **Riposte** (8 charge, ultimate) — unchanged.
+
+**Engine plumbing:**
+- `SpellDef.resolution: 'immediate' | 'pending'` discriminator.
+- `castSpell(id)` branches on resolution. Immediate spells apply via per-spell resolvers in `core/combat/spellResolvers.ts`; pending spells push to `pendingSpells` (existing Bulwark/Reinforce pattern). Skewer/Surge are pending in shape but cleared by the next match (not by EOP); arm a per-phase flag on `Player` (`skewerArmed`, `surgeArmed`) that the cascade walker consumes.
+- Picker-arg spells get dedicated store actions: `castPurify(statusKind)`, `castFocus(from, to)`, `castVolley(targets: string[])`.
+- Volley's red-pool deferral: cascade walker skips `applyMatchRedDamage` while Volley is pending, accumulating into `phasePools.red`. EOP splits the pool into 3 chunks per the chosen distribution.
+- New `StatusKind: 'regen'` — player-side mirror of Burn. Decays −1/turn, heals `stacks` HP at owner's turn start. Wired into `tickStatuses` + `beginPlayerPhase` (heal AFTER burn damage, so burn-then-regen pairs resolve damage first).
+- Multi-cost mana costs already worked since H3's `mana.ts`; Cinder Lash is the first content user.
+
+**Picker modals:** `PurifyPickerModal`, `FocusPickerModal`, `VolleyTargetModal`. Modal overlay style consistent with `RewardScreen`. ESC and backdrop-click close (cast aborts, mana not consumed).
+
+**Out of scope:** ally-target intents (H4b), hero power (H4c deferred), spell acquisition / 6-slot cap (next sub-phase), new enemy compositions, spell upgrades, spell-acquisition shop UI (Phase I integration).
+
+**Acceptance:**
+- ✓ 10 spells + 1 ultimate visible in the spell tray, costs rendered as colored mana pips
+- ✓ Existing Bulwark / Reinforce / Volley / Focus / Riposte work unchanged
+- ✓ **Ignite:** cast → target gains Burn 3; stacks with existing Burn
+- ✓ **Regenerate:** cast → Regen 3 on player; ticks 3, 2, 1 HP over the next 3 turns, then expires
+- ✓ **Purify:** cast → picker opens → pick status → it's removed entirely; if Burn, +3 HP
+- ✓ **Skewer:** cast → pip in PendingStrip → next match's red damage is doubled, then the pip clears
+- ✓ **Brittle:** cast → target gains Vulnerable 2 (existing refresh rule applies)
+- ✓ **Surge:** cast → pip in PendingStrip → next match's cascade level is treated as +2 (visible via Cascade Crystal triggering on a level-0 match), then pip clears
+- ✓ **Cinder Lash:** cast → target gains Burn 2 + player heals 2; needs both R and G mana (with wild substitution allowed)
+- ✓ Target-required spells (Ignite/Brittle/Cinder Lash/Volley) disabled when no living enemy
+- ✓ Purify disabled when player has no harmful statuses (Regen alone doesn't count)
+- ✓ **Tests:** Ignite/Brittle/Cinder Lash apply correct statuses + heal; Regenerate apply + per-turn tick (3→2→1→expire) + cap at maxHp + burn-before-regen ordering; Purify removes entirely + Burn-kicker heals + caps + no-op on absent; Focus mana shift; Volley EOP split + remainder + dead-target skip + Vulnerable composition + kill reroute. (Skewer/Surge end-to-end coverage left to playtest — flag-then-consume cascade-walker logic is wired through store; unit-test harness would need a deterministic board.)
+
+---
+
+### Phase H4b — Ally-target intents + role-mixed compositions
+
+**Goal:** broaden enemy intent vocabulary with three ally-target intent kinds, add the `strength` status they piggyback on, and seed map generation with role-mixed compositions. Simple-stacked compositions remain in the pool so multi-enemy variety isn't gated on role-based units.
 
 **Scope:**
-- **New spells (3-5)** designed around the multi-color mana economy. Working candidates:
-  - **Bash** (3 red): red pool → block at floor(red/2). Mirror of Bulwark.
-  - **Volley** (4 red): split red pool into 3 hits, player distributes across enemies during EOP resolution. The "AOE as spell" answer.
-  - **Cleanse** (2 green): remove 1 stack of one player status.
-  - **Steel Heart** (3 green): heal 4 HP immediately.
-  - **Focus** (2 yellow specifically — not wild): convert 3 of one color mana → 3 of another. Resource-rebalance utility.
 - **Ally-target intent kinds** (engine-level addition):
   - `heal-ally`: enemy targets an ally; adds HP to it next turn
   - `buff-ally`: enemy applies a Strength-like buff status to an ally (new status kind: `strength` — flat damage bonus while active)
   - `shield-ally`: enemy adds block to an ally
-- **Composition design:** map generation includes role-mixed compositions *and* simple stacking compositions. Both are valid multi-enemy fights; variety is the point.
-- **Hero power** — Knight-specific, **cooldown-gated** (not free-every-phase, not mana-costed). Specifics still open (see notes below). One use, then `N` phases of cooldown.
+- **`strength` status** — new `StatusKind`. Flat damage bonus to outgoing attacks while stacks > 0; doesn't tick down per turn (sticks until removed). Composes through `composeDamage` after Vulnerable/Weak.
+- **Intent telegraph:** ally-target intents show the source enemy → arrow → target ally on the intent badge. Same telegraph window as other intents (one phase before resolution).
+- **Composition design:** map generation includes role-mixed compositions *and* simple stacking compositions. Two new role-mixed templates seeded: e.g. "Brute + Skirmisher-as-rallier (buff-ally)", "Defender + Smolder (shield-ally on Smolder so the burn-applier survives longer)". Simple-stacking compositions stay in the pool.
+- One existing archetype gains an ally-target verb variant via intent pattern injection (no new archetype needed). Pick the lightest fit — likely Skirmisher (low HP, attacks fast) gaining a `buff-ally` variant.
 
-**Hero power design notes:**
-- The "free always-pressable +block" model is rejected: redundant with Resolute, no decision space.
-- The "mana cost" model is rejected: turns hero power into a cheap spell, loses its identity.
-- **Locked framing:** hero power is **free to cast** but has a **cooldown** measured in player phases. Cooldown creates the decisional weight via timing ("when in the next N phases is the right moment to use it?").
-- **Effect: still open.** Candidates: stun an enemy's next intent (skip), shatter all gems of one chosen color (board manipulation), heal 8 HP (bigger heal than would-be passive), reveal next 2 intents of all enemies, convert 3 chosen cells to a chosen color. Pick during H4 design.
-- **Cooldown duration: still open.** Lean 2-3 phases. Decide with effect.
-
-**Out of scope:** persistent / cast-and-trigger spells (J2 territory), board-event spells, slot caps on the spell loadout, spell acquisition shop/upgrade UI (Phase I integration).
+**Out of scope:** new archetypes, Corruptor (J1), hero power (H4c deferred).
 
 **Acceptance:**
-- ✓ 3-5 new spells live, each castable with multi-color mana costs
-- ✓ Bash, Volley, Cleanse, Steel Heart, Focus implementations match their specs
-- ✓ Heal-ally / buff-ally / shield-ally intents wired through `executeEnemyTurn`, telegraphed on the intent badge with the target ally clear
-- ✓ At least 2 new enemy compositions designed for multi-enemy nodes (e.g. "Brute + Caster-as-healer", "Defender + Skirmisher")
-- ✓ Simple-composition multi-enemy fights also still appear (some nodes are just 2 attackers with no role-based units)
-- ✓ Hero power button in HUD, cooldown indicator, free-to-cast, cannot be cast during cooldown
-- ✓ **Tests:** spell affordability per multi-color cost; spell consumption order (exact color before wild); ally-target intent resolution (heal-ally adds HP to ally, etc.); hero power cooldown gating
+- ✓ Three new intent kinds wired through `executeEnemyTurn`; resolution applies the correct effect to the named ally
+- ✓ Ally-target intents telegraph clearly (source + target visible on the badge); damage-preview / hover stays correct on the targeted ally
+- ✓ `strength` status applies, sticks until removed, composes additively into outgoing damage
+- ✓ At least 2 new role-mixed multi-enemy compositions present in map generation
+- ✓ Simple-stack multi-enemy compositions still appear (some nodes are still just N attackers)
+- ✓ **Tests:** heal-ally HP add (capped at ally maxHp), buff-ally strength stack, shield-ally block add, strength composition in damage pipeline, composition map-gen distribution
+
+---
+
+### Phase H4c — Hero power (DEFERRED)
+
+**Status:** deferred 2026-05-25 until after H4a/H4b ship. Original H4 spec assumed a Knight hero power was needed; with the expanded spell roster from H4a (5 new spells covering offence / defence / heal / cleanse / mana conversion), the design space left for a hero power has shrunk substantially. Re-evaluate after playing through H4a/H4b: if there's a clear gap the new spells don't cover, design the hero power against that gap; if the kit feels complete, drop H4c entirely and update `01-design.md` to reflect that the class identity is "kit + ultimate", no separate hero power.
+
+Open candidates parked from `08-multi-color-mana-proposal.md`:
+- Stun (skip enemy intent) — strong tempo tool
+- Shatter color (clear all of 1 color) — board manipulation, indirect mana gen
+- Big heal (8 HP) — likely redundant with Steel Heart now
+- Reveal next 2 intents (all enemies) — info advantage
+- Cooldown duration: lean 2-3 phases if it ships
+
+**Acceptance:** N/A while deferred. To be filled in if the phase re-activates.
 
 ---
 
@@ -490,7 +549,7 @@ Audio (sfx, music) is a non-goal for the slice — see `02-scope.md`. Not in thi
 ## Dependency graph
 
 ```
-A → B → C → D → E → F → G → H1 → H2a → H3 → H4 → H2b → H2c → I → J1 → J2 → K → L
+A → B → C → D → E → F → G → H1 → H2a → H3 → H4a → H4b → (H4c?) → H2b → H2c → I → J1 → J2 → K → L
 ```
 
 Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) and the spell roster expansion (H4) need to land before the verb work because verb threats become much more interesting once the player has a richer response toolkit. Without H3/H4, H2b/H2c verbs would feel like one-note board hazards rather than threats the player engages with through spell choice. H1 must precede H2a (multi-enemy combat needs the run-flow scaffolding); H3 must precede H4 (spells are designed around the multi-color economy from day 1); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
@@ -510,8 +569,10 @@ Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) 
 | G | Relics (5) | 4-5h |
 | H1 | Map + run flow (single-enemy) | 4-5h |
 | H2a | Multi-enemy plumbing + AOE + Skirmisher | 4-5h ✅ |
-| H3 | Multi-color mana economy | 6-9h |
-| H4 | Spell roster expansion + ally intents + hero power | 8-10h |
+| H3 | Multi-color mana economy | 6-9h ✅ |
+| H4a | Spell roster expansion (5 new spells) | 5-7h |
+| H4b | Ally-target intents + role-mixed compositions | 3-4h |
+| H4c | Hero power | deferred (re-evaluate) |
 | H2b | Brute column-smash + Defender petrify-row | 5-6h |
 | H2c | Caster color-hex + Swarmer cluster-shove | 5-7h |
 | I | Shop + rest | 3-4h |

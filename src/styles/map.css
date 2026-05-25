@@ -37,22 +37,144 @@
   max-width: 420px;
 }
 
-.map-title {
-  margin: 0 0 0.25rem;
+/* Branded header: wordmark flanked by ◆ glyphs between fading gold rules.
+   Replaces the bare "Choose your path" so the map carries the same
+   identity as the dropped splash screen. */
+.map-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.25rem 0 0.4rem;
+}
+.map-brand-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(200, 163, 90, 0.55),
+    transparent
+  );
+}
+.map-brand-glyph {
+  color: var(--gold-1);
+  font-size: 0.7rem;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+}
+.map-wordmark {
+  margin: 0;
   font-family: 'Cinzel', serif;
-  font-size: 1.6rem;
-  letter-spacing: 0.18em;
+  font-weight: 700;
+  font-size: 1.7rem;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--gold-2);
-  text-shadow: 0 0 18px rgba(200, 163, 90, 0.45);
+  /* Tarnished-gold inscribed look: hot highlight on top, deeper gold
+     base, soft glow halo. Matches the wordmark treatment the splash
+     screen used to carry. */
+  background: linear-gradient(
+    180deg,
+    var(--gold-2) 0%,
+    var(--gold-1) 55%,
+    var(--gold-3) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 22px rgba(200, 163, 90, 0.35);
+  padding: 0 0.15em;
 }
 
 .map-sub {
-  margin: 0 0 1.5rem;
+  margin: 0 0 0.9rem;
   color: var(--parchment-dim);
-  letter-spacing: 0.1em;
-  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
   text-transform: uppercase;
+}
+
+/* Run sigil: small chip that anchors the map to the run state. HP on
+   the left, relic icons on the right. Keeps the map screen feeling
+   connected to the fight chrome that's hidden behind it. */
+.map-run-sigil {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.35rem 0.85rem;
+  margin: 0 auto 1.1rem;
+  background: linear-gradient(
+    180deg,
+    rgba(30, 24, 18, 0.85),
+    rgba(21, 17, 11, 0.85)
+  );
+  border: 1px solid rgba(200, 163, 90, 0.35);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.map-run-hp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  color: var(--parchment);
+}
+.map-run-hp-icon {
+  color: var(--ember-2);
+  text-shadow: 0 0 6px var(--ember-glow);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.map-run-hp-cur {
+  color: var(--parchment);
+  font-weight: 700;
+}
+.map-run-hp-sep {
+  color: var(--gold-3);
+  margin: 0 0.15em;
+}
+.map-run-hp-max {
+  color: var(--parchment-dim);
+}
+.map-run-relics {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid rgba(200, 163, 90, 0.25);
+}
+.map-run-relic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba(11, 8, 5, 0.6);
+  border: 1px solid rgba(200, 163, 90, 0.35);
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--gold-2);
+}
+.map-run-relic.rarity-uncommon {
+  border-color: rgba(122, 184, 255, 0.55);
+  color: var(--arcane-2);
+}
+.map-run-relic.rarity-rare {
+  border-color: rgba(184, 157, 255, 0.6);
+  color: var(--royal-2);
+}
+.map-run-relics-empty {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--parchment-dim);
+  opacity: 0.65;
+  padding-left: 0.75rem;
+  border-left: 1px solid rgba(200, 163, 90, 0.25);
 }
 
 .map-canvas-wrap {
@@ -79,6 +201,81 @@
 .map-edge-traversed {
   stroke: var(--gold-3);
   opacity: 0.4;
+}
+/* Dashed connectors fanning from the "you-are-here" pip up to each
+   entry node. Animated march makes it obvious these are *invitations*,
+   not committed paths. */
+.map-edge-anchor {
+  stroke: var(--gold-1);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+  opacity: 0.7;
+  animation: map-anchor-march 1.4s linear infinite;
+}
+@keyframes map-anchor-march {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+/* Floor-numeral rail in the left margin. Roman numerals climb from I
+   (bottom) to "Apex" (boss floor) so the vertical layout has a spine. */
+.map-floor-numeral {
+  fill: var(--gold-3);
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}
+.map-floor-apex {
+  fill: var(--gold-2);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.95;
+}
+
+/* Player-anchor pip: appears at the bottom of the SVG before any node
+   has been picked. Double ring + compass-rose star inside reads as
+   "you are here, choose your way up." Disappears the moment the player
+   commits to an entrance — the gold-filled .map-node-current ring takes
+   over the "you are here" job from there. */
+.map-anchor {
+  pointer-events: none;
+}
+.map-anchor-ring-outer {
+  fill: none;
+  stroke: rgba(200, 163, 90, 0.4);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 3;
+  animation: map-anchor-spin 18s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.map-anchor-ring-inner {
+  fill: rgba(21, 17, 11, 0.85);
+  stroke: var(--gold-1);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 8px rgba(200, 163, 90, 0.55));
+}
+.map-anchor-star {
+  fill: var(--gold-2);
+  filter: drop-shadow(0 0 3px rgba(240, 208, 137, 0.6));
+}
+.map-anchor-label {
+  fill: var(--gold-2);
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+@keyframes map-anchor-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .map-node-circle {

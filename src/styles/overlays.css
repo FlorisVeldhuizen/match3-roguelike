@@ -32,17 +32,20 @@
   position: relative;
 }
 
+/* Mystic knot centerpiece — same ornament as the HUD's top medallion so
+   the run-end panels read as a family with the in-fight HUD. Attribution
+   in /CREDITS.md. */
 .victory-card::before {
-  content: '✦ ✦ ✦';
+  content: '';
   position: absolute;
-  top: -0.65rem;
+  top: -28px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--ink-1);
-  padding: 0 0.7rem;
-  color: var(--gold-1);
-  letter-spacing: 0.4em;
-  font-size: 0.7rem;
+  width: 54px;
+  height: 54px;
+  background: url('/ornaments/mystic-knot.svg') center / contain no-repeat;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7));
+  pointer-events: none;
 }
 
 .victory-title {
@@ -121,16 +124,19 @@
   position: relative;
 }
 
+/* Same mystic knot as the victory card, ember-recoloured so the defeat
+   panel stays in the red palette while keeping the same shape. */
 .game-over-card::before {
-  content: '☠';
+  content: '';
   position: absolute;
-  top: -0.85rem;
+  top: -28px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--ink-1);
-  padding: 0 0.5rem;
-  color: var(--ember-2);
-  font-size: 1.1rem;
+  width: 54px;
+  height: 54px;
+  background: url('/ornaments/mystic-knot-ember.svg') center / contain no-repeat;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.75));
+  pointer-events: none;
 }
 
 .game-over-title {

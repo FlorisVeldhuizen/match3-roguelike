@@ -459,6 +459,10 @@ export class AnimationController {
       await prev
       this.busy = true
       try {
+        // Cell-anchored overlays (burning flames) listen for this and
+        // clear their decorations so they don't hang in mid-air after
+        // the gems drop away.
+        emitGameEvent({ kind: 'board-swept' })
         const height = this.sprites.length
         const width = this.sprites[0]?.length ?? 0
         const columnOrder = shuffledColumnOrder(width)
@@ -1387,7 +1391,11 @@ export class AnimationController {
     // visual story. Yellow and purple skip the secondary — yellow's
     // effect target IS the mana chip, and purple has no mana chip.
     const effectAttractor: Attractor = () => {
-      const el = this.findEl(`[data-pool-target="${color}"]`)
+      // `:not(.dead)` is a belt-and-braces guard on top of EnemyFrame's
+      // hp-based gate: if for any reason the attribute lingers on a
+      // dying frame, the flock just falls through to "no attractor"
+      // (particles freeze) instead of homing onto a corpse.
+      const el = this.findEl(`[data-pool-target="${color}"]:not(.dead)`)
       return el ? elementCenter(el) : null
     }
     const hasSecondary = color !== 'purple' && color !== 'yellow'

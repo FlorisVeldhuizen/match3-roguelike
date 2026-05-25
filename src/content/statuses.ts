@@ -12,6 +12,9 @@ export const STATUS_TEMPLATES: Record<StatusKind, StatusInstance> = {
   // Vulnerable / Weak 2 → multiplier active for 2 turns.
   vulnerable: { kind: 'vulnerable', stacks: 2 },
   weak: { kind: 'weak', stacks: 2 },
+  // Regen 3 → heals 3, then 2, then 1 (6 HP total over 3 turns).
+  // Mirror of Burn's decay. Used by H4a Regenerate spell.
+  regen: { kind: 'regen', stacks: 3 },
 }
 
 // Side-effect registration at module load (main.tsx imports this file
@@ -55,6 +58,13 @@ const defs: Record<StatusKind, StatusDef> = {
     icon: '🪶',
     tooltip:
       'Attacks deal 50% less damage. {stacks} turns left.',
+  },
+  regen: {
+    id: 'regen',
+    name: 'Regenerate',
+    icon: '🌿',
+    tooltip:
+      'Heals {stacks} HP at the start of your turn, then weakens by 1.',
   },
 }
 

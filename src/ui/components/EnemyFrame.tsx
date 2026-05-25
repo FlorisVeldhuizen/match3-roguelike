@@ -84,6 +84,7 @@ export function EnemyFrame() {
   const targetId = useGameStore((s) => s.fight.targetEnemyId)
   const setTargetEnemy = useGameStore((s) => s.setTargetEnemy)
   const fightPhase = useGameStore((s) => s.fight.phase)
+  const fightCounter = useGameStore((s) => s.fightCounter)
   // Drive the lethal-intent warning. Store values (not HUD's display-timed
   // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
@@ -346,32 +347,34 @@ export function EnemyFrame() {
   }, [])
 
   // Hard-resync displayed HP on fight reset (new fight via reward,
-  // skip, or restart — fightCounter bumps in all three).
-  useEffect(() => {
-    let prevFightCounter = useGameStore.getState().fightCounter
-    return useGameStore.subscribe((s) => {
-      if (s.fightCounter === prevFightCounter) return
-      prevFightCounter = s.fightCounter
-      const freshHp: Record<string, number> = {}
-      const freshBlock: Record<string, number> = {}
-      const freshStatuses: Record<string, StatusInstance[]> = {}
-      const freshIntent: Record<string, Intent> = {}
-      for (const e of s.fight.enemies) {
-        freshHp[e.id] = e.hp
-        freshBlock[e.id] = e.block
-        freshStatuses[e.id] = e.statuses
-        freshIntent[e.id] = e.currentIntent
-      }
-      setDisplayedHp(freshHp)
-      setDisplayedBlock(freshBlock)
-      setDisplayedStatuses(freshStatuses)
-      setDisplayedIntent(freshIntent)
-      setIntentTick({})
-      setStatusTickMarks({})
-      setStatusCueMarks({})
-      setExpiringStatusKinds({})
-    })
-  }, [])
+  // skip, or restart — fightCounter bumps in all three). Done as a
+  // render-phase update so the fresh values are in place during the
+  // SAME render that picks up the new enemies — a useEffect-based
+  // resync paints once with stale entries (e.g. displayedHp[enemy-1]=0
+  // from a previous fight's death) and the intent badge / dead class
+  // flicker through that stale frame before correcting.
+  const [trackedFightCounter, setTrackedFightCounter] = useState(fightCounter)
+  if (trackedFightCounter !== fightCounter) {
+    setTrackedFightCounter(fightCounter)
+    const freshHp: Record<string, number> = {}
+    const freshBlock: Record<string, number> = {}
+    const freshStatuses: Record<string, StatusInstance[]> = {}
+    const freshIntent: Record<string, Intent> = {}
+    for (const e of enemies) {
+      freshHp[e.id] = e.hp
+      freshBlock[e.id] = e.block
+      freshStatuses[e.id] = e.statuses
+      freshIntent[e.id] = e.currentIntent
+    }
+    setDisplayedHp(freshHp)
+    setDisplayedBlock(freshBlock)
+    setDisplayedStatuses(freshStatuses)
+    setDisplayedIntent(freshIntent)
+    setIntentTick({})
+    setStatusTickMarks({})
+    setStatusCueMarks({})
+    setExpiringStatusKinds({})
+  }
 
   return (
     <section className="enemy-row" aria-label="Enemies">
@@ -396,7 +399,12 @@ export function EnemyFrame() {
           intent.kind === 'attack' && intent.amount > playerHp + playerBlock
         const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
         // Targeted, living enemy is the attractor for red gem trails.
-        const poolTargetAttr = isTarget && !dead ? 'red' : undefined
+        // Gate on store-immediate hp (not displayed/lagged hp) so the
+        // attribute drops the same frame the enemy hits zero — otherwise
+        // a flock spawned during the ~700ms displayedHp drain can still
+        // home onto a corpse, which is the swarm-AoE bug.
+        const poolTargetAttr =
+          isTarget && enemy.hp > 0 ? 'red' : undefined
         // Clickable when the player is acting and the enemy is alive but
         // not already the target. Dead enemies and the current target are
         // inert so the cursor doesn't mislead.
