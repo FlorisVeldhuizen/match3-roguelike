@@ -54,7 +54,24 @@ const skirmisher: ArchetypeDef = {
   blockRange: { min: 0, max: 0 },
 }
 
+// Rallier: H4b support archetype. Low HP + attack, but cycles through
+// buff-ally → attack → attack to strengthen its companions over time.
+// New archetype (not mutating Skirmisher) to keep H2a balance intact.
+// Stats: HP 10-12 (same soft band as Skirmisher), attack 1-2 (minimal
+// threat solo — the danger is what it does to its allies).
+const rallier: ArchetypeDef = {
+  id: 'rallier',
+  name: 'Rallier',
+  maxHp: 11,
+  pattern: ['attack', 'buff-ally', 'attack'],
+  attackRange: { min: 1, max: 2 },
+  blockRange: { min: 0, max: 0 },
+  // buff-ally applies 2 Strength stacks per cast (matches STATUS_TEMPLATES default).
+  buffAllyStacks: 2,
+}
+
 // Side-effect registration: bootstrap imports this file once from main.tsx.
 registerArchetype(brute)
 registerArchetype(smolder)
 registerArchetype(skirmisher)
+registerArchetype(rallier)

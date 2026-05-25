@@ -14,6 +14,15 @@ beforeAll(() => {
     attackRange: { min: 3, max: 5 },
     blockRange: { min: 3, max: 5 },
   })
+  registerArchetype({
+    id: 'rallier',
+    name: 'Rallier',
+    maxHp: 11,
+    pattern: ['attack', 'buff-ally', 'attack'],
+    attackRange: { min: 1, max: 2 },
+    blockRange: { min: 0, max: 0 },
+    buffAllyStacks: 2,
+  })
 })
 
 const makePlayer = (overrides: Partial<Player> = {}): Player => ({
@@ -167,6 +176,78 @@ describe('executeEnemyTurn', () => {
     const b = executeEnemyTurn(makePlayer(), [makeEnemy()], [], { seed: 99 })
     expect(a.enemies[0]?.currentIntent).toEqual(b.enemies[0]?.currentIntent)
     expect(a.rng).toEqual(b.rng)
+  })
+
+  // --- Ally-target intent resolution ---
+
+  it('heal-ally adds HP to target ally, capped at maxHp', () => {
+    const ally = makeEnemy({ id: 'ally-1', name: 'Brute', hp: 10, maxHp: 20 })
+    const healer = makeEnemy({
+      id: 'healer-1',
+      name: 'Brute',
+      currentIntent: { kind: 'heal-ally', amount: 8, targetAllyId: 'ally-1' },
+    })
+    const result = executeEnemyTurn(makePlayer(), [ally, healer], [], { seed: 1 })
+    const updatedAlly = result.enemies.find((e) => e.id === 'ally-1')
+    expect(updatedAlly?.hp).toBe(18) // 10 + 8
+    const ev = result.events.find((e) => e.kind === 'ally-healed')
+    expect(ev).toMatchObject({ sourceId: 'healer-1', targetId: 'ally-1', amount: 8 })
+  })
+
+  it('heal-ally is capped at maxHp (no over-healing)', () => {
+    const ally = makeEnemy({ id: 'ally-1', name: 'Brute', hp: 18, maxHp: 20 })
+    const healer = makeEnemy({
+      id: 'healer-1',
+      name: 'Brute',
+      currentIntent: { kind: 'heal-ally', amount: 10, targetAllyId: 'ally-1' },
+    })
+    const result = executeEnemyTurn(makePlayer(), [ally, healer], [], { seed: 1 })
+    const updatedAlly = result.enemies.find((e) => e.id === 'ally-1')
+    expect(updatedAlly?.hp).toBe(20) // capped at maxHp
+    const ev = result.events.find((e) => e.kind === 'ally-healed')
+    expect(ev).toMatchObject({ amount: 2 }) // only 2 effective healing
+  })
+
+  it('buff-ally applies strength stacks to target ally', () => {
+    const ally = makeEnemy({ id: 'ally-1', name: 'Brute', statuses: [] })
+    const buffer = makeEnemy({
+      id: 'buffer-1',
+      name: 'Rallier',
+      archetype: 'rallier',
+      currentIntent: { kind: 'buff-ally', stacks: 2, targetAllyId: 'ally-1' },
+    })
+    const result = executeEnemyTurn(makePlayer(), [ally, buffer], [], { seed: 1 })
+    const updatedAlly = result.enemies.find((e) => e.id === 'ally-1')
+    expect(updatedAlly?.statuses).toContainEqual({ kind: 'strength', stacks: 2 })
+    const ev = result.events.find((e) => e.kind === 'status-applied')
+    expect(ev).toMatchObject({ target: 'ally-1', status: { kind: 'strength', stacks: 2 } })
+  })
+
+  it('shield-ally adds block to target ally', () => {
+    const ally = makeEnemy({ id: 'ally-1', name: 'Brute', block: 0 })
+    const shielder = makeEnemy({
+      id: 'shielder-1',
+      name: 'Brute',
+      currentIntent: { kind: 'shield-ally', amount: 5, targetAllyId: 'ally-1' },
+    })
+    const result = executeEnemyTurn(makePlayer(), [ally, shielder], [], { seed: 1 })
+    const updatedAlly = result.enemies.find((e) => e.id === 'ally-1')
+    expect(updatedAlly?.block).toBe(5)
+    const ev = result.events.find((e) => e.kind === 'ally-shielded')
+    expect(ev).toMatchObject({ sourceId: 'shielder-1', targetId: 'ally-1', amount: 5 })
+  })
+
+  it('ally-target intents are no-ops when target is dead', () => {
+    const deadAlly = makeEnemy({ id: 'ally-1', name: 'Brute', hp: 0, maxHp: 20 })
+    const healer = makeEnemy({
+      id: 'healer-1',
+      name: 'Brute',
+      currentIntent: { kind: 'heal-ally', amount: 8, targetAllyId: 'ally-1' },
+    })
+    const result = executeEnemyTurn(makePlayer(), [deadAlly, healer], [], { seed: 1 })
+    const updatedAlly = result.enemies.find((e) => e.id === 'ally-1')
+    expect(updatedAlly?.hp).toBe(0) // dead, unchanged
+    expect(result.events.some((e) => e.kind === 'ally-healed')).toBe(false)
   })
 
   // Burn ticks on enemies route through applyDamage so the enemy's own
