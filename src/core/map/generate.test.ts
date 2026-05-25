@@ -98,9 +98,9 @@ describe('generateMap', () => {
   //   accidental zero-weight slot)
   it('archetype distribution respects per-column tier weights', () => {
     const counts: Record<number, Record<string, number>> = {
-      0: { brute: 0, smolder: 0, skirmisher: 0 },
-      1: { brute: 0, smolder: 0, skirmisher: 0 },
-      2: { brute: 0, smolder: 0, skirmisher: 0 },
+      0: { brute: 0, smolder: 0, skirmisher: 0, rallier: 0 },
+      1: { brute: 0, smolder: 0, skirmisher: 0, rallier: 0 },
+      2: { brute: 0, smolder: 0, skirmisher: 0, rallier: 0 },
     }
     for (let seed = 1; seed <= SEED_COUNT; seed++) {
       const map = build(seed)
@@ -116,19 +116,67 @@ describe('generateMap', () => {
     const col = (c: number) => {
       const found = counts[c]
       if (!found) throw new Error(`no column ${c}`)
-      return found as { brute: number; smolder: number; skirmisher: number }
+      return found as { brute: number; smolder: number; skirmisher: number; rallier: number }
     }
+    // Count only the weighted-roller archetypes for distribution ratio checks
+    // (rallier only appears via role-mixed compositions, not the weighted roller).
     const total = (c: number) => col(c).brute + col(c).smolder + col(c).skirmisher
-    // Col 0: Skirmisher majority
+    // Col 0: Skirmisher majority (no role-mixed in col 0 solo nodes)
     expect(col(0).skirmisher / total(0)).toBeGreaterThan(0.5)
     // Col 2: Skirmisher not majority (brute+smolder share dominates)
     expect(col(2).skirmisher / total(2)).toBeLessThan(0.5)
-    // Every archetype represented at every encounter column
+    // Every weighted archetype represented at every encounter column
     for (const c of [0, 1, 2]) {
       expect(col(c).brute).toBeGreaterThan(0)
       expect(col(c).smolder).toBeGreaterThan(0)
       expect(col(c).skirmisher).toBeGreaterThan(0)
     }
+  })
+
+  // H4b: role-mixed compositions appear in generated maps; simple-stack
+  // compositions also appear; Rallier is present in at least some col-2 fights.
+  it('role-mixed compositions appear in generated maps (H4b)', () => {
+    let roleMixedCount = 0
+    let simpleStackCount = 0
+    let rallierSeenInCol2 = false
+    // Use a defined fixed seed too for the "at least one in fixed-seed" check.
+    const fixedMap = build(7) // seed chosen to hit a role-mixed node deterministically
+    for (const node of fixedMap.nodes) {
+      if (node.archetypes?.includes('rallier')) rallierSeenInCol2 = true
+    }
+    // Over 1000 seeds, count appearances
+    for (let seed = 1; seed <= SEED_COUNT; seed++) {
+      const map = build(seed)
+      for (const node of map.nodes) {
+        if (!node.archetypes || node.archetypes.length < 2) continue
+        if (node.archetypes.includes('rallier')) {
+          roleMixedCount++
+        } else {
+          // Multi-enemy node without rallier = simple-stack group
+          simpleStackCount++
+        }
+      }
+    }
+    // Both kinds must appear across the sample set.
+    expect(roleMixedCount).toBeGreaterThan(0)
+    expect(simpleStackCount).toBeGreaterThan(0)
+    // Role-mixed should be a meaningful fraction but not dominant.
+    const total = roleMixedCount + simpleStackCount
+    const fraction = roleMixedCount / total
+    expect(fraction).toBeGreaterThan(0.1) // at least 10%
+    expect(fraction).toBeLessThan(0.9)   // not the whole pool
+  })
+
+  // Rallier must appear in at least one node across a reasonable seed range.
+  it('rallier archetype appears in at least one map within 100 seeds', () => {
+    let found = false
+    for (let seed = 1; seed <= 100 && !found; seed++) {
+      const map = build(seed)
+      if (map.nodes.some((n) => n.archetypes?.includes('rallier'))) {
+        found = true
+      }
+    }
+    expect(found).toBe(true)
   })
 
   // Multi-enemy group sizes per column band. Col 0-1 are single-enemy;

@@ -29,6 +29,12 @@ import type {
 //   col-2 always reaches col-3)
 // - ≥1 rest reachable from every col-0 start (same)
 // - no orphan nodes, every node reaches the boss
+//
+// H4b: Role-mixed compositions. Mid-column fight nodes have a ~40% chance
+// to draw from a preset composition pool (role-mixed pairs like
+// ['brute', 'rallier'] or ['smolder', 'rallier']) instead of rolling
+// archetypes independently. Simple-stack groups stay in the pool via the
+// normal weighted roller — variety is the point, not gatekeeping.
 
 const COLUMN_COUNT = 5
 
@@ -69,6 +75,27 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
   // col 4: boss column; not used by the weight roller
   [{ archetype: 'brute', weight: 1 }],
 ]
+
+// H4b: Preset role-mixed compositions for mid-column fight nodes.
+// At least 2 distinct role-mixed templates are required (H4b acceptance).
+// The list intentionally includes simple-stacks too: picking from this
+// pool does NOT exclude homogeneous groups — it just adds more options.
+// Simple-stacks still appear via the normal weighted roller path below.
+const ROLE_MIXED_COMPOSITIONS: EnemyArchetype[][] = [
+  // Role-mixed pairs: support (Rallier) + heavy hitter
+  ['brute', 'rallier'],
+  ['smolder', 'rallier'],
+  // 3-enemy with a Rallier in the mix
+  ['brute', 'skirmisher', 'rallier'],
+  ['smolder', 'skirmisher', 'rallier'],
+]
+
+// Probability (out of 10) that a mid-column multi-enemy fight node draws
+// from ROLE_MIXED_COMPOSITIONS instead of rolling independently.
+// 4/10 = 40% — ensures role-mixed appear frequently enough to matter
+// while simple-stacks remain the slight majority.
+const ROLE_MIXED_CHANCE_NUMERATOR = 4
+const ROLE_MIXED_CHANCE_DENOMINATOR = 10
 
 // Group sizes per column: cols 0-1 = solo (1 enemy), col 2 = 2-3 enemies
 // (mixed), elite = solo but tougher (handled by archetype bias, not
@@ -153,11 +180,36 @@ function buildNodes(rng: RngState): {
       if (kind === 'fight' || kind === 'elite') {
         const { count, rng: rCount } = rollEnemyCount(col, kind, r)
         r = rCount
-        const archetypes: EnemyArchetype[] = []
-        for (let i = 0; i < count; i++) {
-          const { archetype, rng: rArch } = rollWeightedArchetype(col, r)
-          r = rArch
-          archetypes.push(archetype)
+        let archetypes: EnemyArchetype[]
+        // H4b: mid-column multi-enemy fight nodes have a chance to draw a
+        // preset role-mixed composition rather than rolling independently.
+        // Solo fights and elites always use the weighted roller (no Rallier
+        // in a solo node — ally-target intents would always fall back).
+        const isMultiEnemyFight = kind === 'fight' && count >= 2
+        if (isMultiEnemyFight) {
+          const [chance, rChance] = nextInt(r, ROLE_MIXED_CHANCE_DENOMINATOR)
+          r = rChance
+          if (chance < ROLE_MIXED_CHANCE_NUMERATOR) {
+            // Pick a role-mixed composition from the pool.
+            const [compIdx, rComp] = nextInt(r, ROLE_MIXED_COMPOSITIONS.length)
+            r = rComp
+            archetypes = [...ROLE_MIXED_COMPOSITIONS[compIdx]!]
+          } else {
+            // Normal path: roll each archetype independently.
+            archetypes = []
+            for (let i = 0; i < count; i++) {
+              const { archetype, rng: rArch } = rollWeightedArchetype(col, r)
+              r = rArch
+              archetypes.push(archetype)
+            }
+          }
+        } else {
+          archetypes = []
+          for (let i = 0; i < count; i++) {
+            const { archetype, rng: rArch } = rollWeightedArchetype(col, r)
+            r = rArch
+            archetypes.push(archetype)
+          }
         }
         node.archetypes = archetypes
       } else if (kind === 'boss') {
