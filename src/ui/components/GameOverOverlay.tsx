@@ -5,8 +5,6 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 export function GameOverOverlay() {
   const phase = useGameStore((s) => s.fight.phase)
   const runPhase = useGameStore((s) => s.runPhase)
-  // Gated on `gameplay-settled` (BoardScene fires this after the AC drains
-  // + cushion). Adapts to actual cascade length instead of a fixed timer.
   const [reveal, setReveal] = useState(phase === 'game-over')
 
   useEffect(() => {
@@ -19,8 +17,6 @@ export function GameOverOverlay() {
     return unsub
   }, [])
 
-  // H1: also require runPhase to be 'game-over' so a stale fight.phase from
-  // a previous run doesn't haunt the next one after restart.
   if (!reveal || runPhase !== 'game-over') return null
 
   const handleRestart = () => useGameStore.getState().restart()

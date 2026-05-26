@@ -9,8 +9,6 @@ import { RGBSplitFilter } from 'pixi-filters'
 import type { GemColor } from '../types'
 import { getFXSettings, subscribeFXSettings } from '../fx/settings'
 
-// Hex matching the CSS color palette in index.css so visuals stay coherent
-// across the React DOM and the Pixi overlay.
 const COLOR_HEX: Record<GemColor, number> = {
   red: 0xee5e57,
   blue: 0x4f9dff,
@@ -36,27 +34,15 @@ type PhysicsEffect = {
   life: number
   maxLife: number
   growBy: number
-  // Optional scale-over-time curve; receives progress (0 at spawn, 1 at end)
-  // and returns a scale multiplier. When set, supersedes growBy. Used for
-  // overshoot/settle pops on callout text.
   scaleCurve: ((progress: number) => number) | null
   fadeMode: 'linear' | 'late'
   baseScale: number
   rotation: number
   rotationTarget: number
-  rotationEase: number // per-second ease factor (0 = no rotation animation)
-  alphaScale: number // peak alpha (curve output is multiplied by this)
+  rotationEase: number
+  alphaScale: number
 }
 
-// Bezier-mode: particle travels a randomized quadratic curve from start to
-// the (dynamically re-sampled) destination. Lands AT the destination when
-// life reaches zero, then disappears. Control point is fixed at spawn so
-// the curve shape stays stable; only the endpoint can drift.
-//
-// `view` is the bright "light source" head; `tail` is a Graphics redrawn
-// each frame from the last `history` positions to produce a true streak
-// fading behind the head — like a glow trail in the dark, not discrete
-// stamps.
 type BezierEffect = {
   kind: 'bezier'
   view: Container
@@ -74,12 +60,6 @@ const TAIL_MAX_LENGTH = 22
 
 type Effect = PhysicsEffect | BezierEffect
 
-// Full-window transparent Pixi overlay for particle bursts, gem-to-HUD
-// trails, and floating text (damage numbers, cascade callouts).
-
-// Reduced-motion gates the heavy particle methods (burst/sparkle/flame).
-// Trails and floating text stay — they're the actual feedback. Live
-// `change` listener so OS toggling takes effect without a reload.
 let reducedMotion = false
 try {
   const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -88,24 +68,14 @@ try {
     reducedMotion = ev.matches
   })
 } catch {
-  // matchMedia unavailable (SSR / older browsers).
+  // matchMedia unavailable (SSR / older browsers)
 }
 
-// RGB-split offset applied to the chromatic text layer (in-board WORD_POP
-// callouts only). Kept low so glyph interiors stay legible — the priority
-// on text is readability over chromatic punch.
 const OVERLAY_RGB_OFFSET = 1.0
 
 export class OverlayScene {
   private app: Application | null = null
   private layer: Container | null = null
-  // Two text sub-containers:
-  //  - chromatic: in-board callouts (POW!/BOOM!/×N/+1 TURN/NO MOVES) get
-  //    the RGB-split filter for accent.
-  //  - crisp: out-of-board callouts (damage numbers, pool arrivals, heals,
-  //    DEFEATED, enemy block) stay sharp — chromatic split on numbers
-  //    floating around the HUD made them harder to read.
-  // Callers pick by passing `chromatic: true` to spawnFloatingText.
   private textLayerChromatic: Container | null = null
   private textLayerCrisp: Container | null = null
   private effects: Effect[] = []
@@ -135,11 +105,7 @@ export class OverlayScene {
     canvas.style.top = '0'
     canvas.style.left = '0'
     canvas.style.width = '100vw'
-    // dvh tracks the dynamic viewport (URL-bar collapse on iOS Safari),
-    // so the canvas display size matches window.innerHeight 1:1. With
-    // plain `100vh` the canvas is sized to the URL-bar-hidden height
-    // while Pixi's internal renderer matches innerHeight — particles
-    // aimed at DOM coords render stretched and visually overshoot.
+    // dvh avoids iOS Safari URL-bar mismatch with innerHeight
     canvas.style.height = '100dvh'
     canvas.style.pointerEvents = 'none'
     canvas.style.zIndex = '5'
@@ -149,14 +115,10 @@ export class OverlayScene {
     app.stage.addChild(layer)
     this.layer = layer
 
-    // Crisp text layer (no filter) — out-of-board popups land here.
     const textLayerCrisp = new Container()
     layer.addChild(textLayerCrisp)
     this.textLayerCrisp = textLayerCrisp
 
-    // Chromatic text layer (RGB-split filter) — in-board callouts. Added
-    // last so it sits on top of both particles and the crisp text layer
-    // when popups happen to overlap.
     const textLayerChromatic = new Container()
     layer.addChild(textLayerChromatic)
     this.textLayerChromatic = textLayerChromatic
@@ -203,9 +165,6 @@ export class OverlayScene {
     this.effects = []
   }
 
-  // Drop all in-flight effects. Called when the player enters the map
-  // so any straggler particles / floating text don't carry into the
-  // next fight. Scene stays mounted — reusable next encounter.
   clearAll(): void {
     for (const e of this.effects) {
       e.view.destroy({ children: true })
@@ -214,10 +173,6 @@ export class OverlayScene {
     this.effects = []
   }
 
-  // Outward radial burst at (x,y). Color accepts either a GemColor name (uses
-  // the shared palette) or an explicit hex value (for one-offs like the
-  // cascade pop). Opts let callers tune size/speed/life without forking the
-  // method; sensible defaults match match-clear bursts.
   spawnBurst(
     at: ScreenPoint,
     colorOrHex: GemColor | number,
@@ -236,8 +191,6 @@ export class OverlayScene {
     if (!layer) return
     const hex =
       typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
-    // Reduced-motion: cut to 25% (floor 3) so bursts still register as
-    // feedback without filling the screen.
     const rawCount = opts.count ?? 10
     const count = reducedMotion ? Math.max(3, Math.floor(rawCount * 0.25)) : rawCount
     const speedMin = opts.speedMin ?? 90
@@ -278,21 +231,6 @@ export class OverlayScene {
     }
   }
 
-  // Particle trail from (x,y) that arcs along a randomized quadratic Bezier
-  // to a DOM target (the HUD pool indicator). Lands exactly on the pool when
-  // life expires, then disappears. The destination is re-sampled per-frame
-  // so DOM reflows (scroll, resize) don't strand particles, but the curve
-  // shape is locked at spawn for stable motion.
-  // colorOrHex:
-  //   - GemColor: look up the gem palette
-  //   - number: one hex, every particle the same (default trail behavior)
-  //   - number[]: per-particle palette — each head + its tail picks one
-  //     hex at random. Used for verb trails that want a multi-color glow
-  //     (e.g. Smolder's ember red + orange + yellow for "flame-y" feel).
-  //
-  // innerHex sets the bright core. Defaults to white so existing callers
-  // (gem pools, status hand-offs) keep their bright light-source dot.
-  // Flame verbs pass a hot yellow so the core reads as molten, not pearl.
   spawnTrail(
     from: ScreenPoint,
     attractor: Attractor,
@@ -319,9 +257,6 @@ export class OverlayScene {
       const start = jitterPoint(from, 5)
       const control = randomBezierControl(start, initialEnd)
       const hex = pick()
-      // Head = bright light-source dot. Tail = empty Graphics, redrawn
-      // every frame from position history to streak behind the head.
-      // Tail is added FIRST so the head renders on top.
       const tail = new Graphics()
       tail.alpha = 0
       layer.addChild(tail)
@@ -348,14 +283,9 @@ export class OverlayScene {
     }
   }
 
-  // White sparkles drifting upward — small, brief, no color. Used at
-  // mid-heat levels to put a fleck of motion in the air around callout
-  // text without taking over the screen.
   spawnSparkle(at: ScreenPoint, count = 5): void {
     const layer = this.layer
     if (!layer) return
-    // Sparkle is heat decoration on top of the callout/burst — skip
-    // entirely under reduced-motion.
     if (reducedMotion) return
     for (let i = 0; i < count; i++) {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.65
@@ -390,15 +320,9 @@ export class OverlayScene {
     }
   }
 
-  // Rising embers: orange/yellow particles directed mostly upward with
-  // slight horizontal jitter, negative gravity (upward acceleration), and
-  // a quick shrink-fade. Used as an "intensity" signal behind chained
-  // cascade callouts — subtle, not a full flame loop.
   spawnFlame(at: ScreenPoint, count = 8): void {
     const layer = this.layer
     if (!layer) return
-    // Embers are intensity decoration on top of the burst — skip under
-    // reduced-motion.
     if (reducedMotion) return
     for (let i = 0; i < count; i++) {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.7
@@ -416,7 +340,7 @@ export class OverlayScene {
         y: g.y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        gravity: -60, // upward acceleration → embers keep rising
+        gravity: -60,
         drag: 1.4,
         life: 480 + Math.random() * 220,
         maxLife: 600,
@@ -432,16 +356,11 @@ export class OverlayScene {
     }
   }
 
-  // Shield-absorbed flash: an expanding hex ring + a few light-blue sparks
-  // flying outward. Reads as "the shield held" — quick, contained, not
-  // showy. Color is the same light-blue used by the block popup so the
-  // visual language stays consistent across the HUD.
   spawnShieldBlock(at: ScreenPoint): void {
     const layer = this.layer
     if (!layer) return
     const hex = 0xa8c8ff
 
-    // Expanding hex ring: outline only, grows ~1.0 → 2.2 while fading.
     const ring = new Graphics()
     const r = 24
     for (let i = 0; i <= 6; i++) {
@@ -467,7 +386,6 @@ export class OverlayScene {
       life: 320,
       maxLife: 320,
       growBy: 0,
-      // Quick outward expansion, then settles. Progress is 0→1 over life.
       scaleCurve: (p) => 1 + p * 1.3,
       fadeMode: 'linear',
       baseScale: 1,
@@ -477,7 +395,6 @@ export class OverlayScene {
       alphaScale: 0.9,
     })
 
-    // 5 small radial sparks — short life, no gravity, fade fast.
     const sparkCount = 5
     for (let i = 0; i < sparkCount; i++) {
       const angle =
@@ -512,19 +429,13 @@ export class OverlayScene {
     }
   }
 
-  // Shield-broken shatter: a dimmer, larger ring flash plus 10 angular
-  // shards flying outward with gravity and rotation. Reads as "the shield
-  // gave way" — more chaotic and longer-lived than the block effect, with
-  // shards falling away.
   spawnShieldBreak(at: ScreenPoint): void {
     const layer = this.layer
     if (!layer) return
     const hex = 0xd6ebff
 
-    // Broken hex ring: half-arcs offset slightly so the ring looks fractured.
     const ring = new Graphics()
     const r = 28
-    // Two arcs with a gap — gives the "split" look without per-segment work.
     const arcs: [number, number][] = [
       [-Math.PI * 0.85, Math.PI * 0.1],
       [Math.PI * 0.25, Math.PI * 0.95],
@@ -562,7 +473,6 @@ export class OverlayScene {
       alphaScale: 0.75,
     })
 
-    // 10 shards: small elongated rectangles that fly out and tumble.
     const shardCount = 10
     for (let i = 0; i < shardCount; i++) {
       const angle =
@@ -593,8 +503,6 @@ export class OverlayScene {
         fadeMode: 'linear',
         baseScale: 1,
         rotation: angle,
-        // Tumble target — pick something past the spawn angle so easing
-        // produces visible rotation throughout the life.
         rotationTarget: angle + (Math.random() < 0.5 ? -1 : 1) * Math.PI * 1.8,
         rotationEase: 1.4,
         alphaScale: 1,
@@ -602,10 +510,6 @@ export class OverlayScene {
     }
   }
 
-  // Floating text (damage popup, cascade callout, etc).
-  // rotationFrom/rotationTo (radians) animate the text rotation over its life.
-  // rotationEase controls how fast it settles (per-second factor); 0 disables
-  // animation and the text holds at rotationFrom.
   spawnFloatingText(
     at: ScreenPoint,
     text: string,
@@ -615,17 +519,10 @@ export class OverlayScene {
       lifeMs?: number
       driftY?: number
       growBy?: number
-      // When provided, supersedes growBy. Lets callers script a custom
-      // scale curve over the life — e.g. overshoot-and-settle pop for
-      // cascade callouts.
       scaleCurve?: (progress: number) => number
       rotationFrom?: number
       rotationTo?: number
       rotationEase?: number
-      // Route to the RGB-split chromatic layer (in-board WORD_POP
-      // callouts) vs the crisp non-filtered layer (damage numbers,
-      // pool arrivals, etc). Defaults to crisp — chromatic split on
-      // legible numbers around the HUD makes them harder to read.
       chromatic?: boolean
     } = {},
   ): void {
@@ -636,19 +533,11 @@ export class OverlayScene {
     const t = new Text({
       text,
       style: {
-        // Paytone One — heavy rounded display, won an A/B against ~34
-        // other display fonts (Russo One, Bowlby One, Sansita Black,
-        // Anton, Mochiy Pop One, etc). Best short-text legibility for
-        // the floating ×N / POW! / BOOM! / damage-number popups.
         fontFamily: '"Paytone One", "Helvetica Neue", Arial, sans-serif',
         fontSize: opts.fontSize ?? 26,
         fontWeight: '400',
         letterSpacing: 1,
         fill: opts.color ?? 0xffffff,
-        // Thin dark edge for definition against bright gems + a soft
-        // diffuse halo (distance 0, no offset) for legibility. Avoids the
-        // tacky "drop shadow under the text" stamp effect — the Anton
-        // typeface itself is heavy enough to carry the impact.
         stroke: {
           color: 0x000000,
           width: 2,
@@ -697,8 +586,7 @@ export class OverlayScene {
     const dt = dtMs / 1000
     const layer = this.layer
     if (!layer) return
-    // Two-pointer compaction — avoids allocating a survivors array each
-    // frame during cascades with 100+ live particles.
+    // Two-pointer compaction avoids allocating a survivors array each frame
     const effects = this.effects
     let writeIdx = 0
     for (let readIdx = 0; readIdx < effects.length; readIdx++) {
@@ -740,7 +628,7 @@ export class OverlayScene {
         }
       } else {
         const end = e.attractor()
-        const progress = 1 - e.life / e.maxLife // 0 → 1
+        const progress = 1 - e.life / e.maxLife
         let curX = e.view.x
         let curY = e.view.y
         if (end) {
@@ -756,8 +644,6 @@ export class OverlayScene {
           e.view.x = curX
           e.view.y = curY
         }
-        // Fade in over first 15%, hold, brief fade-out over last 10% so the
-        // disappearance lands cleanly on the pool indicator.
         const fadeIn = 0.15
         const fadeOut = 0.9
         const alpha =
@@ -767,17 +653,13 @@ export class OverlayScene {
               ? Math.max(0, 1 - (progress - fadeOut) / (1 - fadeOut))
               : 1
         e.view.alpha = alpha
-        // Record current position into history and redraw the tail as a
-        // fading polyline from oldest to newest. Width and per-segment
-        // alpha both ramp up toward the head so it reads as a streak of
-        // light, not equal-weight dashes.
         e.history.push({ x: curX, y: curY })
         if (e.history.length > TAIL_MAX_LENGTH) e.history.shift()
         const hist = e.history
         e.tail.clear()
         if (hist.length >= 2) {
           for (let i = 0; i < hist.length - 1; i++) {
-            const localT = (i + 1) / hist.length // 0 (oldest) → 1 (newest)
+            const localT = (i + 1) / hist.length
             const segAlpha = localT * localT * 0.85 * alpha
             const width = 1 + localT * 4.5
             const p0 = hist[i]
@@ -804,8 +686,6 @@ export class OverlayScene {
   }
 }
 
-// Coord helpers — both return screen-space (viewport) coordinates, matching
-// the overlay canvas's coordinate system.
 export function elementCenter(el: HTMLElement): ScreenPoint | null {
   const rect = el.getBoundingClientRect()
   if (rect.width === 0 && rect.height === 0) return null
@@ -820,10 +700,6 @@ function jitterPoint(p: ScreenPoint, magnitude: number): ScreenPoint {
   }
 }
 
-// Pick a Bezier control point perpendicular to the start→end axis, with a
-// randomized side and magnitude so curves bow left or right and apex earlier
-// or later along the path. Magnitude scales with travel distance so short
-// trails curve subtly and long trails arc more.
 function randomBezierControl(
   start: ScreenPoint,
   end: ScreenPoint,
@@ -833,11 +709,8 @@ function randomBezierControl(
   const len = Math.hypot(dx, dy) || 1
   const nx = -dy / len
   const ny = dx / len
-  // Perpendicular offset: random sign, 15-55% of travel distance.
   const sign = Math.random() < 0.5 ? -1 : 1
   const perpMag = len * (0.15 + Math.random() * 0.4) * sign
-  // Along-axis offset: shift apex away from midpoint so curves don't all
-  // peak at the same arc-length.
   const alongShift = (Math.random() - 0.5) * 0.4
   const midX = (start.x + end.x) / 2 + dx * alongShift
   const midY = (start.y + end.y) / 2 + dy * alongShift

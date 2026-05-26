@@ -17,30 +17,15 @@ import { applyStatusToList } from './statuses'
 import { runCascade } from '../board/cascade'
 import { processCascadeEvents } from './cascadeProcessor'
 
-// H4a immediate-effect spell resolvers. These run inline at cast time
-// (no pendingSpells push, no EOP step). Pure: no mutation, no store
-// access. Caller (store castSpell / castPurify / castFocus) handles
-// the mana consumption, spell-cast event, and relic onSpellCast hook
-// chain — these resolvers only produce the *effect*.
-
-// ----- Apply-status helpers -----
-
-// Burn count applied to the targeted enemy by Ignite.
 export const IGNITE_BURN_STACKS = 3
-// Vulnerable stacks applied by Brittle.
 export const BRITTLE_VULN_STACKS = 2
-// Cinder Lash: Burn applied to target + self heal amount.
 export const CINDER_BURN_STACKS = 2
 export const CINDER_HEAL = 2
-// Purify: bonus heal when stripping Burn specifically (turns the
-// "tank it then convert" line into a real win condition).
+// Bonus heal when stripping Burn rewards the "tank then cleanse" line.
 export const PURIFY_BURN_HEAL = 3
-// Regenerate stacks applied to self (decay-decay-decay → 3+2+1 = 6 HP).
+// decay-decay-decay → 3+2+1 = 6 HP total
 export const REGENERATE_STACKS = 3
 
-// Ignite: apply Burn to the targeted living enemy. Returns the updated
-// enemies array + a status-applied event. Caller is expected to have
-// validated a living target exists.
 export function resolveIgnite(
   enemies: readonly Enemy[],
   targetEnemyId: string,
@@ -52,8 +37,6 @@ export function resolveIgnite(
   const updated = enemies.map((e) =>
     e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e,
   )
-  // The stacks reported is the just-applied amount (not cumulative),
-  // mirroring how Smolder's onHit rider works.
   return {
     enemies: updated,
     events: [
@@ -67,7 +50,6 @@ export function resolveIgnite(
   }
 }
 
-// Brittle: apply Vulnerable to the targeted living enemy.
 export function resolveBrittle(
   enemies: readonly Enemy[],
   targetEnemyId: string,
@@ -95,10 +77,7 @@ export function resolveBrittle(
   }
 }
 
-// Cinder Lash: apply Burn to target + heal self. The two effects are
-// independent — even if the heal caps, the Burn still lands; even if
-// the target is dead, the heal still happens (but we still gate at
-// cast on having a living target so the spell isn't useless).
+// Effects are independent: heal still happens if target dies mid-resolve.
 export function resolveCinderLash(
   player: Player,
   enemies: readonly Enemy[],
@@ -123,7 +102,6 @@ export function resolveCinderLash(
       source: { kind: 'player' },
     })
   }
-  // Self heal (capped at maxHp). Emits healed only on positive delta.
   const before = player.hp
   const next = Math.min(player.maxHp, before + CINDER_HEAL)
   const delta = next - before
@@ -134,8 +112,6 @@ export function resolveCinderLash(
   return { player: nextPlayer, enemies: nextEnemies, events }
 }
 
-// Regenerate: apply Regen to self. Stacks accumulate with any existing
-// Regen the player already had (same rule as re-applying Burn).
 export function resolveRegenerate(player: Player): {
   player: Player
   events: GameEvent[]
@@ -158,11 +134,6 @@ export function resolveRegenerate(player: Player): {
   }
 }
 
-// Purify: remove the named status ENTIRELY from the player (all stacks).
-// If the cleared status was Burn, also heal PURIFY_BURN_HEAL HP — turns
-// the "tank-the-burn-then-cleanse" line into a real heal swing. Caller
-// gates via the picker UI; this returns events-empty if the named status
-// isn't present.
 export function resolvePurify(
   player: Player,
   statusKind: StatusKind,
@@ -190,25 +161,9 @@ export function resolvePurify(
   return { player: nextPlayer, events }
 }
 
-// Focus: move up to FOCUS_TRANSFER mana from `from` to `to` colour,
-// respecting the source's current value and the target's cap. Yellow
-// cost is consumed by the caller; this is the colour-shift effect.
 export const FOCUS_TRANSFER = 3
 
-// H2b.5: Shatter Color — first player-side board verb. Generates a
-// synthetic match-found event from the cells of the target colour,
-// then routes it through the shared cascadeProcessor so the same
-// machinery used by a regular match handles pool deltas, relic
-// onMatch hooks (Sharp Edge / Iron Buckler / Cascade Crystal),
-// red-damage routing, green-heal commit, and kill chain. The result:
-// shatter benefits from every relic that listens to onMatch, the
-// same way a hand-played match does.
-//
-// The synthetic match uses shape='shatter' so the processor treats it
-// as single-target (not AOE like a line-5) AND doesn't drop blessed
-// flags on the cleared cells. blessed=true is passed through when ANY
-// of the cleared cells already carried the blessed flag — the 2×
-// payout still applies, just no new blessed cells get spawned.
+// shape='shatter' → single-target (not AOE), no new blessed flags spawned.
 export function resolveShatter(
   player: Player,
   enemies: Enemy[],
@@ -225,7 +180,6 @@ export function resolveShatter(
   rng: RngState
   events: GameEvent[]
 } {
-  // Collect cells of the target colour.
   const cellsCleared: Pos[] = []
   for (let y = 0; y < board.length; y++) {
     const row = board[y]
@@ -247,12 +201,6 @@ export function resolveShatter(
     }
   }
 
-  // Synthesize a Match for the cleared cells and feed it into the
-  // shared cascade walker. shape='shatter' opts out of T/L AOE
-  // routing AND the line-5 blessed-flag drop. The walker handles the
-  // initial clear + gravity + refill AND any follow-up matches the
-  // refilled board produces — gravity-induced cascade chains ripple
-  // through naturally, level by level.
   const synthMatch: Match = {
     cells: cellsCleared,
     color,
@@ -261,11 +209,6 @@ export function resolveShatter(
   }
   const cascadeResult = runCascade(board, rng, [synthMatch])
 
-  // The walker's event stream drives both the FX layer (gems-cleared,
-  // gems-fell, gems-spawned) AND the gameplay pipeline (cascade-start,
-  // match-found). Route through processCascadeEvents so relic onMatch
-  // / onCascade / onEnemyKilled hooks all fire, pool deltas commit,
-  // red damage routes, kills + target re-point happen.
   const processed = processCascadeEvents(
     cascadeResult.events,
     player,

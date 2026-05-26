@@ -3,28 +3,11 @@ import type { Enemy, GemColor, Intent, Pos } from '../../types'
 import { BOARD_HEIGHT, BOARD_WIDTH, MANA_GEM_COLORS } from '../../types'
 import { type ArchetypeDef, type IntentRange } from './archetypeRegistry'
 
-// Per-intent-kind rollers. Each is pure: takes only what it needs (rng,
-// archetype def, optional ally list for ally-target kinds) and returns
-// the rolled intent + advanced rng. Mirrors the spellResolvers /
-// intentResolvers pattern.
-//
-// Why varying signatures (not a uniform `(def, rng, ctx) => Intent`):
-// - 'attack' / 'block' only need rng + def's range
-// - 'tile-burn' needs def's tileBurnCount; no rng advance
-// - ally intents need the live sibling list + the roller's id
-// - 'column-smash' / 'petrify-row' need rng + board dimensions (constants)
-// Forcing a single signature would either widen all callers or hide the
-// real input shape behind a vague "context" object. Per-kind narrow
-// signatures keep the call sites in `rollIntent` honest.
-
 export function rollAttackIntent(
   def: ArchetypeDef,
   rng: RngState,
 ): { intent: Intent; rng: RngState } {
   const [amount, r2] = rollInRange(rng, def.attackRange)
-  // Carry the archetype's onHitStatus onto the intent itself so the
-  // UI can telegraph it (e.g. Smolder's attacks show "⚔ 3 +🔥") and
-  // executeEnemyTurn doesn't have to round-trip through the registry.
   const onHit = def.onHitStatus
     ? { status: def.onHitStatus.kind, stacks: def.onHitStatus.stacks }
     : undefined
@@ -48,15 +31,11 @@ export function rollTileBurnIntent(
   def: ArchetypeDef,
   rng: RngState,
 ): { intent: Intent; rng: RngState } {
-  // tile-burn: no roll — count is fixed per archetype. Cell selection
-  // happens at fire time in executeEnemyTurn (it needs the live board).
+  // No roll — cell selection happens at fire time (needs live board).
   const count = def.tileBurnCount ?? 1
   return { intent: { kind: 'tile-burn', count }, rng }
 }
 
-// Shared logic for the three ally-target kinds. Returns null if no
-// sibling is alive — caller (rollIntent) then falls back to attack so
-// the rolling enemy still has a turn.
 function pickAllySibling(
   livingAllies: readonly Enemy[],
   rollerEnemyId: string | undefined,
@@ -110,7 +89,6 @@ export function rollBuffAllyIntent(
 ): { intent: Intent; rng: RngState } | null {
   const pick = pickAllySibling(livingAllies, rollerEnemyId, rng)
   if (!pick) return null
-  // buff-ally: fixed stacks count, no range roll beyond the sibling pick.
   const stacks = def.buffAllyStacks ?? 2
   return {
     intent: { kind: 'buff-ally', stacks, targetAllyId: pick.targetAllyId },
@@ -118,10 +96,7 @@ export function rollBuffAllyIntent(
   }
 }
 
-// Bounded-retry overlap avoidance. Roll a discrete value in [0, size);
-// if it collides with `claimed`, retry up to `attempts` times. Fall
-// back to the last roll if the claimed set is saturated (e.g. all
-// columns already claimed) — no enemy turn should hang due to bad RNG.
+// Bounded retry; falls back to last roll if all values are claimed.
 function pickUnclaimedInt(
   rng: RngState,
   size: number,
@@ -155,18 +130,11 @@ export function rollPetrifyRowIntent(
   return { intent: { kind: 'petrify-row', row }, rng: r2 }
 }
 
-// H2c: Caster picks the colour at roll time so the telegraph can render
-// the threat (which colour to avoid matching next phase). Uniform over
-// the 5 mana-bearing gem colours (never gold — hex over a 10%-spawn
-// colour that gives no mana would feel arbitrary and read as a dud).
+// Never gold — hex on a rare non-mana colour would feel like a dud.
 export function rollColorHexIntent(
   rng: RngState,
   claimedColors: ReadonlySet<GemColor> = new Set(),
 ): { intent: Intent; rng: RngState } {
-  // Pick a color index whose color isn't already claimed. Same bounded-
-  // retry pattern as the column/row pickers, but checks claim via the
-  // resolved GemColor rather than the index, so the registry order
-  // doesn't matter.
   let r = rng
   let lastIdx = 0
   for (let i = 0; i < 16; i++) {
@@ -183,20 +151,6 @@ export function rollColorHexIntent(
   return { intent: { kind: 'color-hex', color }, rng: r }
 }
 
-// H2c: Swarmer rolls a 2-cell source run + 2-cell destination run.
-// Orientation (horizontal/vertical) randomized; both runs share the
-// same orientation so the move preserves shape. Destination must not
-// overlap source — sampled with bounded retry, falls back to any
-// non-overlapping run if 16 attempts fail to find a clean pick.
-//
-// `claimedCells` is the set of cells already spoken for by sibling
-// enemies' telegraphed verbs (column-smash columns expanded to cells,
-// petrify-row rows expanded to cells, other shoves' source+dest
-// cells). Avoiding overlap prevents two telegraphs marking the same
-// cell, prevents a Brute from erasing a Swarmer's shoved gems next
-// turn, etc. See aggregateSiblingClaims / expandClaimsToCells in
-// intents.ts. Falls back to an unconstrained pick if the board is
-// saturated.
 export function rollClusterShoveIntent(
   def: ArchetypeDef,
   rng: RngState,
@@ -227,9 +181,6 @@ export function rollClusterShoveIntent(
   const overlapsClaimed = (cells: Pos[]): boolean =>
     cells.some((p) => claimedCells.has(`${p.x},${p.y}`))
 
-  // Pick a source that doesn't collide with existing flags. Bounded
-  // retry; falls through to whatever the last attempt produced if the
-  // board is saturated (very unlikely with length 2 + 8×8).
   let sources: Pos[] = []
   for (let attempt = 0; attempt < 16; attempt++) {
     const srcPick = pickRun(r)
@@ -253,9 +204,7 @@ export function rollClusterShoveIntent(
       break
     }
   }
-  // Fallback: nudge sources by one cell in-bounds and use that. Hits
-  // only on pathological boards where all 16 attempts overlap (vanishingly
-  // rare with 8×8 + length 2 — there are ~50 non-overlapping placements).
+  // Fallback for saturated boards (vanishingly rare with 8×8 + length 2).
   if (destinations.length === 0) {
     if (horizontal) {
       const sx = sources[0]?.x ?? 0

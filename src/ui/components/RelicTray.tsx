@@ -3,8 +3,6 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { tryGetRelic } from '../../core/relics/registry'
 
-// HUD slot showing acquired relics. Icon + name on hover; pulses briefly
-// whenever a relic-triggered event fires for that relic.
 export function RelicTray() {
   const relics = useGameStore((s) => s.fight.player.relics)
   const [pulsing, setPulsing] = useState<Record<string, number>>({})

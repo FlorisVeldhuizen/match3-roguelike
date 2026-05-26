@@ -1,8 +1,3 @@
-// Public audio API — barrel that re-exports from the split modules.
-//
-// Callers import from `audio/sfx` so the underlying split stays an
-// internal refactor concern.
-
 export {
   isMuted,
   setMuted,

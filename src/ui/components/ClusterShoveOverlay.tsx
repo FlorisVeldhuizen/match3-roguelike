@@ -14,58 +14,16 @@ import {
 } from '../state/hoveredCell'
 import { SHOVE_HUES, shoveHueFor } from '../state/shoveHues'
 
-// H2c threat visualization for Swarmer's cluster-shove board verb.
-//
-// Event-driven (not store-derived) so the markers persist through the
-// gap between "store advances the swarmer's intent" (synchronous,
-// happens before the animator dequeues anything) and "the gem flight
-// actually starts" (whenever the animator gets to the resolved event).
-// A purely store-derived overlay vanishes the moment the intent ticks,
-// leaving a beat of empty board before the flight animation begins —
-// the player reads it as "the warning vanished and then magic happened
-// later," not as "the warning resolved into the action." Same pattern
-// as ColumnSmashOverlay.
-//
-//   - cluster-shove-placed:    add (enemyId, sources, destinations).
-//   - cluster-shove-resolved:  drop the enemy's threat — fires in
-//                              lockstep with the animator's flight
-//                              (emitGameEvent runs before the await in
-//                              AnimationController.playEvent), so the
-//                              markers fade exactly as the gems lift.
-//   - enemy-killed:            drop the enemy's threat — Swarmer died
-//                              between telegraph and fire.
-//   - fight reset:             seed from store (current swarmers whose
-//                              intent is cluster-shove).
-//
-// Connecting lines (per-source-destination bezier curves) only render
-// when the player hovers (a) the matching swarmer's enemy frame, OR
-// (b) one of that threat's source/destination cells. Permanent lines
-// on a 3-swarmer board read as a smear of crisscrossing dashes;
-// on-demand inspection per enemy stays parseable. Static source rings
-// and destination chevrons always show so the threat is legible at a
-// glance.
-
 type Threat = {
   enemyId: string
   sources: Pos[]
   destinations: Pos[]
-  // `expiring`: held briefly between resolve/kill and actual unmount so
-  // the CSS fade-out has time to play. Same pattern as ColorHexOverlay
-  // / BurningOverlay (their `is-expiring` state during FIZZLE_MS).
   expiring?: boolean
 }
 
-// Time held in the `expiring` state — long enough for the wash + bracket
-// fade-out transition to complete before the React tree drops the
-// element. Matches the 320ms fade-out timing in threats.css.
+// Matches the 320ms fade-out in threats.css
 const FADE_OUT_MS = 320
 
-// Quadratic bezier path from source to destination, with the control
-// point offset perpendicular to the midpoint. The offset is a fraction
-// of segment length so short shoves get a gentle arc and long
-// cross-board shoves curve more pronouncedly. Curve always bows the
-// same way (right-hand side of source→dst direction) so multiple lines
-// from one swarmer don't overlap on top of each other.
 const CURVE_RATIO = 0.22
 function bezierPath(
   from: { cx: number; cy: number },
@@ -75,7 +33,6 @@ function bezierPath(
   const my = (from.cy + to.cy) / 2
   const dx = to.cx - from.cx
   const dy = to.cy - from.cy
-  // Perpendicular (rotated 90° CCW): (-dy, dx). Scaled by CURVE_RATIO.
   const ctrlX = mx - dy * CURVE_RATIO
   const ctrlY = my + dx * CURVE_RATIO
   return `M ${from.cx} ${from.cy} Q ${ctrlX} ${ctrlY} ${to.cx} ${to.cy}`
@@ -85,18 +42,7 @@ function samePos(a: Pos, b: Pos): boolean {
   return a.x === b.x && a.y === b.y
 }
 
-// A shove cluster is always a contiguous 1×N run along one axis (see
-// rollClusterShoveIntent — same `horizontal` flag drives both source
-// and destination). So we render the whole cluster as ONE marker —
-// brackets framing the entire run, one capsule landing-ring on the
-// destination, one connecting line — instead of N independent markers
-// stacked next to each other. Cuts the visual count in half for
-// length-2 (the only length in play today) and keeps the cluster
-// reading as a single unit, which is how the player has to defend it.
-
 function clusterOrientation(cells: Pos[]): 'horizontal' | 'vertical' {
-  // Falls back to 'horizontal' for single-cell runs — irrelevant
-  // visually since width=height in that case.
   return cells.length >= 2 && cells[0].y === cells[1].y ? 'horizontal' : 'vertical'
 }
 
@@ -154,11 +100,6 @@ export function ClusterShoveOverlay() {
   )
 
   useEffect(() => {
-    // Two-phase removal: mark expiring → wait FADE_OUT_MS → actually
-    // delete. The expiring threat keeps rendering with .is-expiring
-    // applied, which drives the opacity transition to 0 in CSS.
-    // fightCounter-guarded so a stale timeout can't leak into a
-    // fresh fight after reset.
     const markExpiring = (ownerId: string) => {
       setThreats((prev) => {
         const cur = prev.get(ownerId)
@@ -193,10 +134,6 @@ export function ClusterShoveOverlay() {
           return next
         })
       } else if (event.kind === 'cluster-shove-resolved') {
-        // Flight is firing NOW (emitGameEvent runs before the await in
-        // AnimationController). Begin the fade-out in lockstep with
-        // the flight so the markers visibly soften as the gems lift,
-        // instead of snapping out the frame the intent ticks.
         markExpiring(event.enemyId)
       } else if (event.kind === 'enemy-killed') {
         markExpiring(event.enemyId)
@@ -208,15 +145,6 @@ export function ClusterShoveOverlay() {
 
   const threatList = [...threats.values()]
 
-  // A threat reveals its connecting lines when the player hovers its
-  // enemy frame OR any of its source/destination cells. The distinction
-  // matters for line styling: cell-hover means the player is pointing
-  // AT one specific cell of this threat, so the line gets an arrowhead
-  // (pointing to the new location) and the destination chevron hides
-  // (the line itself is now the directional indicator, the chevron is
-  // redundant). Enemy-hover is the broad "tell me what this enemy is
-  // doing" gesture, where keeping the chevron visible reinforces the
-  // existing telegraph language.
   const cellMatchesThreat = (t: Threat, p: Pos): boolean =>
     t.sources.some((s) => samePos(s, p)) ||
     t.destinations.some((d) => samePos(d, p))
@@ -227,14 +155,6 @@ export function ClusterShoveOverlay() {
   const enemyHoverRevealsThreat = (t: Threat): boolean =>
     hoveredEnemyId === t.enemyId
 
-  // One line per threat: cluster-center → cluster-center. The N
-  // per-cell lines that used to fan out from each source to its
-  // matching destination just rendered the cluster moving as a unit;
-  // a single line says the same thing without the visual crowding.
-  // Enemy-hover and cell-hover are treated identically — both reveal
-  // the same arrowed line and hide the destination crosshair, so the
-  // player learns one inspection gesture regardless of where they
-  // point.
   const lines = threatList.flatMap((t) => {
     const revealed = cellHoverRevealsThreat(t) || enemyHoverRevealsThreat(t)
     if (!revealed) return []
@@ -251,35 +171,17 @@ export function ClusterShoveOverlay() {
     ]
   })
 
-  // A threat is "hovered" whenever the player is pointing at its
-  // enemy frame OR one of its source/destination cells. Used twice:
-  // (a) the bezier-line + arrowhead reveal, (b) the per-cluster
-  // `is-hovered` class that boosts the marker so the specific shove
-  // the player is inspecting stands out from siblings on a
-  // multi-swarmer board.
   const hoveredThreatIds = new Set(
     threatList
       .filter((t) => cellHoverRevealsThreat(t) || enemyHoverRevealsThreat(t))
       .map((t) => t.enemyId),
   )
-  // Crosshair hides whenever the bezier+arrowhead is doing the
-  // directional job — same trigger as the line itself, since the two
-  // would now double-indicate the destination.
   const chevronHiddenThreatIds = hoveredThreatIds
 
-  // Hue is set per-threat via a CSS custom property so source rings,
-  // destination markers, and the connecting line all pull from one
-  // source of truth — and the CSS still owns lightness/alpha so all the
-  // tuning stays in one place.
   const hueStyle = (enemyId: string): CSSProperties => ({
     ['--shove-hue' as string]: String(shoveHueFor(enemies, enemyId) ?? SHOVE_HUES[0]),
   })
 
-  // Per-threat: one source bracket-frame anchored at the cluster's
-  // min-corner cell, sized inline to span the full N-cell run; one
-  // destination ring sized the same way. Orientation class drives the
-  // bracket/ring proportions in CSS so the marker keeps a consistent
-  // absolute-cell footprint regardless of horizontal vs vertical run.
   const clusterSizeStyle = (cells: Pos[]): CSSProperties => {
     const orient = clusterOrientation(cells)
     return orient === 'horizontal'
@@ -327,10 +229,7 @@ export function ClusterShoveOverlay() {
           preserveAspectRatio="none"
         >
           <defs>
-            {/* One marker per palette hue. Sharing a single marker with
-                `context-stroke` would be cleaner but interop is still
-                spotty across Safari versions; cloning the marker is
-                cheap. Each path picks its marker by hue index. */}
+            {/* Cloned per hue — context-stroke interop is unreliable in Safari */}
             {SHOVE_HUES.map((hue) => (
               <marker
                 key={`arrowhead-${hue}`}

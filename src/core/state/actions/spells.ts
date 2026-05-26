@@ -31,17 +31,6 @@ import {
 import type { StoreSet, StoreGet } from './types'
 
 export function makeCastSpell(set: StoreSet, get: StoreGet) {
-  // Free-action spell cast. Cost paid on cast; effect resolves at EOP
-  // (Bulwark/Reinforce/Volley), on the next enemy attack (Riposte),
-  // on the next match (Skewer/Surge), or immediately (Ignite/
-  // Regenerate/Brittle/Cinder Lash). 01-design rules: cast window =
-  // player phase + board settled + can pay cost. "Board settled"
-  // belongs in UI (button disabled while AC drains) — engine just
-  // gates on phase and cost.
-  //
-  // H4a redesign: picker-arg spells (Purify, Focus, Volley) have their
-  // own store actions. castSpell covers no-arg cases: Bulwark,
-  // Reinforce, Ignite, Regenerate, Brittle, Skewer, Surge, Cinder Lash.
   return (id: SpellId): { ok: boolean; events: GameEvent[] } => {
     const current = get()
     if (current.fight.phase !== 'player-acting') {
@@ -50,7 +39,6 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
     if (current.fight.player.pendingSpells.includes(id)) {
       return { ok: false, events: [] }
     }
-    // Spells that need picker args refuse the no-arg path.
     if (id === 'purify' || id === 'focus' || id === 'volley') {
       return { ok: false, events: [] }
     }
@@ -58,7 +46,6 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
     if (!canAffordSpell(current.fight.player.mana, def.cost)) {
       return { ok: false, events: [] }
     }
-    // Target-required spells reject without a living enemy in focus.
     const needsTarget =
       id === 'ignite' || id === 'brittle' || id === 'cinder-lash'
     const targetId = current.fight.targetEnemyId
@@ -118,10 +105,6 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
       })
       return { ok: true, events: [event, ...hookEvents, ...effectEvents] }
     }
-    // Pending-resolution spells (Bulwark/Reinforce/Skewer/Surge).
-    // Skewer + Surge ALSO arm a one-shot flag consumed by the next
-    // match (see cascade walker), in addition to entering pendingSpells
-    // so the PendingStrip can show them.
     set((s) => {
       s.fight.player.mana = nextMana
       s.fight.player.pendingSpells.push(id)
@@ -137,11 +120,6 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
 }
 
 export function makeCastPurify(set: StoreSet, get: StoreGet) {
-  // H4a Purify: immediate. Args: which player status to remove. Strips
-  // the chosen status ENTIRELY (all stacks). If it was Burn, also
-  // heals PURIFY_BURN_HEAL. Picker UI offers only present statuses;
-  // this action no-ops if the named status is absent, on top of the
-  // standard affordability + phase gate.
   return (statusKind: StatusKind): { ok: boolean; events: GameEvent[] } => {
     const current = get()
     if (current.fight.phase !== 'player-acting') {
@@ -183,19 +161,6 @@ export function makeCastPurify(set: StoreSet, get: StoreGet) {
 }
 
 export function makeCastShatter(set: StoreSet, get: StoreGet) {
-  // H2b.5 first player-side board verb. Picker picks the target gem
-  // colour; every cell of that colour shatters and applies its normal
-  // per-colour effect (red dmg / blue block pool / green heal /
-  // yellow mana / purple skill charge) scaled by cell count, then
-  // gravity + refill spawns fresh gems. Uses rng.board for the spawn
-  // roll — shatter is a player action, so its determinism rides the
-  // board rng stream rather than rng.enemy.
-  //
-  // Routes through the shared cascade walker inside resolveShatter,
-  // so relic onMatch / onCascade hooks (Sharp Edge / Iron Buckler /
-  // Cascade Crystal …) fire on the cleared cells and any gravity-
-  // induced cascade follow-ups. runOnSpellCast fires here as it does
-  // for every other spell.
   return (color: GemColor): { ok: boolean; events: GameEvent[] } => {
     const current = get()
     if (current.fight.phase !== 'player-acting') {
@@ -205,9 +170,6 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
     if (!canAffordSpell(current.fight.player.mana, def.cost)) {
       return { ok: false, events: [] }
     }
-    // Refuse no-op casts (no cells of the picked colour on the board).
-    // The picker UI should disable the option in this case but the
-    // gate stays here as a defensive backstop.
     const hasAny = current.board.cells.some((row) =>
       row.some((c) => c.gemColor === color),
     )
@@ -242,12 +204,6 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
       current.fight.hexedColors ?? [],
     )
 
-    // Victory check — Shatter is the first immediate-damage spell that
-    // can kill an enemy from a free action mid-phase, so the phase
-    // transition can't wait for resolveEndOfPhase like a swap-driven
-    // kill does. Mirror the victory branch in attemptSwap: roll the
-    // reward, advance runPhase, append the node to completedNodeIds,
-    // emit phase-changed.
     const anyEnemyAlive = r.enemies.some((e) => e.hp > 0)
     let nextFightPhase: CombatPhase = current.fight.phase
     let nextRunPhase: RunPhase = current.runPhase
@@ -264,14 +220,9 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
         completedNodeIds.push(curNode)
       }
       if (current.fight.isBoss) {
-        // Boss kill heals to full (same rule as the swap-driven boss
-        // kill in attemptSwap). The run-victory screen follows.
         finalPlayer = { ...finalPlayer, hp: finalPlayer.maxHp }
         nextRunPhase = 'victory'
       } else if (nextPendingReward == null) {
-        // Phase I: spell-cast victory uses the same reward roller as
-        // attemptSwap, including gold-drop tier + spell-vs-relic split.
-        // Elite-flag is respected even when the killing blow is a spell.
         const clearedNode = current.map.nodes.find(
           (n) => n.id === current.map.currentNodeId,
         )
@@ -315,8 +266,6 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
       s.pendingReward = nextPendingReward
       s.runPhase = nextRunPhase
       s.map.completedNodeIds = completedNodeIds
-      // Whichever path triggered the cast, the board-targeting mode
-      // is consumed by it.
       s.boardTargetingSpell = null
     })
     return {
@@ -327,10 +276,6 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
 }
 
 export function makeCastFocus(set: StoreSet, get: StoreGet) {
-  // H4a Focus: immediate. Args: source colour (mana taken from) and
-  // target colour (mana added to). Picker UI is responsible for offering
-  // only non-empty sources and non-capped targets; this action no-ops
-  // (refunds nothing) on degenerate args.
   return (from: GemColor, to: GemColor): { ok: boolean; events: GameEvent[] } => {
     const current = get()
     if (current.fight.phase !== 'player-acting') {
@@ -376,10 +321,6 @@ export function makeCastFocus(set: StoreSet, get: StoreGet) {
 }
 
 export function makeCastVolley(set: StoreSet, get: StoreGet) {
-  // H4a Volley: pending. Args: array of 3 enemy ids (the chosen targets,
-  // one per hit). The sole red-pool consumer. Stored in
-  // player.volleyTargets for EOP to read; cleared with the pending
-  // entry at EOP.
   return (targets: string[]): { ok: boolean; events: GameEvent[] } => {
     const current = get()
     if (current.fight.phase !== 'player-acting') {
@@ -395,7 +336,6 @@ export function makeCastVolley(set: StoreSet, get: StoreGet) {
     if (targets.length !== 3) {
       return { ok: false, events: [] }
     }
-    // Each target must be a living enemy in this fight.
     const living = new Set(
       current.fight.enemies.filter((e) => e.hp > 0).map((e) => e.id),
     )
@@ -424,9 +364,6 @@ export function makeCastVolley(set: StoreSet, get: StoreGet) {
       s.fight.player.pendingSpells.push('volley')
       s.fight.player.relics = writeRelics
       s.fight.player.volleyTargets = [...targets]
-      // Reset accumulated phasePools.red on cast so pre-cast red
-      // (already dealt as damage) doesn't double-dip into the EOP
-      // volley split.
       s.fight.player.phasePools.red = 0
     })
     return { ok: true, events: [event, ...hookEvents] }

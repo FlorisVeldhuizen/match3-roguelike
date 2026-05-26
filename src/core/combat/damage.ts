@@ -1,12 +1,6 @@
-// How an incoming damage hit splits across block and HP. Both the player-
-// attack path (in the store's swap walker) and the enemy-attack path (in
-// executeEnemyTurn) call into this so block-absorption / kill-detection
-// behave identically.
-
 export type DamageResult = {
   blockAfter: number
   hpAfter: number
-  // Clamped at remaining HP — never > hpBefore.
   hpDamage: number
   blocked: number
   blockBroken: boolean

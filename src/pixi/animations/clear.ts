@@ -1,8 +1,5 @@
 import { Ticker, type Sprite } from 'pixi.js'
 
-// Scale-pop overshoot + flash, then shrink + fade. ~280ms.
-// 0.00 → 0.18: pop up to 1.25x, tint flashes to white.
-// 0.18 → 1.00: shrink to 0 and fade alpha to 0.
 export function tweenClear(sprite: Sprite, durationMs = 280): Promise<void> {
   const startScale = sprite.scale.x
   const startAlpha = sprite.alpha

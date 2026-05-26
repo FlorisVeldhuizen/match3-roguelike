@@ -17,22 +17,6 @@ import type {
   RelicDef,
 } from './types'
 
-// The relic engine is a pure orchestrator: it walks the player's
-// acquisition-ordered RelicInstance[] and calls each one's hook function,
-// threading a context that lets hooks read snapshot state, read/write
-// per-relic flag bags, and emit follow-up events.
-//
-// Two flavors:
-// - runModifiers: payload-in, payload-out filter chain (acquisition order)
-// - runListeners: fan-out, no return; hooks emit events via ctx
-//
-// onFatalDamage is special: it's an interceptor — the first hook in
-// acquisition order that returns `{prevented:true}` wins and stops the chain.
-
-// === Shared ctx builder ==================================================
-// Mutates `instances` in place for flag writes. Callers (the store) must
-// thread the mutated array back into Zustand. Engine doesn't touch the
-// outer store; it only edits the array it was given.
 function buildCtx(
   inst: RelicInstance,
   snapshot: FightSnapshot,
@@ -61,7 +45,6 @@ function getHook<K extends HookKind>(
   return def.hooks[kind]
 }
 
-// === Modifier chain ======================================================
 export type EngineRunResult<P> = {
   payload: P
   events: GameEvent[]
@@ -101,7 +84,6 @@ export function runOnDamageDealt(
   return { payload: p, events }
 }
 
-// === Listener fan-out ====================================================
 function runListener<K extends HookKind, E>(
   kind: K,
   event: E,
@@ -217,11 +199,7 @@ export function runOnRoundStarted(
   return runListener('onRoundStarted', event, instances, snapshot)
 }
 
-// === Fatal interceptor ===================================================
-// Called when a hit *would* drop player HP to ≤0. Walks relics in
-// acquisition order; first one to return a `prevented:true` result wins,
-// the rest of the chain is skipped, and the caller pins HP to `hpFloor`.
-// Returns null if no relic intervenes — caller proceeds to game-over.
+// First relic in acquisition order that returns prevented:true wins
 export function interceptFatalDamage(
   payload: { incoming: number; source: DamageSource },
   instances: RelicInstance[],
@@ -241,7 +219,6 @@ export function interceptFatalDamage(
   return { result: null, events }
 }
 
-// === Snapshot helper =====================================================
 export function snapshotOf(
   player: Player,
   enemies: readonly Enemy[],
@@ -251,7 +228,6 @@ export function snapshotOf(
   return { player, enemies, targetEnemyId, cascadeLevel }
 }
 
-// === Acquisition ========================================================
 export function acquireRelic(relics: RelicInstance[], id: string): RelicInstance[] {
   if (relics.some((r) => r.id === id)) return relics
   const inst: RelicInstance = { id, runFlags: {}, fightFlags: {} }

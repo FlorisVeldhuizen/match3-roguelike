@@ -1,13 +1,5 @@
 import type { Pos } from '../../types'
 
-// Tiny shared atom for "which board cell is the cursor currently over."
-// Written by BoardScene's pointer handlers (the canvas owns pointer
-// interaction; HTML overlays have pointer-events: none and can't catch
-// hover directly), read by overlays that want to reveal extra
-// information about a specific cell — currently only ClusterShoveOverlay,
-// which uses it to show the source→destination connecting lines when
-// the player hovers a pending-shove source or destination.
-
 let current: Pos | null = null
 const listeners = new Set<(p: Pos | null) => void>()
 

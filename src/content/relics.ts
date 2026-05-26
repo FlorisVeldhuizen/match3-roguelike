@@ -1,11 +1,6 @@
 import { registerRelic } from '../core/relics/registry'
 import type { RelicDef } from '../core/relics/types'
 
-// Phase G relics. Five hooks exercised: onMatch (Iron Buckler, Sharp Edge,
-// Cascade Crystal), onDamageTaken (Thornmail), onFatalDamage (Stoneheart).
-// The remaining 10 hooks are wired in the engine but unused by these five —
-// J2 picks them up.
-
 const ironBuckler: RelicDef = {
   id: 'iron-buckler',
   name: 'Iron Buckler',
@@ -56,8 +51,6 @@ const thornmail: RelicDef = {
   upgradedDescription: 'When an enemy attacks you, reflect 2 damage back.',
   hooks: {
     onDamageTaken: (payload, ctx) => {
-      // Only enemy attacks trigger thornmail — burn, self-curse (J1),
-      // and other sources are explicitly excluded per architecture §2.
       if (payload.source !== 'enemy-attack') return
       if (payload.attackerId == null) return
       const reflect = ctx.upgraded ? 2 : 1
@@ -66,9 +59,6 @@ const thornmail: RelicDef = {
         relicId: 'thornmail',
         effect: `reflected ${reflect} damage`,
       })
-      // The store walker scans engine-emitted damage-dealt events with
-      // source='thornmail' and applies them to the attacker. Engine only
-      // produces the description; resolution lives at the call site.
       ctx.emit({
         kind: 'damage-dealt',
         targetId: payload.attackerId,
@@ -100,9 +90,6 @@ const cascadeCrystal: RelicDef = {
           green: Math.floor(payload.deltas.green * mult),
           yellow: Math.floor(payload.deltas.yellow * mult),
           purple: Math.floor(payload.deltas.purple * mult),
-          // Phase I: cascade amplification applies to gold too — same
-          // tempo, same multiplier rule. Future gold-specific relics
-          // could opt out by mutating deltas.gold separately.
           gold: Math.floor(payload.deltas.gold * mult),
         },
       }

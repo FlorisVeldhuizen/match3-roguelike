@@ -1,9 +1,6 @@
 import { HoverTooltip } from '../HoverTooltip'
 import { popClass, type PopState } from './popAnimation'
 
-// Phase I: run-persistent currency chip. Unlike mana, gold has no cap, no
-// per-fight reset, and no in-match side effect — it just climbs. Lives in
-// the mana cluster so the eye finds all earned currencies in one read.
 export function GoldChip({
   value,
   pop,

@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { getFXSettings, subscribeFXSettings } from '../../fx/settings'
 
-// Fullscreen WebGL canvas that draws subtle CRT scanlines + animated
-// noise specks + soft vignette over the whole page. Transparent + pointer
-// -events:none, so it only adds the visual veneer — clicks fall through
-// to the React UI and the board canvas underneath.
-
 const VERT_SRC = `
 attribute vec2 a_pos;
 void main() {
@@ -13,9 +8,6 @@ void main() {
 }
 `
 
-// Output is RGBA premultiplied by alpha — most of the screen stays clear
-// (alpha 0), with scanline rows and occasional specks darkening the page
-// underneath. Vignette gently dims the corners.
 const FRAG_SRC = `
 precision mediump float;
 uniform float u_time;
@@ -29,31 +21,21 @@ void main() {
   vec2 frag = gl_FragCoord.xy;
   vec2 uv = frag / u_resolution.xy;
 
-  // Horizontal scanlines, ~2px period. Even rows are clear, odd rows get
-  // a faint black overlay.
   float scan = step(1.0, mod(frag.y, 2.0));
   float scanAlpha = scan * 0.05;
 
-  // Animated grain: hash on (frag, seed) where seed is time-quantized so
-  // the pattern reseeds at ~5Hz. Slow + sparse so it sits behind the
-  // image rather than fighting it.
   float seed = floor(u_time * 5.0);
   float n = hash(frag + vec2(seed * 0.31, seed * 0.17));
-  // Dark specks — top ~1.5% of the noise distribution.
   float dark = step(0.985, n) * (n - 0.985) * 8.0;
-  // Bright flecks — top ~1%.
   float light = step(0.99, 1.0 - n) * (0.01 - n) * -8.0;
 
-  // Soft vignette — dims the corners so the screen feels framed.
   float d = distance(uv, vec2(0.5));
   float vig = smoothstep(0.45, 1.05, d);
   float vigAlpha = vig * 0.22;
 
   float blackAlpha = clamp(scanAlpha + dark * 0.12 + vigAlpha, 0.0, 0.45);
-  // Light flecks contribute a small white add over the darkened pixel.
   vec3 rgb = vec3(light * 0.22);
   float a = blackAlpha + light * 0.15;
-  // Premultiply so the canvas composites correctly with the page below.
   gl_FragColor = vec4(rgb * a, a);
 }
 `
@@ -123,9 +105,6 @@ export function CRTOverlay() {
     const uTime = gl.getUniformLocation(prog, 'u_time')
     const uRes = gl.getUniformLocation(prog, 'u_resolution')
 
-    // Half-res internal — scanlines + grain look identical at 0.5 because
-    // the shader pattern scales with frag coord; halving saves ~75% on a
-    // 4K display and the upscale is invisible.
     const RENDER_SCALE = 0.5
     const resize = () => {
       const w = Math.max(1, Math.floor(window.innerWidth * RENDER_SCALE))
@@ -144,8 +123,6 @@ export function CRTOverlay() {
     ).matches
     const start = performance.now()
     let raf = 0
-    // 30Hz — grain reseeds at 14Hz which is already below this, and the
-    // visual difference between 30/60 is invisible. Matches ArcaneBackground.
     const FRAME_MIN_MS = 1000 / 30
     let lastDraw = 0
     const draw = (now: number) => {

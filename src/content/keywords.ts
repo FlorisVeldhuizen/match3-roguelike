@@ -1,15 +1,3 @@
-// Keyword registry for the inline "keyword tooltip" pattern used in
-// intent badges, spell tooltips, etc. A keyword is a mechanic the player
-// might need a refresher on while reading another tooltip — Burn,
-// Vulnerable, Riposte, etc. The <Keyword> component (ui/components)
-// renders one inline, highlighted in its mechanic's palette, with a
-// sub-tooltip on hover showing the definition.
-//
-// Status keywords (Burn / Vulnerable / Weak) deliberately read their
-// name + icon from STATUS_TEMPLATES so the chip and the keyword stay in
-// sync. Non-status keywords (future Block / Riposte / etc.) declare
-// everything inline.
-
 import { getStatusDef } from './statuses'
 
 export type KeywordId =
@@ -27,13 +15,7 @@ export type KeywordDef = {
   id: KeywordId
   name: string
   icon: string
-  // Short body for the sub-tooltip. Keep to one short sentence — the
-  // sub-tooltip pops on top of an already-open tooltip; a paragraph
-  // crowds the screen. The longer "why does this exist" explanation
-  // belongs in the design doc, not the keyword body.
   body: string
-  // CSS variant key — `kw-${variant}` is added to the inline span. Used
-  // for per-mechanic colours so Burn reads orange, Block reads blue, etc.
   variant: string
 }
 

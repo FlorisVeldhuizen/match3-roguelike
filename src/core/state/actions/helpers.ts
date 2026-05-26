@@ -16,14 +16,6 @@ import type { BoardState } from '../store'
 
 const PLAYER_MAX_HP = 40
 
-// Single source of truth for a "clean" BoardState — used by every
-// new-fight transition (enterNode, debugForceFight, restart's
-// initialState). All board-affecting effects reset here: cells get
-// the freshly-generated grid (which wipes gem-bound flags like
-// burning); board-level state (selected, petrifiedRows, and any
-// future addition like a frozen-tiles map or a global board
-// modifier) is reset to its empty default. Adding a new board-level
-// effect means extending this helper, not chasing every reset site.
 export function freshBoardState(cells: Cell[][]): BoardState {
   return {
     width: BOARD_WIDTH,
@@ -46,25 +38,14 @@ export function freshPlayer(relics: RelicInstance[] = []) {
     pendingSpells: [],
     carryBlockNextPhase: false,
     relics,
-    // Phase I: run-persistent currency. freshPlayer is called per-fight,
-    // so callers that want to carry gold across fights (enterNode) must
-    // copy it over after — same pattern as HP.
     gold: 0,
-    // Phase I: seed owned-spell set from the registry's starter flag.
-    // Carries across fights via enterNode (mirrors gold / relics). Tests
-    // that bypass the registry get an empty list — harmless because the
-    // spell tray would just render nothing.
     ownedSpellIds: listSpells()
       .filter((s) => s.starter === true)
       .map((s) => s.id),
   }
 }
 
-// Phase I elite scaling. Applied per-enemy when freshFight is called with
-// isElite=true. Hand-tuned to feel like a "tougher version of the same
-// archetype": +40% HP, +1 to attack & block telegraphs. Stays additive on
-// block / attack so weak archetypes still feel weak — the scaler is a
-// danger amplifier, not an identity rewrite.
+// Additive on attack/block so weak archetypes stay weak — amplifier, not identity rewrite.
 const ELITE_HP_SCALAR = 1.4
 const ELITE_INTENT_BONUS = 1
 
@@ -77,9 +58,6 @@ export function freshFight(
     isElite?: boolean
   } = {},
 ): { fight: FightState; rng: RngState } {
-  // H2a: archetypes is a list (length 1-3 today; boss stays length 1).
-  // If absent (boot sentinel, tests that bypass the map), fall back to
-  // a single rng pick over the current archetype pool.
   let archetypes = options.archetypes
   let workingRng = enemyRng
   if (!archetypes || archetypes.length === 0) {
@@ -94,11 +72,7 @@ export function freshFight(
     const def = getArchetype(archetype)
     const first = rollIntent(archetype, 0, workingRng)
     workingRng = first.rng
-    // Elite scaling: bump HP and (for attack / block intents) the rolled
-    // amount. Other intent kinds (column-smash, petrify-row, ally-buff,
-    // etc.) keep their telegraphed payload — scaling them would distort
-    // the verb's design (e.g. a 2× column-smash is "smashes 2 columns",
-    // a different mechanic, not a tougher version of the same one).
+    // Only attack/block scale — other intents would change the verb's design if scaled.
     const baseHp = isElite ? Math.round(def.maxHp * ELITE_HP_SCALAR) : def.maxHp
     let intent = first.intent
     let blockSeed = intent.kind === 'block' ? intent.amount : 0
@@ -116,9 +90,7 @@ export function freshFight(
       archetype,
       hp: baseHp,
       maxHp: baseHp,
-      // Initial block intent is pre-applied so the enemy is already
-      // guarded when the player makes their first move. Mirrors the
-      // telegraph-time pre-application done by executeEnemyTurn.
+      // Pre-applied so enemy is guarded before the player's first move.
       block: blockSeed,
       currentIntent: intent,
       nextIntentIndex: 0,

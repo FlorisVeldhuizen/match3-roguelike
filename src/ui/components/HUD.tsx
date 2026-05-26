@@ -32,9 +32,6 @@ export function HUD() {
 
   const hpPop = usePopOnChange(displayedHp)
   const blockPop = usePopOnChange(stagedBlue)
-  // Per-colour mana pop animations. Each chip animates independently
-  // when its own value changes (a yellow match doesn't pulse the red
-  // chip, etc.).
   const redManaPop = usePopOnChange(displayedMana.red)
   const blueManaPop = usePopOnChange(displayedMana.blue)
   const greenManaPop = usePopOnChange(displayedMana.green)
@@ -43,7 +40,6 @@ export function HUD() {
   const goldPop = usePopOnChange(displayedGold)
 
   const hpPct = Math.max(0, (displayedHp / player.maxHp) * 100)
-  // Low-HP urgency pulse, ≤30%, excluding 0 (game-over overlay handles that).
   const isLowHp = displayedHp > 0 && displayedHp / player.maxHp <= 0.3
   const badgeBlock = stagedBlue
   const blockHasPending = badgeBlock > 0 && !blockCommitted
@@ -55,10 +51,6 @@ export function HUD() {
       aria-label="Player status"
       data-player-hud="true"
     >
-      {/* Status chips float ABOVE the HUD (mirrors the enemy frame's
-          intent-badge pattern). Absolute positioning means no layout
-          shift when chips appear/disappear — the resource row keeps a
-          stable single-row layout regardless of status presence. */}
       <StatusBar
         statuses={displayedStatuses}
         tickMarks={statusTickMarks}

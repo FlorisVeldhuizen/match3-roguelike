@@ -7,49 +7,15 @@ import type {
   UltimateId,
 } from '../../types'
 
-// Registry pattern (mirrors archetypeRegistry): content/ bootstraps the
-// player class's spell defs at app start; combat engine looks them up
-// without crossing the core→content boundary.
-//
-// Each def is the **single source of truth** for that spell — name, icon,
-// cost, full description, short pending-state label, short pending-state
-// description. UI (SpellTray button, PendingStrip pip, future battle log)
-// reads from here so descriptions never drift across surfaces.
-
 export type SpellDef = {
   id: SpellId
   name: string
   icon: string
-  // H3: multi-colour mana cost. e.g. Bulwark = { blue: 3 }, Reinforce =
-  // { blue: 4 }. Affordability + consumption applies wild-substitution
-  // via core/combat/mana.ts. Yellow listed here means "yellow specifically
-  // required"; for typical spells, yellow is consumed as a wild substitute
-  // when other colours are short.
   cost: ManaCost
-  // Tooltip body. ReactNode (not string) so spell defs can embed inline
-  // <Keyword> chips for Burn / Vulnerable / Block / etc — same pattern
-  // intentDisplays.tsx uses for enemy intents. Plain strings still work
-  // (assignable to ReactNode) for spells with no status references.
   description: ReactNode
-  // H4a: 'pending' = effect resolves later (EOP, or on a trigger); the
-  // spell enters `player.pendingSpells` on cast. 'immediate' = effect
-  // applies inline at cast time and the spell never enters pendingSpells.
-  // Drives castSpell's branching in core/state/store.ts.
   resolution: SpellResolution
-  // Short verb shown next to the name when this spell sits in the
-  // pending strip (e.g. "queued" — "Bulwark — queued"). For immediate
-  // spells this field is unused but still populated (registry shape
-  // stays uniform).
   pendingLabel: string
-  // Short description shown in the pending-strip tooltip. Distinct from
-  // `description` because once a spell is queued, the player only needs
-  // to be reminded of *what's about to happen*, not how to cast it.
-  // ReactNode for the same reason as `description`.
   pendingDescription: ReactNode
-  // Class-baseline kit. True for spells the player owns at run start;
-  // omitted spells are part of the discoverable pool (reward/shop drops,
-  // not yet wired up). The dev "Unlock all spells" toggle bypasses this
-  // filter so the full kit is reachable in dev builds.
   starter?: boolean
 }
 
@@ -90,18 +56,12 @@ export function listSpells(): SpellDef[] {
   return [...spellRegistry.values()]
 }
 
-// Tray-facing spell list. Reads the player's run-owned set (seeded from
-// the starter flag at run start, grown by acquireSpell on
-// reward / shop). The dev "unlock all" override still bypasses to the
-// full registry so the testing flow stays usable.
 export function listSpellsForTray(
   ownedIds: readonly string[],
   unlockAll: boolean,
 ): SpellDef[] {
   if (unlockAll) return listSpells()
   const owned = new Set(ownedIds)
-  // Preserve registry order so the tray layout is deterministic across
-  // runs (acquisition order doesn't reshuffle the row).
   return [...spellRegistry.values()].filter((s) => owned.has(s.id))
 }
 
@@ -113,8 +73,6 @@ export function isUltimateId(id: PendingSpellId): id is UltimateId {
   return ultimateRegistry.has(id as UltimateId)
 }
 
-// PendingStrip / battle log: look up display metadata for any cast-and-
-// pending entry without branching on spell-vs-ultimate at the call site.
 export type PendingMeta = {
   name: string
   icon: string

@@ -5,11 +5,6 @@ import { rollShopOffer } from '../../shop/offer'
 import type { SpellId } from '../../../types'
 import type { StoreSet, StoreGet } from './types'
 
-// Phase I shop actions. The shop opens via enterNode (nodes.ts sets
-// runPhase='shop'); the screen is responsible for calling
-// rollOfferIfNeeded on first mount. Purchases mutate currentShopOffer in
-// place so the screen can render "sold out" without re-rolling.
-
 export function makeRollShopOffer(set: StoreSet, get: StoreGet) {
   return (): void => {
     const current = get()
@@ -83,7 +78,6 @@ export function makeShopBuyHeal(set: StoreSet, get: StoreGet) {
     const item = offer.heals.find((h) => h.kind === kind)
     if (!item || item.purchased) return { ok: false }
     if (current.fight.player.gold < item.cost) return { ok: false }
-    // Refuse purchase at full HP — gold-wasteful and confusing.
     const p = current.fight.player
     if (p.hp >= p.maxHp) return { ok: false }
     set((s) => {
@@ -116,7 +110,6 @@ export function makeShopRemoveRelic(set: StoreSet, get: StoreGet) {
     const cost = offer.removeOffer.cost
     set((s) => {
       s.fight.player.gold -= cost
-      // Preserve acquisition order of the surviving relics.
       s.fight.player.relics = s.fight.player.relics.filter(
         (r) => r.id !== relicId,
       )

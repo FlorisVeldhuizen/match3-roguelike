@@ -29,13 +29,6 @@ import {
   subscribeUnlockAllSpells,
 } from '../../debug/devControls'
 
-// Single header-anchored popover that combines all runtime settings:
-// sound (mute + volume), visual FX toggles, and (dev builds only) the
-// debug tooling for the cascade pipeline. Replaces the three separate
-// header buttons (VolumeSlider, MuteToggle, FXToggle) plus the floating
-// DevTools panel. Popover pattern mirrors the old FXToggle (close on
-// outside click + Escape).
-
 const FX_ROWS: { key: FXKey; label: string; hint: string }[] = [
   { key: 'rgbSplit', label: 'RGB Split', hint: 'Chromatic accent on in-board callouts' },
   { key: 'shockwave', label: 'Shockwave', hint: 'Ripple on big matches & cascades' },
@@ -52,19 +45,14 @@ export function SettingsPanel() {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
-  // Sound state
   const [muted, setMutedState] = useState(isMuted)
   const [volume, setVolumeState] = useState(getVolume)
   useEffect(() => subscribeMuted(setMutedState), [])
   useEffect(() => subscribeVolume(setVolumeState), [])
 
-  // FX state
   const [fxSettings, setFxSettingsState] = useState<FXSettings>(getFXSettings)
   useEffect(() => subscribeFXSettings(setFxSettingsState), [])
 
-  // Dev state (only mounted when import.meta.env.DEV is true at the
-  // component-render level; the hooks below are always called to keep
-  // hook order stable, but the values they observe are inert in prod).
   const [speed, setSpeed] = useState(getTimeScale())
   const [stepOn, setStepOn] = useState(isStepMode())
   const [unlockAll, setUnlockAll] = useState(isUnlockAllSpells())
@@ -72,7 +60,6 @@ export function SettingsPanel() {
   useEffect(() => subscribeStepMode(setStepOn), [])
   useEffect(() => subscribeUnlockAllSpells(setUnlockAll), [])
 
-  // Close on outside click / Escape (same pattern the old FXToggle used).
   useEffect(() => {
     if (!open) return
     const onPointer = (ev: PointerEvent) => {
@@ -94,8 +81,6 @@ export function SettingsPanel() {
   const forceMatch5 = () => {
     const swap = useGameStore.getState().debugForceMatch5()
     if (!swap) return
-    // Defer one tick so the store mutation re-renders the BoardScene
-    // sprite grid before the triggering swap animates.
     window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
   }
 

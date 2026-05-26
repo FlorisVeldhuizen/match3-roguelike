@@ -1,10 +1,6 @@
 import { getCtx, isMuted } from '../context'
 import { intensity, jitter, schedRingPartial } from '../utils'
 
-// Heal / health-potion cue. Locked in after picker A/B as a 4-note rising
-// major arpeggio (root + major third + perfect fifth + octave) on pure
-// sines via schedRingPartial. Reads as a deliberate "you regained health"
-// pattern rather than a 2-note arcade pickup pip.
 function synthHealArpeggio(amount: number): void {
   const c = getCtx()
   if (!c) return

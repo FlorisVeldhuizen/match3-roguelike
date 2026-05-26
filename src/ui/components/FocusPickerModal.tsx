@@ -4,11 +4,6 @@ import { emitGameEvent } from '../../core/events/emitter'
 import { FOCUS_TRANSFER } from '../../core/combat/spellResolvers'
 import { MANA_CAPS, type GemColor } from '../../types'
 
-// H4a Focus picker. Two-step selection: pick a source colour (with ≥1
-// mana), then a target colour (with cap headroom). Confirm transfers
-// FOCUS_TRANSFER (3) or whatever fits between have/headroom. ESC or
-// click-outside cancels without casting.
-
 const COLOURS: ReadonlyArray<'red' | 'blue' | 'green' | 'yellow'> = [
   'red',
   'blue',

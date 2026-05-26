@@ -10,11 +10,6 @@ import { applyDamage } from './damage'
 import { composeDamage, tickStatuses } from './statuses'
 import { interceptFatalDamage, snapshotOf } from '../relics/engine'
 
-// H3: multi-color mana economy. Each colour delta accumulates BOTH into
-// its immediate-effect track (red/blue/green → phasePools, purple →
-// skillCharge) AND into the colour mana pool (per-cap). Yellow no
-// longer flows into a single generic mana counter; it becomes wild
-// mana in the colour pool. Purple does not contribute to mana.
 export function applyPoolDeltas(player: Player, deltas: PoolDeltas): Player {
   const m = player.mana
   return {
@@ -42,25 +37,6 @@ export type EndOfPhaseResult = {
   events: GameEvent[]
 }
 
-// End of player phase. Heal (green) is committed per-match by the store
-// walker; red damage normally fires per-match too unless Bash/Volley is
-// pending (which defers red into phasePools.red for this resolver). Blue
-// is resolved here per Bulwark/Reinforce rules. After resolution the
-// phase transitions to the enemy turn.
-//
-// Pending-spell resolution (01-design §Spells):
-// - Bulwark alone: blue pool → attack at floor(blue/2), block becomes 0.
-// - Reinforce alone: block becomes (blue × 2) and carries into next phase.
-// - Both queued (the synergy): Reinforce empowers the Bulwark swing —
-//   attack at full blue (not floor/2), block becomes 0, and Reinforce
-//   gives up its own double/carry. Both spells are spent on one strike.
-// - Neither queued: block = blue (the default).
-// - Volley queued: red pool splits into 3 chunks distributed across
-//   the player's chosen targets; each chunk goes through composeDamage
-//   + applyDamage. (H4a; Volley is the sole red-pool consumer.)
-//
-// Riposte stays in pendingSpells across the enemy turn (it triggers on
-// incoming attacks); everything else is cleared here.
 export function resolveEndOfPhase(
   player: Player,
   enemies: Enemy[],
@@ -79,8 +55,7 @@ export function resolveEndOfPhase(
   let nextBlock = pools.blue
   if (hasBulwark) {
     nextBlock = 0
-    // Reinforce, if also queued, empowers the swing to full blue damage
-    // and gives up its own double/carry — both spells fire as one strike.
+    // Reinforce empowers Bulwark swing to full blue (not floor/2)
     const rawAttack = hasReinforce ? pools.blue : Math.floor(pools.blue / 2)
     const target =
       targetEnemyId != null
@@ -124,9 +99,7 @@ export function resolveEndOfPhase(
     events.push({ kind: 'pending-effect-resolved', spellId: 'reinforce' })
   }
 
-  // H4a Volley: split the deferred red pool into 3 chunks, applied
-  // across the chosen targets. floor(pool/3) per chunk; remainder lands
-  // on the LAST chunk so no damage is lost. Empty pool = no hits emitted.
+  // Volley: split deferred red pool into 3 chunks across chosen targets
   if (hasVolley && player.volleyTargets && player.volleyTargets.length === 3) {
     const total = pools.red
     if (total > 0) {
@@ -188,15 +161,8 @@ export function resolveEndOfPhase(
     block: nextBlock,
     phasePools: { red: 0, blue: 0, green: 0 },
     pendingSpells: nextPending,
-    // Reinforce queues a one-shot block carry-over for the next phase
-    // (01-design §Reinforce): normal "block zeros at next phase start"
-    // is overridden once. When Reinforce is combined with Bulwark, it is
-    // spent empowering the swing instead — no carry.
     carryBlockNextPhase:
       hasReinforce && !hasBulwark ? true : player.carryBlockNextPhase,
-    // H4a: Volley's target list lives until EOP resolves it. Clear once
-    // consumed so it can't leak into a later phase (which would let a
-    // second Volley re-use a stale list before the player picks again).
     volleyTargets: hasVolley ? undefined : player.volleyTargets,
   }
 
@@ -221,16 +187,6 @@ export type PlayerPhaseBeginResult = {
   phase: CombatPhase
 }
 
-// Statuses tick once here: Burn routes through applyDamage so any block
-// that survived the enemy turn (carryBlockNextPhase, or just the wall
-// that absorbed the enemy hit and hasn't been zeroed yet) eats the burn
-// first — armor protects from fire too. After the tick, block is zeroed
-// (the wall is spent), unless Reinforce's carryBlockNextPhase flag is
-// set. If Burn kills the player, returns phase='game-over'.
-// Stoneheart needs to see lethal damage from any source, including burn
-// ticks at phase start, so the engine fatal-intercept call lives here.
-// `enemies` + `targetEnemyId` are passed through purely so the engine's
-// snapshot is accurate (relics may read enemies); they're not mutated.
 export function beginPlayerPhase(
   player: Player,
   enemies: readonly Enemy[] = [],
@@ -239,19 +195,12 @@ export function beginPlayerPhase(
   const events: GameEvent[] = []
   const ticked = tickStatuses('player', player.statuses)
 
-  // Event order matters for the FX layer: emit `damage-taken` (+ the
-  // block-broken/absorbed sub-events) BEFORE the status-ticked /
-  // status-expired events. That way the chip → HP particle trail spawns
-  // while the status chip is still mounted in the UI; any chip-removing
-  // expiry plays after the trail is already in flight.
   let hp = player.hp
   let block = player.block
   let relics = player.relics
   if (ticked.burnDamage > 0 && hp > 0) {
     const res = applyDamage(block, hp, ticked.burnDamage)
     let finalHp = res.hpAfter
-    // Stoneheart (and any future on-fatal relic): if burn would kill,
-    // give the chain a chance to pin HP to a floor.
     if (res.killed) {
       const snap = snapshotOf(player, enemies, targetEnemyId, 0)
       const writeRelics = relics.map((r) => ({
@@ -284,9 +233,7 @@ export function beginPlayerPhase(
       events.push({ kind: 'block-absorbed', targetId: 'player' })
     }
   }
-  // H4a Regen tick: heal AFTER burn damage so burn-then-regen pairs
-  // resolve damage first then heal. If burn killed and Stoneheart
-  // pinned HP to 1, regen lifts off the floor.
+  // Regen heals AFTER burn so burn-then-regen resolves damage first
   if (ticked.regenHeal > 0 && hp > 0) {
     const before = hp
     hp = Math.min(player.maxHp, hp + ticked.regenHeal)
@@ -298,9 +245,6 @@ export function beginPlayerPhase(
   events.push(...ticked.events)
 
   const phase: CombatPhase = hp <= 0 ? 'game-over' : 'player-acting'
-  // Reinforce's one-shot carry-over: keep whatever block survived the
-  // enemy turn (already doubled at EOP) AND the burn tick above; clear
-  // the flag so the next phase end zeros block normally.
   const carrying = player.carryBlockNextPhase
   return {
     player: {

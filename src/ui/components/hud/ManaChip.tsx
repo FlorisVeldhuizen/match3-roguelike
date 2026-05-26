@@ -22,12 +22,6 @@ export function ManaChip({
   title: string
   body: ReactNode
 }) {
-  // data-mana-target: the trail attractor for this colour's pool-gained
-  // particles (H3 routing). data-pool-target stays on the immediate-effect
-  // target (block badge for blue, HP bar for green, etc.) so the arrival
-  // popup + heal/block FX still anchor to those. For yellow specifically,
-  // the chip carries both attributes because yellow's popup IS the
-  // mana popup — no other "effect" anchor exists for it.
   return (
     <HoverTooltip
       variant="mana"

@@ -26,17 +26,9 @@ import { getHoveredCell, subscribeHoveredCell } from '../state/hoveredCell'
 import { shoveHueFor } from '../state/shoveHues'
 
 const HIT_FLASH_MS = 280
-// Must match (or slightly outlast) the longest .firing-* animation in
-// index.css — currently enemy-firing-attack at 460ms.
+// Must match the longest .firing-* animation in index.css
 const INTENT_FIRE_MS = 460
-// Death pulse duration — long enough to read the scale-flash arc, short
-// enough to settle into the static .dead state before the next event.
 const KILL_PULSE_MS = 720
-
-// Intent badge / tooltip data now lives in src/content/intentDisplays.tsx
-// (icon, badge number, label, description as a single switch dispatched
-// from `intentDisplay(intent)`). Adding a new IntentKind means one new
-// case there, not four parallel branches here.
 
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
@@ -44,65 +36,31 @@ export function EnemyFrame() {
   const setTargetEnemy = useGameStore((s) => s.setTargetEnemy)
   const fightPhase = useGameStore((s) => s.fight.phase)
   const fightCounter = useGameStore((s) => s.fightCounter)
-  // Phase I: elite badge surfaces tougher-than-normal stats. Reads from
-  // FightState (set by freshFight via the elite node kind in nodes.ts).
   const isElite = useGameStore((s) => s.fight.isElite === true)
-  // Drive the lethal-intent warning. Store values (not HUD's display-timed
-  // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
   const playerBlock = useGameStore((s) => s.fight.player.block)
   const animatedPhase = useAnimatedPhase()
-  // Reciprocal-hover: when the player points at a cell that's part of
-  // a swarmer's cluster-shove (source or destination), the matching
-  // enemy frame above lights up in that swarmer's accent hue. Lets the
-  // player trace "whose shove is this" without leaving the board.
   const hoveredCell = useSyncExternalStore(subscribeHoveredCell, getHoveredCell)
 
-  // Displayed HP per enemy, mirrored event-driven so the bar drains on
-  // `damage-dealt` (animation-timed) instead of snapping when the store
-  // finalises the whole turn synchronously at swap commit time.
   const [displayedHp, setDisplayedHp] = useState<Record<string, number>>(() => {
     const out: Record<string, number> = {}
     for (const e of enemies) out[e.id] = e.hp
     return out
   })
-  // Per-enemy "has this enemy fired its intent yet this enemy turn?" flag.
-  // Reset to false for everyone on phase-changed → enemy-acting (start of
-  // the enemy turn). Set to true on enemy-acted (emitted by executeEnemyTurn
-  // after each enemy's action events). Cleared again on intent-telegraphed
-  // (end-of-turn batch — every surviving enemy gets a fresh intent, so the
-  // badge should show again with the new intent).
-  //
-  // The badge then shows per-enemy as: (a) during player phase, always;
-  // (b) during enemy phase, only for enemies that haven't yet acted. Net
-  // effect: badges fade one at a time as each enemy plays out its action,
-  // instead of all hiding at once when the enemy phase starts.
   const [firedIntent, setFiredIntent] = useState<Record<string, boolean>>({})
 
-  // Displayed intent lags the store: it only updates when intent-telegraphed
-  // plays (after the enemy has visibly resolved the previous one).
   const [displayedIntent, setDisplayedIntent] = useState<Record<string, Intent>>(() => {
     const out: Record<string, Intent> = {}
     for (const e of enemies) out[e.id] = e.currentIntent
     return out
   })
 
-  // Displayed block lags the store too. executeEnemyTurn pre-applies the
-  // next block intent at telegraph time, so `enemy.block` jumps the moment
-  // the swap commits — long before the shield pulse + intent badge play.
-  // Mirror it event-driven instead: bump on enemy-block-gained (sync with
-  // the firing-block pulse) and drain on player-attack damage-dealt at
-  // trail arrival (sync with displayedHp).
   const [displayedBlock, setDisplayedBlock] = useState<Record<string, number>>(() => {
     const out: Record<string, number> = {}
     for (const e of enemies) out[e.id] = e.block
     return out
   })
 
-  // Per-enemy status chips, animation-timed. Same store/animation race
-  // as the player side — if we read enemy.statuses straight from the
-  // store, a status applied at swap commit pops the icon before its
-  // particles have even left the caster.
   const [displayedStatuses, setDisplayedStatuses] = useState<
     Record<string, StatusInstance[]>
   >(() => {
@@ -110,41 +68,23 @@ export function EnemyFrame() {
     for (const e of enemies) out[e.id] = e.statuses
     return out
   })
-  // Bumps per (enemyId, statusKind) on every tick — used as a React key
-  // so the chip's "-1" popup re-mounts and replays its keyframe.
   const [statusTickMarks, setStatusTickMarks] = useState<
     Record<string, Partial<Record<StatusKind, number>>>
   >({})
-  // Parallel pre-impact "wind up" cue bumps; fires when this enemy's
-  // status is about to deal proc damage. Pulses the chip just as the
-  // chip→frame trail launches.
   const [statusCueMarks, setStatusCueMarks] = useState<
     Record<string, Partial<Record<StatusKind, number>>>
   >({})
-  // Per-enemy fizzle window — chips remain in displayedStatuses for an
-  // extra ~480ms past status-expired so the goodbye flash + fade can
-  // play on the chip itself. Cleared once the fizzle finishes.
   const [expiringStatusKinds, setExpiringStatusKinds] = useState<
     Record<string, Set<StatusKind>>
   >({})
 
   const [flashing, setFlashing] = useState<Record<string, number>>({})
-  // Red trail arrival → brief "incoming damage" pulse on the targeted enemy.
-  // Cleared by id so the pulse stops if the player switches targets mid-phase.
   const [trailPulse, setTrailPulse] = useState<Record<string, number>>({})
-  // Scale+flash CSS transition into the dead state. Triggered when
-  // displayedHp hits zero, in sync with the death burst.
   const [killedPulse, setKilledPulse] = useState<Record<string, number>>({})
-  // Stagger pulse: the enemy's shield was broken and their turn is spent
-  // recovering. Drives the .staggered CSS recoil animation on the frame.
   const [staggered, setStaggered] = useState<Record<string, number>>({})
-  // "Intent firing" tracks which enemy is currently visibly resolving its
-  // intent and whether that intent is attack or block (so the CSS can play
-  // the right pulse — the intent badge is already hidden by this point).
   const [intentFiring, setIntentFiring] = useState<
     Record<string, { count: number; kind: 'attack' | 'block' }>
   >({})
-  // Bump on intent-telegraphed → triggers a "new intent" pop-in animation.
   const [intentTick, setIntentTick] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -154,9 +94,6 @@ export function EnemyFrame() {
         const amount = event.amount
         const isPlayerAttack = event.source === 'player-attack'
         const procKind = statusKindFromDamageSource(event.source)
-        // Status-proc damage on this enemy: bump the chip's pre-impact
-        // cue immediately so the chip pulses as the trail launches,
-        // not when it arrives.
         if (procKind && amount > 0) {
           const pk = procKind
           setStatusCueMarks((prev) => ({
@@ -167,16 +104,11 @@ export function EnemyFrame() {
             },
           }))
         }
-        // Both player-attack hits (red gem trail) and status-proc hits
-        // (chip → enemy trail) need to delay the bar drain so it lands
-        // when the particles arrive. Everything else is immediate.
         const delay = isPlayerAttack || procKind ? TRAIL_ARRIVAL_MS : 0
         window.setTimeout(() => {
           setDisplayedHp((prev) => {
             const before = prev[id] ?? 0
             const after = Math.max(0, before - amount)
-            // Kill transition (alive → 0): fire the .killed pulse in sync
-            // with the death burst (both land at trail arrival).
             if (before > 0 && after === 0) {
               setKilledPulse((p) => ({ ...p, [id]: (p[id] ?? 0) + 1 }))
               window.setTimeout(() => {
@@ -203,8 +135,6 @@ export function EnemyFrame() {
           }
         }, delay)
       } else if (event.kind === 'pool-gained' && event.color === 'red') {
-        // Brief outline pulse when the trail lands. Damage popup itself
-        // comes from the per-match damage-dealt event.
         const id = useGameStore.getState().fight.targetEnemyId
         if (!id) return
         scheduleAtTrailArrival(() => {
@@ -217,9 +147,6 @@ export function EnemyFrame() {
           }, 380)
         })
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
-        // Enemy's attack landed — pulse the actual attacker (multi-enemy
-        // safe). Fall back to targetEnemyId only if the event omitted the
-        // attackerId (older payloads / non-attack sources).
         const id =
           event.attackerId ?? useGameStore.getState().fight.targetEnemyId
         if (id) bumpIntentFiring(setIntentFiring, id, 'attack')
@@ -244,10 +171,6 @@ export function EnemyFrame() {
           ...prev,
           [event.enemyId]: (prev[event.enemyId] ?? 0) + 1,
         }))
-        // Telegraph batch fires at turn end; clear firedIntent so the
-        // newly telegraphed badge shows. Same-frame setState with the
-        // displayedIntent above lands together → badge re-appears with
-        // the new intent.
         setFiredIntent((prev) => {
           if (!prev[event.enemyId]) return prev
           const next = { ...prev }
@@ -255,24 +178,10 @@ export function EnemyFrame() {
           return next
         })
       } else if (event.kind === 'enemy-acted') {
-        // Fires AFTER this enemy's action events. Mark fired → the
-        // per-enemy badge gate hides this enemy's badge while siblings
-        // that haven't yet acted keep theirs visible.
         setFiredIntent((prev) => ({ ...prev, [event.enemyId]: true }))
       } else if (event.kind === 'phase-changed' && event.phase === 'enemy-acting') {
-        // Fresh enemy turn: reset all firedIntent flags so badges show
-        // at the start. (They start showing because firedIntent is
-        // empty AND animatedPhase is still player-acting until the
-        // anim layer updates; either way the gate opens.)
         setFiredIntent({})
       } else if (event.kind === 'status-applied' && event.target !== 'player') {
-        // Apply IMMEDIATELY at event time. Was delayed by
-        // TRAIL_ARRIVAL_MS to sync with the particle trail; that delay
-        // let a follow-up status-ticked race the apply at +700ms and
-        // skip the intermediate value (player saw chip jump from N to
-        // N+M-1 with a popup of N+M, instead of N → N+M → N+M-1).
-        // Trail particles spawned by AnimationController are decorative
-        // confirmation now — the chip is the authoritative state.
         const enemyId = event.target
         const incoming = event.status
         setDisplayedStatuses((prev) => ({
@@ -280,10 +189,6 @@ export function EnemyFrame() {
           [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
         }))
       } else if (event.kind === 'status-ticked' && event.target !== 'player') {
-        // Delay by TRAIL_ARRIVAL_MS so the chip number drops AFTER the
-        // tick's chip→target particle lands (otherwise the chip ticks
-        // 3→2 while the hit-for-3 is still in flight). Bump the tick
-        // marker so StatusBar replays the "-1" popup animation.
         const enemyId = event.target
         const { statusKind, remaining } = event
         window.setTimeout(() => {
@@ -302,13 +207,6 @@ export function EnemyFrame() {
           }))
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'status-expired' && event.target !== 'player') {
-        // Goodbye flash + fade on the enemy chip when its final tick
-        // lands. Sequence mirrors HUD.tsx player-side:
-        //   t = +TRAIL_ARRIVAL_MS         → mark chip as expiring; the
-        //                                    `is-expiring` CSS class plays
-        //                                    a ~480ms flash-and-fade.
-        //   t = +TRAIL_ARRIVAL_MS + FIZZLE → filter the chip out of
-        //                                    displayedStatuses.
         const enemyId = event.target
         const { statusKind } = event
         const FIZZLE_MS = 480
@@ -341,13 +239,6 @@ export function EnemyFrame() {
     return unsub
   }, [])
 
-  // Hard-resync displayed HP on fight reset (new fight via reward,
-  // skip, or restart — fightCounter bumps in all three). Done as a
-  // render-phase update so the fresh values are in place during the
-  // SAME render that picks up the new enemies — a useEffect-based
-  // resync paints once with stale entries (e.g. displayedHp[enemy-1]=0
-  // from a previous fight's death) and the intent badge / dead class
-  // flicker through that stale frame before correcting.
   const [trackedFightCounter, setTrackedFightCounter] = useState(fightCounter)
   if (trackedFightCounter !== fightCounter) {
     setTrackedFightCounter(fightCounter)
@@ -376,9 +267,6 @@ export function EnemyFrame() {
       {enemies.map((enemy) => {
         const shownHp = displayedHp[enemy.id] ?? enemy.hp
         const shownBlock = displayedBlock[enemy.id] ?? enemy.block
-        // Use the *displayed* HP for the dead-vs-alive visual so the
-        // skull/intent-hide flips in sync with the bar drain, not at
-        // store-commit time.
         const dead = shownHp <= 0
         const isTarget = enemy.id === targetId
         const isHit = (flashing[enemy.id] ?? 0) > 0
@@ -389,26 +277,14 @@ export function EnemyFrame() {
         const isFiring = (firingState?.count ?? 0) > 0
         const firingKind = firingState?.kind
         const intent = displayedIntent[enemy.id] ?? enemy.currentIntent
-        // Lethal: telegraphed attack exceeds hp + visible block.
         const lethalIntent =
           intent.kind === 'attack' && intent.amount > playerHp + playerBlock
         const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
-        // Targeted, living enemy is the attractor for red gem trails.
-        // Gate on store-immediate hp (not displayed/lagged hp) so the
-        // attribute drops the same frame the enemy hits zero — otherwise
-        // a flock spawned during the ~700ms displayedHp drain can still
-        // home onto a corpse, which is the swarm-AoE bug.
+        // Gate on store-immediate hp (not displayedHp) to avoid trails homing onto a corpse
         const poolTargetAttr =
           isTarget && enemy.hp > 0 ? 'red' : undefined
-        // Clickable when the player is acting and the enemy is alive but
-        // not already the target. Dead enemies and the current target are
-        // inert so the cursor doesn't mislead.
         const selectable =
           !dead && !isTarget && fightPhase === 'player-acting'
-        // Frame lights up when the hovered cell is one of this swarmer's
-        // shove source/destination cells. Uses the displayed (lagged)
-        // intent so it stays in sync with the badge/overlay rather
-        // than the store-immediate intent that updates a frame earlier.
         const shoveCellHovered =
           !dead &&
           hoveredCell !== null &&
@@ -481,10 +357,6 @@ export function EnemyFrame() {
                 </span>
               )}
             </div>
-            {/* Effects row: block badge + status chips share one slot.
-                The block badge is always mounted (.empty when no block) so
-                this row's height is reserved regardless of statuses — adding
-                Burn etc. expands inline without shifting the HP bar down. */}
             <div className="enemy-effects-row">
               <div
                 className={`enemy-block-badge${
@@ -520,13 +392,6 @@ export function EnemyFrame() {
   )
 }
 
-// Badge + viewport-aware tooltip. The tooltip is portalled to body and
-// position is computed in JS so it never clips the viewport edges.
-// Closes immediately on mouseleave — inline keyword sub-tooltips
-// auto-show alongside the parent (see <Keyword> + HoverTooltip's
-// autoShow path), so the player never needs to traverse into the
-// tooltip itself, and both parent + children vanish together when the
-// badge loses hover.
 function IntentBadge({
   intent,
   tick,
@@ -546,18 +411,14 @@ function IntentBadge({
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   useLayoutEffect(() => {
-    // Tooltip is unmounted when !hovered, so we don't need to reset pos.
-    // On next hover useLayoutEffect re-runs and recomputes before paint.
     if (!hovered) return
     const compute = () => {
       const a = anchorRef.current?.getBoundingClientRect()
       const t = tipRef.current?.getBoundingClientRect()
       if (!a || !t) return
       const margin = 8
-      // Prefer above the badge; flip below if there isn't room.
       const wantsBelow = a.top - margin - t.height < margin
       const top = wantsBelow ? a.bottom + margin : a.top - margin - t.height
-      // Center on the anchor horizontally, then clamp inside the viewport.
       let left = a.left + a.width / 2 - t.width / 2
       left = Math.max(
         margin,
@@ -570,8 +431,6 @@ function IntentBadge({
     return () => window.removeEventListener('resize', compute)
   }, [hovered])
 
-  // For ally-target intents, look up the target's name from the enemy list
-  // so the badge shows "❤️ 4 ➜ Brute" rather than a bare number.
   const allyTargetId =
     intent.kind === 'heal-ally' || intent.kind === 'buff-ally' || intent.kind === 'shield-ally'
       ? intent.targetAllyId
@@ -580,17 +439,12 @@ function IntentBadge({
     ? (enemies.find((e) => e.id === allyTargetId)?.name ?? '?')
     : null
 
-  // All per-kind icon/badge/label/tooltip data comes from one registry
-  // call. Adding a new IntentKind lands as a single case in
-  // src/content/intentDisplays.tsx — no parallel branches here.
   const display = intentDisplay(intent)
 
   return (
     <>
       <div
         ref={anchorRef}
-        // key on the wrapping element re-mounts on intent change so the
-        // pop-in animation replays for the freshly telegraphed intent.
         key={`${intent.kind}-${display.number ?? 'x'}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         style={
@@ -618,14 +472,9 @@ function IntentBadge({
             aria-hidden
           >
             {getStatusDef(intent.onHit.status).icon}
-            {/* Rider stacks — surfaces the magnitude of the applied
-                status so the player can read the full threat as a
-                single sentence: "⚔ 3 🔥 2" → "hit for 3, apply 2 Burn".
-                The chip will show the same number once it lands. */}
             <span className="intent-rider-amount">{intent.onHit.stacks}</span>
           </span>
         )}
-        {/* Ally-target: show arrow + target ally name/silhouette */}
         {allyTargetName && (
           <>
             <span className="intent-ally-arrow" aria-hidden>➜</span>
@@ -651,11 +500,6 @@ function IntentBadge({
             <div className="intent-tooltip-body">
               {display.description}
             </div>
-            {/* Damage-math preview (`X − Y block = Z to HP`) was removed
-                — it duplicated info already conveyed by the intent
-                amount + the keyword sub-tooltips, and added visual
-                noise to every hover. Block/damage interactions are
-                covered by the <Keyword id="block"/> sub-tooltip. */}
           </div>,
           document.body,
         )}

@@ -1,10 +1,6 @@
 import type { GameEvent } from '../../types'
 
-// Tiny pub/sub for animation-timed GameEvents. AnimationController fires this
-// as it plays each event; React subscribers (pool pulses, screenshake) and
-// the SFX layer hang off it. This is animation-timed, not logic-timed —
-// subscribers should NOT use it as a source of truth for state (that's
-// the Zustand store).
+// Animation-timed, not logic-timed — do not use as state source of truth.
 type Handler = (event: GameEvent) => void
 
 const handlers = new Set<Handler>()

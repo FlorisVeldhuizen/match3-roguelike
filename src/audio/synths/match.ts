@@ -1,15 +1,10 @@
 import { getCtx, isMuted, out } from '../context'
 import { jitter, makeNoiseBurst } from '../utils'
 
-// Gem-match-clear cue — fires once per cleared cluster. Cluster-size
-// scaling is gentler than damage/heal because clack fires constantly and
-// per-cell loudness boosts add up fast in a cascade.
 function matchIntensity(clusterSize: number): number {
   return 1 + 0.18 * Math.log2(Math.max(1, clusterSize / 3))
 }
 
-// Helper for the twinkle/coin-ping family: staggered sine pings at ratios
-// of a base frequency. Currently only used by synthCoinPing (parked).
 function renderTwinkleSeq(
   c: AudioContext,
   now: number,
@@ -39,10 +34,7 @@ function renderTwinkleSeq(
   }
 }
 
-// Reserved (not bound to any event): coin-pickup ping. Auditioned as a
-// match-clear variant ("Chirp"), validated as "a great sound for a coin",
-// parked here for a future coin / gold / loot cue. Call playCoinPingSfx
-// when that cue is introduced.
+// Parked: coin-pickup ping, not currently bound to any event.
 function synthCoinPing(amount: number): void {
   const c = getCtx()
   if (!c) return
@@ -66,9 +58,6 @@ export function playCoinPingSfx(amount = 1): void {
   synthCoinPing(amount)
 }
 
-// Locked-in match-clear cue (auditioned vs twinkle/glint/whoosh/chirp).
-// Filtered noise with an upward sweep and a swell envelope that peaks at
-// 50% of its 135ms — reads as a deliberate "draw-in" before resolving.
 function synthMatchSwell(clusterSize: number): void {
   const c = getCtx()
   if (!c) return

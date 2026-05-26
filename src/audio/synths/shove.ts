@@ -1,21 +1,13 @@
 import { getCtx, isMuted, out } from '../context'
 import { jitter, makeNoiseBurst } from '../utils'
 
-// Swarmer cluster-shove resolve — a quick whoosh (the gems flying) +
-// a soft thud (the gems landing) capped at ~350ms total. Reads as
-// "stuff just got rearranged" without the heaviness of a column
-// smash. Scales subtly with move count so a 3-swarmer cluster has a
-// bigger sweep than a single-swarmer one.
 function synthShove(moveCount: number): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
   const I = Math.min(1.4, 0.6 + moveCount * 0.18)
-  // Total shape: whoosh peaks around 60ms, thud at ~180ms, decay tail.
   const dur = 0.34
 
-  // Whoosh: bandpass noise sweeping 600 → 250 Hz (downward, like
-  // something being thrown across the board to land somewhere lower).
   const noise = makeNoiseBurst(c)
   const filter = c.createBiquadFilter()
   filter.type = 'bandpass'
@@ -30,7 +22,6 @@ function synthShove(moveCount: number): void {
   noise.start(now)
   noise.stop(now + dur + 0.02)
 
-  // Thud: short sine bump at 110 Hz on a fast envelope.
   const t = now + 0.16
   const osc = c.createOscillator()
   osc.type = 'sine'

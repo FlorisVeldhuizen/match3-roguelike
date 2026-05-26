@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 
-// Tiny pop-on-change primitive used by the HUD value displays (HP, mana,
-// charge, block). Each value gets its own `usePopOnChange` so a yellow
-// mana match doesn't pulse the red chip, etc. The returned PopState's
-// `key` is used as a React key on the number span so the popup
-// re-mounts and replays its keyframe animation on each change.
 export type PopState = { key: number; dir: -1 | 0 | 1 }
 
 export function usePopOnChange(value: number): PopState {

@@ -1,10 +1,5 @@
 import { useEffect, useRef } from 'react'
 
-// Fullscreen background shader: slow domain-warped FBM noise tinted with the
-// fantasy palette (deep ink-violet → arcane purple → ember whisper → gold).
-// Drifts on a ~0.04 Hz time multiplier so it reads as "mist behind the altar"
-// rather than active animation that fights the board for attention.
-
 const VERT_SRC = `
 attribute vec2 a_pos;
 void main() {
@@ -52,7 +47,6 @@ void main() {
 
   float t = u_time * 0.04;
 
-  // Two-step domain warp gives smoky filaments instead of grainy noise.
   vec2 q = vec2(
     fbm(p + vec2(0.0, 0.0) + t),
     fbm(p + vec2(5.2, 1.3) - t * 0.8)
@@ -63,7 +57,6 @@ void main() {
   );
   float f = fbm(p + 3.5 * r);
 
-  // Palette: ink-violet → arcane purple → ember → faint gold.
   vec3 ink     = vec3(0.040, 0.025, 0.060);
   vec3 violet  = vec3(0.110, 0.045, 0.150);
   vec3 ember   = vec3(0.380, 0.110, 0.090);
@@ -73,16 +66,13 @@ void main() {
   color = mix(color, ember, smoothstep(0.45, 0.80, f) * length(q) * 0.55);
   color = mix(color, gold,  smoothstep(0.70, 0.92, f) * 0.22);
 
-  // Faint sigil glints: rare high-frequency hot spots.
   float spark = smoothstep(0.82, 0.95, f * length(r));
   color += gold * spark * 0.18;
 
-  // Heavy radial vignette keeps the edges quiet; the board sits center-stage.
   float d = distance(uv, vec2(0.5));
   float vig = smoothstep(1.05, 0.25, d);
   color *= 0.45 + 0.55 * vig;
 
-  // Global dim so it never competes with the HUD.
   color *= 0.78;
 
   gl_FragColor = vec4(color, 1.0);
@@ -145,8 +135,6 @@ export function ArcaneBackground() {
     const uTime = gl.getUniformLocation(prog, 'u_time')
     const uRes = gl.getUniformLocation(prog, 'u_resolution')
 
-    // Internal render is half-res so the shader stays cheap; CSS upscales it
-    // and the soft noise hides the resample.
     const RENDER_SCALE = 0.5
     const resize = () => {
       const w = Math.max(1, Math.floor(window.innerWidth * RENDER_SCALE))
@@ -163,9 +151,6 @@ export function ArcaneBackground() {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const start = performance.now()
     let raf = 0
-    // Drift is 0.04 Hz — well under Nyquist for 30Hz, so we draw at 30Hz
-    // and halve the FBM workload. rAF still runs at vsync; we just skip
-    // GL on alternate frames.
     const FRAME_MIN_MS = 1000 / 30
     let lastDraw = 0
 
@@ -180,7 +165,6 @@ export function ArcaneBackground() {
     }
 
     if (reducedMotion) {
-      // One static frame so the background still renders.
       draw(start)
     } else {
       raf = requestAnimationFrame(draw)

@@ -1,19 +1,12 @@
 import { getCtx, isMuted, out } from '../context'
 import { jitter, makeNoiseBurst } from '../utils'
 
-// Brute column-smash impact — replaces the attack-sfx placeholder
-// previously used. Heavier than an attack: low-frequency thud + a
-// short rubble crackle layered on top so the cue reads as "big
-// physical event" without becoming a generic explosion. Pairs with
-// the magnitude-1.1 screen-shake fired alongside.
 function synthSmash(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
   const dur = 0.48
 
-  // Body: low sine dropping 110 → 55 Hz. Carries the weight of the
-  // impact; very fast attack, longish decay.
   const body = c.createOscillator()
   body.type = 'sine'
   body.frequency.setValueAtTime(110 * jitter(0.08), now)
@@ -26,8 +19,6 @@ function synthSmash(): void {
   body.start(now)
   body.stop(now + dur + 0.02)
 
-  // Slight high-mid sub-body for "crack" character — square at 220 Hz,
-  // very brief, masked by the rubble layer below.
   const crack = c.createOscillator()
   crack.type = 'square'
   crack.frequency.setValueAtTime(220 * jitter(0.1), now)
@@ -40,8 +31,6 @@ function synthSmash(): void {
   crack.start(now)
   crack.stop(now + 0.13)
 
-  // Rubble crackle: highpass noise burst for the falling-debris layer
-  // on top of the body. 300ms tail so it lingers past the thud.
   const noise = makeNoiseBurst(c)
   const filter = c.createBiquadFilter()
   filter.type = 'highpass'

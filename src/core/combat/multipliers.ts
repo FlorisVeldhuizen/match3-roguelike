@@ -1,7 +1,3 @@
-// Cascade-level scoring multipliers. Default is a single identity entry so a
-// pristine engine never multiplies. content/cascade.ts registers the real
-// table at bootstrap (see architecture §1: "cascade multiplier table is
-// content, not a constant" — a future rare relic can swap it).
 let multipliers: readonly number[] = [1]
 
 export function setCascadeMultipliers(table: readonly number[]): void {

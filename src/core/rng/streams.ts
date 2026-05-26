@@ -1,7 +1,6 @@
 import type { RngState } from './mulberry32'
 
-// cyrb53: small, fast, well-distributed 53-bit hash. ~10 lines, no dependency.
-// Used to derive per-stream seeds from `root + ':' + streamName`.
+// cyrb53: 53-bit hash for deriving per-stream seeds.
 function cyrb53(str: string, seed = 0): number {
   let h1 = 0xdeadbeef ^ seed
   let h2 = 0x41c6ce57 ^ seed

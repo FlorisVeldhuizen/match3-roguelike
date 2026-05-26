@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
 import { subscribeGameEvents } from '../../core/events/emitter'
 
-// Off-screen aria-live regions. Two channels so urgent events (damage,
-// victory) don't queue behind ambient ones. Per-match damage-dealt is
-// skipped to avoid spamming during cascades.
-
-// Identical-string updates don't trigger re-announcement in most ATs;
-// toggling a trailing space gives every emit a fresh diff.
+// Trailing-space toggle: identical strings don't trigger re-announcement in most ATs
 const bump = (prev: string, text: string): string =>
   prev === text ? `${text} ` : text
 

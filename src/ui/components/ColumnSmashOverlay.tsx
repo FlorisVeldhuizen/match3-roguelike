@@ -5,25 +5,6 @@ import { useFightReset } from '../hooks/useFightReset'
 import { BOARD_HEIGHT } from '../../types'
 import { CellAnchor } from './CellAnchor'
 
-// Threat visualization for Brute's column-smash telegraph. Event-driven
-// (not store-derived) so the overlay's visibility tracks the animator's
-// playback timeline rather than the synchronous store commit:
-//
-//   - column-smash-placed:    add (owner, column) — the threat now
-//                             covers the entire column until fire.
-//   - column-smash-resolved:  drop the owner's threat in lockstep with
-//                             the smash visual (resolved is queued
-//                             immediately before gems-cleared in the
-//                             animator).
-//   - enemy-killed:           drop the owner's threat — Brute died
-//                             between telegraph and fire.
-//   - fight reset:            seed from store (current enemies whose
-//                             intent is column-smash).
-//
-// Threats are column-bound, not gem-bound: matching gems inside the
-// column or swapping new ones in does not reduce the threat — the
-// entire column gets smashed at fire time.
-
 const keyOf = (owner: string, column: number) => `${owner}|${column}`
 
 export function ColumnSmashOverlay() {
@@ -31,10 +12,6 @@ export function ColumnSmashOverlay() {
     new Map(),
   )
 
-  // Seed from the store on first mount and on every fight reset. Until
-  // the player's first interaction there are no events to drive the
-  // overlay, so without this seed a saved game with an active smash
-  // telegraph would render blank.
   const seedFromStore = useCallback(() => {
     const enemies = useGameStore.getState().fight.enemies
     const next = new Map<string, { owner: string; column: number }>()
@@ -71,9 +48,6 @@ export function ColumnSmashOverlay() {
           return next
         })
       } else if (event.kind === 'column-smash-resolved') {
-        // Smash is firing NOW — drop the threat in lockstep with the
-        // gems-cleared burst (column-smash-resolved is queued
-        // immediately before gems-cleared in the animator).
         const ownerId = event.enemyId
         setThreats((prev) => {
           let changed = false
@@ -87,7 +61,6 @@ export function ColumnSmashOverlay() {
           return changed ? next : prev
         })
       } else if (event.kind === 'enemy-killed') {
-        // Brute died between telegraph and fire — drop its threat.
         const ownerId = event.enemyId
         setThreats((prev) => {
           let changed = false

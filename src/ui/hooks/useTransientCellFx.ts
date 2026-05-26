@@ -1,17 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
 
-// Registry of short-lived, cell-anchored visual effects (bursts, fizzles,
-// shatters, …). Each item carries a unique id, a logical cell, and is
-// auto-pruned `durationMs` after spawn so the consumer doesn't have to
-// hand-manage setTimeout cleanup.
-//
-// Generic over a per-item meta payload so a consumer can, e.g., remember
-// what color spark to render. When no meta is needed, leave the param
-// unset (defaults to undefined) and just read x/y.
-//
-// Pattern matches the burning-overlay's bursts + fizzles registries and
-// is intended as the foundation for any future cell-anchored FX.
-
 export type TransientCellFx<TMeta = undefined> = {
   id: number
   x: number

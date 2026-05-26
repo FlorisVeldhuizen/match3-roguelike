@@ -1,20 +1,11 @@
 import { getCtx, isMuted, out } from '../context'
 import { jitter, makeNoiseBurst } from '../utils'
 
-// Caster hex apply — the moment the curse lands on every gem of the
-// targeted colour. Sonic identity: high-band filtered noise sweep
-// (arcane shimmer) + descending minor-3rd triad on a detuned sine
-// voice (the curse "settling in"). Brief — ~400ms — so it doesn't
-// crowd the per-match cues that follow once the player engages with
-// the hexed colour.
 function synthHexApply(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
 
-  // Shimmer layer: bandpass noise sweeping down 1800→900 Hz. The
-  // descending sweep reads as "magic settling" rather than "magic
-  // rising" (rising would feel like the player triggering something).
   const dur = 0.42 * jitter(0.1)
   const noise = makeNoiseBurst(c)
   const filter = c.createBiquadFilter()
@@ -30,10 +21,6 @@ function synthHexApply(): void {
   noise.start(now)
   noise.stop(now + dur + 0.02)
 
-  // Chord layer: triad in a minor flavor (A4, C5, E5 → approx 440, 523,
-  // 659). All three notes hit together (no arpeggio) — a single
-  // "the hex is on" beat, slightly detuned per call so chained hex
-  // events on multi-caster boards don't sample-loop.
   const detune = jitter(0.04)
   const FREQS = [440, 523, 659]
   const decay = 0.32
@@ -42,7 +29,6 @@ function synthHexApply(): void {
     osc.type = 'sine'
     const startF = f * detune
     osc.frequency.setValueAtTime(startF, now)
-    // Slight downward bend at the tail — sustains the "settling" arc.
     osc.frequency.exponentialRampToValueAtTime(startF * 0.96, now + decay)
     const g = c.createGain()
     g.gain.setValueAtTime(0.0001, now)
@@ -54,11 +40,6 @@ function synthHexApply(): void {
   }
 }
 
-// Brief zap when the player matches a hexed gem and Weak applies.
-// One short detuned blip + softer noise tick — should read as
-// "punishment, you walked into the curse" rather than a celebration.
-// Scales subtly with stack count so a 5-line of hexed gems gets a
-// bigger zap than a 3-match.
 function synthHexTrigger(stacks: number): void {
   const c = getCtx()
   if (!c) return
@@ -66,7 +47,6 @@ function synthHexTrigger(stacks: number): void {
   const I = Math.min(1.4, 0.6 + stacks * 0.12)
   const dur = 0.22
 
-  // Detuned descending sine — minor 3rd from E5 → C5.
   const detune = jitter(0.04)
   const FREQS = [659, 523]
   const gap = 0.05
@@ -87,7 +67,6 @@ function synthHexTrigger(stacks: number): void {
     osc.stop(t + 0.2)
   }
 
-  // Soft noise tick under the zap to give it physical body.
   const noise = makeNoiseBurst(c)
   const filter = c.createBiquadFilter()
   filter.type = 'highpass'
@@ -101,9 +80,6 @@ function synthHexTrigger(stacks: number): void {
   noise.stop(now + dur + 0.02)
 }
 
-// Brief upward shimmer when a hex expires (turnsLeft reached 0).
-// Reads as "curse breaking" — short, bright, optimistic without
-// being celebratory (the player just survived a debuff window).
 function synthHexExpire(): void {
   const c = getCtx()
   if (!c) return

@@ -15,7 +15,6 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
       enemyRoll.fight.player.maxHp,
       current.fight.player.hp,
     )
-    // Mana resets per fight — see nodes.ts for the rationale.
     const boardRoll = generateBoard(current.rng.board)
     runOnRoundStarted(
       { fightId: 0 },
@@ -30,9 +29,6 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
     set((s) => {
       s.fight = enemyRoll.fight
       s.rng.enemy = enemyRoll.rng
-      // freshBoardState resets every board-affecting field together —
-      // cells (wipes gem-bound flags), selected, petrifiedRows, and
-      // any future addition. Mirrors enterNode's reset.
       s.board = freshBoardState(boardRoll.board)
       s.rng.board = boardRoll.rng
       s.fightCounter += 1

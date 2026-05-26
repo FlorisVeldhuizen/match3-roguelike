@@ -3,13 +3,6 @@ import { listSpells } from '../combat/spellRegistry'
 import { listRelics } from '../relics/registry'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
-// Phase I shop pricing. Hand-tuned to bracket the gold-drop curve:
-//   - 4-fight run with avg 14g/fight ≈ 56g pre-shop (col-3 fight at col-4
-//     shop) → buys exactly one common relic or both small heals or one
-//     spell. The player decides what to spend the first wallet on.
-//   - Elite run ≈ 95g+ pre-shop → one uncommon relic, OR a small heal +
-//     common relic, OR a spell + small heal. Real tension between
-//     options instead of "pick the cheapest".
 const RELIC_COSTS: Record<'common' | 'uncommon' | 'rare', number> = {
   common: 60,
   uncommon: 100,
@@ -22,11 +15,6 @@ const HEAL_BIG_COST = 50
 const HEAL_BIG_AMOUNT = 35
 const RELIC_REMOVE_COST = 75
 
-// Roll one shop's contents. Deterministic from rng.loot — caller threads
-// the returned rng back into the store. 3 relics (weighted to common,
-// promote up if pool exhausted), 2 unowned non-starter spells, 2 heals
-// (both always present), 1 relic-remove (always present, gated by
-// "player owns at least one relic" at point-of-purchase).
 export function rollShopOffer(args: {
   ownedRelics: readonly RelicInstance[]
   ownedSpellIds: readonly SpellId[]
@@ -36,9 +24,7 @@ export function rollShopOffer(args: {
   const ownedRelicIds = new Set(args.ownedRelics.map((r) => r.id))
   const ownedSpellSet = new Set(args.ownedSpellIds)
 
-  // Relics: 70/25/5 common/uncommon/rare split. Each pick re-rolls
-  // against the chosen rarity's pool with promote-up if exhausted —
-  // same ladder rollReward already uses.
+  // 70/25/5 common/uncommon/rare rarity split.
   const relicPicks: ShopOffer['relics'] = []
   const rarityWeights: ('common' | 'uncommon' | 'rare')[] = [
     'common',
@@ -85,7 +71,6 @@ export function rollShopOffer(args: {
     }
   }
 
-  // Spells: 2 unowned non-starter spells, flat price.
   const spellPicks: ShopOffer['spells'] = []
   const spellPool = listSpells()
     .filter((s) => s.starter !== true && !ownedSpellSet.has(s.id))
@@ -114,7 +99,6 @@ export function rollShopOffer(args: {
   }
 }
 
-// Exported for tests / UI so prices stay declared once.
 export const SHOP_PRICES = {
   relic: RELIC_COSTS,
   spell: SPELL_COST,

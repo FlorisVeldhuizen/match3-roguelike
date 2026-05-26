@@ -6,15 +6,6 @@ import {
 } from '../core/combat/spellRegistry'
 import { Keyword } from '../ui/components/Keyword'
 
-// Knight kit (H4a redesign). Costs from 02-scope §Difficulty curve.
-// Effects from 01-design §Abilities. Numeric resolution:
-//   - core/combat/turn.ts: Bulwark/Reinforce/Volley at EOP
-//   - core/combat/enemyTurn.ts: Riposte counter on incoming attack
-//   - core/combat/spellResolvers.ts: immediate-effect spells (Ignite,
-//     Regenerate, Purify, Brittle, Cinder Lash, Focus)
-//   - core/state/store.ts: Skewer/Surge flag arming + cascade-walker
-//     consumption
-
 const bulwark: SpellDef = {
   id: 'bulwark',
   name: 'Bulwark',
@@ -59,11 +50,6 @@ const reinforce: SpellDef = {
   starter: true,
 }
 
-// H4a player-distributed AOE. At cast time, the player picks three
-// enemy targets (one per hit, can repeat) in a modal. While Volley is
-// queued, red matches stop dealing damage and pool up; at EOP the
-// pool splits into 3 chunks (floor(pool/3); remainder lands on the
-// last chunk) and each chunk hits its assigned target.
 const volley: SpellDef = {
   id: 'volley',
   name: 'Volley',
@@ -77,10 +63,6 @@ const volley: SpellDef = {
     "When your turn ends, the red pool splits into three strikes, one per chosen target.",
 }
 
-// H4a immediate mana conversion. Player picks a source colour (with
-// ≥1 mana) and a target colour (with cap headroom); spell moves up to
-// 3 mana from source → target. Yellow cost is explicit — Focus can't
-// fund itself via the wild-substitution rule.
 const focus: SpellDef = {
   id: 'focus',
   name: 'Focus',
@@ -93,11 +75,6 @@ const focus: SpellDef = {
   pendingDescription: '',
 }
 
-// --- H4a redesign — replacing Bash / Steel Heart / Cleanse ---
-
-// Ignite: weaponize the burn track. Apply 3 Burn to the current target.
-// Threads with Smolder and future burn-relics. Auto-targets the
-// selected enemy (consistent with red-match damage routing).
 const ignite: SpellDef = {
   id: 'ignite',
   name: 'Ignite',
@@ -114,10 +91,6 @@ const ignite: SpellDef = {
   starter: true,
 }
 
-// Regenerate: player-side mirror of Burn. Apply 3 Regen to self →
-// heals 3, 2, 1 at the start of your next three turns (6 HP total,
-// front-loaded). Spreading the heal creates a tempo-investment decision
-// vs. an instant green-match heal.
 const regenerate: SpellDef = {
   id: 'regenerate',
   name: 'Regenerate',
@@ -133,9 +106,6 @@ const regenerate: SpellDef = {
   pendingDescription: '',
 }
 
-// Purify: remove a status entirely (all stacks). Burn-specific kicker:
-// also heal 3 HP. Encourages the "tank the burn, then cleanse it for
-// HP" line. Picker UI shows player's current statuses.
 const purify: SpellDef = {
   id: 'purify',
   name: 'Purify',
@@ -152,11 +122,6 @@ const purify: SpellDef = {
   pendingDescription: '',
 }
 
-// --- H4a redesign — new spells ---
-
-// Skewer: one-shot setup. Your next match's red damage is doubled.
-// Pending so it shows in the strip until consumed. Cleared by the
-// match walker when the next match fires (not at EOP).
 const skewer: SpellDef = {
   id: 'skewer',
   name: 'Skewer',
@@ -169,9 +134,6 @@ const skewer: SpellDef = {
   pendingDescription: 'Your next red match deals double damage.',
 }
 
-// Brittle: status-setup play. Apply 2 Vulnerable to the current target.
-// Pairs with big red matches the same turn — Vulnerable composes
-// through the existing damage pipeline. Auto-targets selected enemy.
 const brittle: SpellDef = {
   id: 'brittle',
   name: 'Brittle',
@@ -187,10 +149,6 @@ const brittle: SpellDef = {
   pendingDescription: '',
 }
 
-// Surge: cascade play. Your next match counts as cascade level +2.
-// Activates Cascade Crystal (and future cascade-relics) on a match
-// that would normally be level 0. Pending so it shows in the strip;
-// consumed by the match walker.
 const surge: SpellDef = {
   id: 'surge',
   name: 'Surge',
@@ -204,8 +162,6 @@ const surge: SpellDef = {
     'Your next match counts as cascade level +2 (triggers cascade relics).',
 }
 
-// Cinder Lash: hybrid offence + sustain. Apply 2 Burn to target +
-// heal 2 self. First multi-cost spell — costs 2 red AND 1 green.
 const cinderLash: SpellDef = {
   id: 'cinder-lash',
   name: 'Cinder Lash',
@@ -221,15 +177,6 @@ const cinderLash: SpellDef = {
   pendingDescription: '',
 }
 
-// H2b.5: Shatter Color — first player-side board verb. Picker spell
-// (player selects target color at cast time). Clears every gem of the
-// chosen colour and applies the standard per-colour effect (red →
-// damage, blue → block pool, green → heal, yellow → mana, purple →
-// skill charge), scaled by cell count. Heavy yellow cost forces the
-// player to bank wild mana before cashing in. Routes through the
-// shared cascade walker, so relic onMatch / onCascade hooks (Sharp
-// Edge, Iron Buckler, Cascade Crystal, …) fire on the cleared cells
-// and any gravity-induced follow-up matches chain naturally.
 const shatter: SpellDef = {
   id: 'shatter',
   name: 'Shatter',

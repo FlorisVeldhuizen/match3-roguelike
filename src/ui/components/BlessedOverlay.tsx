@@ -6,28 +6,6 @@ import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import { CellAnchor } from './CellAnchor'
 
-// Animation-timed overlay for the `blessed` cell flag (match-5 reward).
-// Mirrors BurningOverlay's pattern but simpler — blessed is a 1-bit flag
-// (present or absent), no duration / no fizzle. See
-// PLANNING/01-design.md §Blessed cells.
-//
-// Lifecycle:
-//   - tile-blessed-placed:      add an entry at each listed cell.
-//   - blessed-match-triggered:  the listed cells just cleared, so drop them
-//                               from the overlay (the gold rim vanishes with
-//                               the matched gem).
-//   - board-wipe (shuffle/sweep): clear all (handled via useBoardWipe).
-//   - fight reset:              reseed from store (new fight = fresh board).
-//
-// Position tracking lives in useAnimatedCellPositions so the rim slides in
-// lockstep with the gem sprite underneath during swap / gravity.
-
-// Per-sparkle randomized look. Position is a % within the cell (left/top
-// of the sparkle's bounding box), delay and duration vary so adjacent
-// blessed cells never tick in sync. Each iteration of the drift
-// animation re-rolls left/top via `animationiteration` (see
-// BlessedSpark below), so a single gem doesn't keep showing sparkles at
-// the same three spots every cycle.
 type SparkConfig = {
   left: number
   top: number
@@ -36,10 +14,6 @@ type SparkConfig = {
 }
 const SPARKS_PER_CELL = 3
 
-// Position bounds tuned for the gem's silhouette: ~15% inset from cell
-// edges (so sparkles don't ride into neighbour cells), with a Y bias
-// toward the lower half so the upward drift reads as "energy rising
-// from the gem" rather than "ambient dust above it".
 function randomSparkPos(): { left: number; top: number } {
   return {
     left: 15 + Math.random() * 70,
@@ -52,20 +26,13 @@ function randomSparks(): SparkConfig[] {
     const p = randomSparkPos()
     out.push({
       ...p,
-      // Stagger across a window slightly longer than the per-spark
-      // duration so they're never all peaking together.
-      delay: -Math.random() * 2.6,
+        delay: -Math.random() * 2.6,
       duration: 2.0 + Math.random() * 0.9,
     })
   }
   return out
 }
 
-// Single sparkle. Listens for `animationiteration` on its own element to
-// re-roll position via direct DOM mutation between loops — purely
-// cosmetic, no React state, no re-render. Position changes happen at
-// opacity:0 (the keyframe's 0% state), so the player never sees a sparkle
-// teleport mid-flight.
 function BlessedSpark({ initial }: { initial: SparkConfig }) {
   const ref = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -102,8 +69,6 @@ export function BlessedOverlay() {
 
   useLayoutEffect(() => {
     setSparks(seedBlessedFromStore(positions.set, idCounterRef))
-    // Intentionally one-shot. Fight resets are handled by the subscription
-    // below; positions is a stable ref-API object so it doesn't re-trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -124,11 +89,6 @@ export function BlessedOverlay() {
   useEffect(() => {
     return subscribeGameEvents((event) => {
       if (event.kind === 'tile-blessed-placed') {
-        // tile-blessed-placed fires AFTER gems-spawned in the cascade
-        // event stream, so the cells are already at their final
-        // post-cascade positions when this beat plays. No trail-arrival
-        // delay needed (unlike tile-burn-placed, which has to wait for
-        // ember particles to fly from the enemy frame to the cells).
         const placed: { id: string; sparks: SparkConfig[] }[] = []
         for (const c of event.cells) {
           const id = `bless-${++idCounterRef.current}`
@@ -142,9 +102,6 @@ export function BlessedOverlay() {
           return next
         })
       } else if (event.kind === 'blessed-match-triggered') {
-        // Gems carrying the flag just got matched — drop them from the
-        // overlay so the gold rim vanishes with the gem (rather than
-        // hovering over a now-cleared cell).
         const removed: string[] = []
         for (const c of event.cells) {
           const id = positions.findIdAt(c.x, c.y)

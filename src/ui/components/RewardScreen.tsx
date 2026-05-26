@@ -5,15 +5,6 @@ import { tryGetRelic } from '../../core/relics/registry'
 import { getSpell } from '../../core/combat/spellRegistry'
 import type { SpellId } from '../../types'
 
-// Post-fight 3-pick modal. Gated on the `gameplay-settled` event
-// (emitted by BoardScene after the AC drains + cushion) so it adapts
-// to cascade length — long chains play out fully, short kills reveal
-// promptly. On click, dispatches acquireRelic or acquireSpellReward and
-// the store transitions to the map.
-//
-// Phase I: rewards are discriminated relic / spell offers. Renders the
-// right row variant based on pendingReward.kind. Gold credit happens
-// inside both acquire actions (and on skip).
 export function RewardScreen() {
   const pendingReward = useGameStore((s) => s.pendingReward)
   const runPhase = useGameStore((s) => s.runPhase)
@@ -30,8 +21,6 @@ export function RewardScreen() {
   }, [])
 
   if (!reveal) return null
-  // Boss-fight victory routes to VictoryOverlay instead; this modal is
-  // only valid for the post-fight 'reward' runPhase.
   if (runPhase !== 'reward') return null
   if (pendingReward == null) return null
 
@@ -63,7 +52,6 @@ export function RewardScreen() {
     )
   }
 
-  // Relic variant — unchanged from H1 except for the gold-on-skip label.
   const ids = pendingReward.offeredRelicIds
   const handleRelicPick = (id: string) => {
     useGameStore.getState().acquireRelic(id)
@@ -110,8 +98,6 @@ export function RewardScreen() {
 }
 
 function SpellRewardRow({ id }: { id: SpellId }) {
-  // getSpell throws on unknown id; that should never happen because the
-  // roller only offers registered ids. If it does, skip rendering.
   let def
   try {
     def = getSpell(id)

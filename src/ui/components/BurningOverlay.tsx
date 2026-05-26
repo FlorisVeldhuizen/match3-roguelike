@@ -10,32 +10,9 @@ import { useHoveredCellKey } from '../hooks/useHoveredCellKey'
 import { CellAnchor } from './CellAnchor'
 import type { Pos } from '../../types'
 
-// Animation-timed overlay. We deliberately do NOT mirror s.board.cells:
-// that state commits at swap time (before the cascade animates), which
-// would yank the flame off-screen before the gem itself even clears.
-// Instead we drive the displayed flames off animation-timed events:
-//   - tile-burn-placed:   add flames at the listed cells (Smolder's verb).
-//   - tile-burn-triggered: spawn a burst at the cleared cells, then drop
-//                          them from the displayed set after the burst.
-//   - cell-flag-ticked / 'burning': decrement the visible countdown so
-//     the number on each flame matches the game state.
-// Fight resets reseed from the store; board-wipe events (shuffle/sweep)
-// just clear everything.
-//
-// Position tracking, transient FX, hover, and board-wipe lifecycle all
-// live in shared primitives (useAnimatedCellPositions, useTransientCellFx,
-// useHoveredCellKey, useBoardWipe, useFightReset) so future cell-anchored
-// overlays (petrify, freeze, hex, …) plug into the same foundation.
-
 type FlameMeta = { remaining: number }
 
 const BURST_MS = 720
-// Soft smoke puff for the "burn expired" beat (countdown ran out without
-// being triggered). Longer than BURST_MS so the player has time to
-// register a happy event — at 650ms it was too quick to catch, the
-// puff was gone before the eye landed on it. Softer in shape than
-// BURST_MS so it still reads as "passed without firing" rather than
-// "exploded" despite being longer.
 const FIZZLE_MS = 1200
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
@@ -43,10 +20,6 @@ const keyOf = (p: Pos) => `${p.x},${p.y}`
 export function BurningOverlay() {
   const positions = useAnimatedCellPositions()
   const [meta, setMeta] = useState<Map<string, FlameMeta>>(new Map())
-  // Mirror of meta for read-only access inside event handlers without
-  // forcing a resubscribe when meta changes. The cell-flag-ticked
-  // handler needs the live remaining count to decide whether a flame
-  // expires this tick.
   const metaRef = useRef(meta)
   useEffect(() => {
     metaRef.current = meta
@@ -56,12 +29,8 @@ export function BurningOverlay() {
   const hoveredKey = useHoveredCellKey()
   const flameIdRef = useRef(0)
 
-  // Initial seed from store on mount. useLayoutEffect so positions +
-  // meta land before the first paint (no empty-flame flash if a fight
-  // begins with already-burning tiles, e.g. on a save reload).
   useLayoutEffect(() => {
     setMeta(seedMetaFromStore(positions.set, flameIdRef))
-    // Intentionally one-shot; fight resets handle their own reseed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -86,20 +55,6 @@ export function BurningOverlay() {
       if (event.kind === 'tile-burn-placed') {
         const cells = event.cells
         const duration = event.duration
-        // Delay flame appearance to the trail-arrival beat — the
-        // AnimationController spawns ember particles from the enemy
-        // to each cell, and the flame should "ignite" when those
-        // particles land, not the instant the event fires.
-        //
-        // Note: positions.set / flameIdRef mutations happen OUTSIDE the
-        // setMeta updater. React Strict Mode invokes state updaters
-        // twice in dev; if we did the registry work inside the updater,
-        // we'd allocate two ids and leak a ghost into the positions map.
-        //
-        // The fightCounter guard prevents a stale timeout from leaking
-        // flames into a fresh fight if the fight ends within 700ms of
-        // the placement (e.g. killing-blow swap while ember trails are
-        // still in flight).
         const scheduledFight = useGameStore.getState().fightCounter
         window.setTimeout(() => {
           if (useGameStore.getState().fightCounter !== scheduledFight) return
@@ -117,11 +72,6 @@ export function BurningOverlay() {
           })
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'tile-burn-triggered') {
-        // Spawn a burst at each cell, then strip those flames so they
-        // resolve visually rather than vanishing on store commit.
-        // tile-burn-triggered fires before gems-fell within the cascade
-        // step, so the cells here match the flames' current logical
-        // positions.
         bursts.spawn(event.cells.map((c) => ({ x: c.x, y: c.y })))
         const removedIds: string[] = []
         for (const c of event.cells) {
@@ -138,9 +88,6 @@ export function BurningOverlay() {
           })
         }
       } else if (event.kind === 'cell-flag-ticked' && event.flag === 'burning') {
-        // End-of-player-phase tick reduces remaining duration by 1.
-        // Resolve ids and decide expirations up-front so the setMeta
-        // updater stays pure (Strict Mode double-invokes updaters).
         type Tick = { id: string; pos: Pos; remaining: number | 'expire' }
         const ticks: Tick[] = []
         const m = metaRef.current
@@ -161,9 +108,6 @@ export function BurningOverlay() {
           }
         }
         if (expired.length > 0) {
-          // Smoke puff at the cell the flame just vacated. Position is
-          // captured from the event (pre-expiry logical cell), which is
-          // where the player last saw the flame.
           fizzles.spawn(expired.map((p) => ({ x: p.x, y: p.y })))
         }
         setMeta((prev) => {
@@ -183,11 +127,6 @@ export function BurningOverlay() {
       {Array.from(positions.positions.entries()).map(([id, p]) => {
         const m = meta.get(id)
         if (!m) return null
-        // Flame shrinks as duration approaches 0 — visual proxy for
-        // "how much longer this burns". On the final turn we hold the
-        // size at 0.85 (well above the small-end of 0.55) and the
-        // .is-fizzling class layers an urgent opacity flicker on top
-        // so the player gets a clear "about to wink out" tell.
         const fizzling = m.remaining <= 1
         const scale = fizzling ? 0.85 : Math.min(1, 0.55 + 0.225 * m.remaining)
         const hovered = hoveredKey === keyOf({ x: p.x, y: p.y })
@@ -237,16 +176,6 @@ export function BurningOverlay() {
   )
 }
 
-// Palette-matched SVG flame. Replaces the 🔥 emoji used previously —
-// the emoji fidelity didn't sit alongside the Pixi particle palette
-// (FLAME_PALETTE / FLAME_CORE_HEX) used everywhere else for fire FX.
-// Hex stops match those particle colors: deep red → bright ember →
-// hot orange → amber → molten core. A separate inner-core gradient
-// makes the base of the flame glow brighter, mimicking real flame
-// physics (hottest at the bottom near the fuel). preserveAspectRatio
-// 'xMidYMax' anchors the flame's foot to the middle-bottom of its box
-// so transform:scale keeps the flame "standing on the gem" rather
-// than centering and floating mid-cell.
 function FlameSvg() {
   return (
     <svg
@@ -270,9 +199,6 @@ function FlameSvg() {
           <stop offset="100%" stopColor="#ffc15c" stopOpacity="0" />
         </radialGradient>
       </defs>
-      {/* Teardrop flame body — pointed tip with a curled-back top to
-          give it motion, broad rounded base for the "sitting on the
-          gem" silhouette. */}
       <path
         d="M12 1.5
            C 10 7, 6.5 10, 5 16
@@ -282,16 +208,11 @@ function FlameSvg() {
            C 13.2 2.6, 12.6 1.7, 12 1.5 Z"
         fill="url(#flame-body)"
       />
-      {/* Inner core: brighter bottom glow. Eccentric ellipse rather
-          than circle so the molten heart reads as fire shape. */}
       <ellipse cx="12" cy="22" rx="4.5" ry="6" fill="url(#flame-core)" />
     </svg>
   )
 }
 
-// Diamond-shaped ember spark — replaces the ✦ unicode char so the
-// sparks render consistently across platforms (some fonts substitute
-// ✦ with a less-fiery glyph) and pick up our palette directly.
 function SparkSvg() {
   return (
     <svg
@@ -308,7 +229,6 @@ function SparkSvg() {
           <stop offset="100%" stopColor="#ff9034" />
         </radialGradient>
       </defs>
-      {/* Four-point star (longer vertical axis). */}
       <path
         d="M6 0 L7.2 4.8 L12 6 L7.2 7.2 L6 12 L4.8 7.2 L0 6 L4.8 4.8 Z"
         fill="url(#spark-body)"
@@ -317,11 +237,6 @@ function SparkSvg() {
   )
 }
 
-// Smoke wisp — replaces the 💨 emoji used for the fizzle puff. The
-// emoji was horizontal (wind-style) and got rotated -90° via CSS to
-// point up; here it's natively vertical so the CSS keyframe doesn't
-// need the rotation workaround. Cool grey-blue to read as "fire is
-// out" rather than warm ember tones.
 function SmokeSvg() {
   return (
     <svg
@@ -338,8 +253,6 @@ function SmokeSvg() {
           <stop offset="100%" stopColor="#776e63" stopOpacity="0" />
         </radialGradient>
       </defs>
-      {/* Three soft puffs stacked into a wisp — bottom widest, top
-          narrowest, slight S-curve. */}
       <ellipse cx="12" cy="22" rx="8" ry="6" fill="url(#smoke-body)" />
       <ellipse cx="13" cy="14" rx="6" ry="5" fill="url(#smoke-body)" />
       <ellipse cx="11" cy="7" rx="4" ry="3.5" fill="url(#smoke-body)" />

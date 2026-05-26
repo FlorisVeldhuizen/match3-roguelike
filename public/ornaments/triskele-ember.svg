@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  Celtic triskele (triple spiral) ornament  ember/defeat variant.
+  Same geometry as triskele.svg, recoloured to ember-red for the
+  game-over panel.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#c4423c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Outer ring -->
+  <circle cx="50" cy="50" r="46" stroke="#7a2222" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+  <circle cx="50" cy="50" r="42" stroke="#c4423c" stroke-width="0.8" opacity="0.35"/>
+
+  <!-- Spiral 1 (top) -->
+  <path d="M50 50
+    C50 44, 55 39, 50 33
+    C44 26, 34 30, 32 38
+    C29 48, 36 58, 50 58
+    C58 58, 62 52, 60 46" stroke="#ee5e57" stroke-width="2.8"/>
+
+  <!-- Spiral 2 (bottom-right) -->
+  <path d="M50 50
+    C55 53, 60 51, 64 56
+    C69 62, 63 72, 55 74
+    C45 76, 38 68, 42 58
+    C44 53, 50 52, 54 55" stroke="#ee5e57" stroke-width="2.8"/>
+
+  <!-- Spiral 3 (bottom-left) -->
+  <path d="M50 50
+    C45 53, 40 51, 36 56
+    C31 62, 37 72, 45 74
+    C55 76, 62 68, 58 58
+    C56 53, 50 52, 46 55" stroke="#ee5e57" stroke-width="2.8"/>
+
+  <!-- Center hub -->
+  <circle cx="50" cy="50" r="3.5" fill="#ee5e57" stroke="none"/>
+
+  <!-- Accent dots -->
+  <circle cx="50" cy="30" r="2" fill="#c4423c" stroke="none"/>
+  <circle cx="67" cy="67" r="2" fill="#c4423c" stroke="none"/>
+  <circle cx="33" cy="67" r="2" fill="#c4423c" stroke="none"/>
+</svg>

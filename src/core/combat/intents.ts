@@ -50,20 +50,12 @@ export function rollIntent(
   // Includes the rolling enemy itself; the roller excludes it by id.
   livingAllies?: Enemy[],
   rollerEnemyId?: string,
-  // Intents already rolled by sibling enemies earlier in this same
-  // enemy turn (telegraphed for the next player turn). Each board-
-  // affecting roller uses the appropriate slice of these claims to
-  // avoid colliding with another enemy's pending effect: two Brutes
-  // hitting the same column, a Defender and a Brute landing on the
-  // same cells, a Swarmer shoving into a column about to be smashed,
-  // etc. See aggregateSiblingClaims / expandClaimsToCells.
   siblingNextIntents: readonly Intent[] = [],
 ): { intent: Intent; rng: RngState } {
   const def = getArchetype(archetype)
   const kind: IntentKind | undefined = def.pattern[patternIndex % def.pattern.length]
   if (kind === undefined) throw new Error('rollIntent: empty pattern')
 
-  // Aggregate once so every verb roller below shares the same view.
   const claims = aggregateSiblingClaims(siblingNextIntents)
 
   switch (kind) {
@@ -95,9 +87,6 @@ export function rollIntent(
     case 'color-hex':
       return rollColorHexIntent(rng, claims.colors)
     case 'cluster-shove':
-      // Cell-bound: avoid both raw cell claims AND the cell expansion
-      // of column/row axis claims (so a shove can't put gems where
-      // another verb will erase them next turn).
       return rollClusterShoveIntent(
         def,
         rng,
@@ -106,33 +95,6 @@ export function rollIntent(
   }
 }
 
-// =====================================================================
-// Intent-claim framework
-// =====================================================================
-// A telegraphed board verb "claims" some part of the board for its
-// upcoming effect. Other board verbs rolling on the same turn should
-// avoid overlapping that claim — otherwise two telegraphs paint
-// markers on the same cell, two effects fire on the same gem, or one
-// verb's effect erases another's. This framework lets every roller
-// share one aggregated view of what's already spoken for, instead of
-// each kind reasoning about the others ad-hoc.
-//
-// Claim "spaces": each verb adds itself to whichever space is most
-// natural. Adding a new verb means (a) extending the type and (b)
-// adding a case in addIntentToClaims — no caller changes needed.
-//
-//   - columns: whole-column effects (column-smash). Other column-bound
-//              verbs avoid same-column.
-//   - rows:    whole-row effects (petrify-row). Same idea.
-//   - cells:   specific-cell effects (cluster-shove source+dst). Cell-
-//              bound rollers avoid these AND the cell expansion of
-//              column/row claims (via expandClaimsToCells).
-//   - colors:  color-pool effects (color-hex). Color-bound rollers
-//              avoid same-color.
-//
-// Future generic example: a hypothetical "3x3 area-clear" verb would
-// add the 9 cells to `cells`, and cell-bound siblings would naturally
-// avoid them.
 export type IntentClaims = {
   columns: Set<number>
   rows: Set<number>
@@ -144,8 +106,6 @@ export function emptyClaims(): IntentClaims {
   return { columns: new Set(), rows: new Set(), cells: new Set(), colors: new Set() }
 }
 
-// Mutates `claims` to include this intent's footprint. Switch is the
-// single place a new verb plugs in.
 function addIntentToClaims(intent: Intent, claims: IntentClaims): void {
   if (intent.kind === 'column-smash') {
     claims.columns.add(intent.column)
@@ -157,10 +117,7 @@ function addIntentToClaims(intent: Intent, claims: IntentClaims): void {
   } else if (intent.kind === 'color-hex') {
     claims.colors.add(intent.color)
   }
-  // tile-burn is intentionally NOT a claim: it picks cells at fire
-  // time (not at roll time) and the resolver's
-  // pickClusterCellsWithoutFlag already avoids overlap with existing
-  // burning flags. attack/block/ally intents have no board footprint.
+  // tile-burn picks cells at fire time, not roll time — no claim needed.
 }
 
 export function aggregateSiblingClaims(
@@ -171,13 +128,8 @@ export function aggregateSiblingClaims(
   return claims
 }
 
-// Cell-bound rollers (cluster-shove and any future cell-claiming verbs)
-// want a single Set of forbidden cells. This expands axis claims
-// (columns/rows) into their full cell footprints and merges with the
-// already-cell claims. So a sibling Brute claiming column 3 blocks a
-// Swarmer's shove from putting a gem anywhere in column 3 — without
-// this expansion the Brute's smash would erase the shoved cells next
-// turn, producing a visual "shove happened then was erased" beat.
+// Expands column/row claims into cell-level claims so cell-bound
+// verbs (shove) avoid areas another verb will erase next turn.
 export function expandClaimsToCells(
   claims: IntentClaims,
   boardWidth: number,
@@ -193,11 +145,6 @@ export function expandClaimsToCells(
   return out
 }
 
-// H2b: apply the telegraph flag for board-verb intents (column-smash,
-// petrify-row). Called by both freshFight (initial intent) and
-// executeEnemyTurn (next intent at end of enemy turn). Returns the
-// updated board and petrifiedRows plus any telegraph events for the FX
-// layer. No-op for intent kinds that don't have a telegraph flag.
 export function applyIntentTelegraph(
   board: Cell[][],
   petrifiedRows: PetrifiedRows,
@@ -210,11 +157,6 @@ export function applyIntentTelegraph(
   events: GameEvent[]
 } {
   if (intent.kind === 'column-smash') {
-    // Column-bound threat — no cell flag is written. The overlay tracks
-    // the threat by (enemyId, column) from the placed/resolved events,
-    // and the resolver smashes the whole column at fire time. `cells`
-    // still names every cell in the column for FX layers that want to
-    // hang animation anchors per-cell without re-deriving the column.
     const cells: Pos[] = []
     const h = board.length
     for (let y = 0; y < h; y++) {
@@ -234,11 +176,6 @@ export function applyIntentTelegraph(
     }
   }
   if (intent.kind === 'color-hex') {
-    // Color-hex telegraph: no board mutation — the overlay pulses every
-    // gem of the threatened colour by reading enemies[].currentIntent.
-    // The active hex set (FightState.hexedColors) is only written when
-    // the intent fires next turn (mirrors petrify-row's "telegraph then
-    // fire" cadence).
     return {
       board,
       petrifiedRows,
@@ -252,11 +189,7 @@ export function applyIntentTelegraph(
     }
   }
   if (intent.kind === 'cluster-shove') {
-    // Pre-flag each source cell with its own destination. Per-cell flag
-    // lets counterplay work independently: matching one source clears
-    // its flag without affecting the other. Flags travel with gems under
-    // gravity, so the resolver scans the whole board for `pendingShove`
-    // and shoves whichever cells still carry the flag at fire time.
+    // Per-cell flags travel with gravity; matching a source clears its flag (counterplay).
     let nextBoard = board
     const len = Math.min(intent.sources.length, intent.destinations.length)
     for (let i = 0; i < len; i++) {
@@ -291,13 +224,7 @@ export function applyIntentTelegraph(
     }
   }
   if (intent.kind === 'petrify-row') {
-    // Telegraph-only: emit the placed event for the FX layer (so the
-    // overlay can render a "warning" treatment on the row), but do NOT
-    // mutate petrifiedRows yet. The actual lockout is applied at fire
-    // time by resolvePetrifyRowIntent — matching attack semantics
-    // (telegraph this turn → effect lands next turn). The pending state
-    // is derived by the overlay from enemies[].currentIntent so we
-    // don't need to materialize a separate "pending" map.
+    // Telegraph only — actual lockout applied by resolver next turn.
     const def = getArchetype(archetype)
     const duration = def.petrifyDuration ?? 2
     const cells: Pos[] = []

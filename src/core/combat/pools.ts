@@ -13,11 +13,6 @@ export const ZERO_DELTAS: PoolDeltas = {
   gold: 0,
 }
 
-// Walk a settled cascade event stream and tally per-color pool deltas.
-// Cascade-start events advance the multiplier; match-found events contribute
-// `match.size * cascade * (blessed ? 2 : 1)` (floored) to their color. The
-// split between immediate (yellow/purple) and pooled (red/blue/green)
-// crediting is handled by the caller — this just totals deltas.
 export function computeMatchPayouts(events: readonly GameEvent[]): PoolDeltas {
   const out: PoolDeltas = { ...ZERO_DELTAS }
   let level = 0
@@ -33,9 +28,6 @@ export function computeMatchPayouts(events: readonly GameEvent[]): PoolDeltas {
   return out
 }
 
-// At least one match-found of size 4+ → player keeps the phase open.
-// Architecture: "4+ match grants extra turn"; chains are uncapped, but a
-// single swap caps at one extra turn regardless of how many 4+ matches landed.
 export function hasExtraTurnMatch(events: readonly GameEvent[]): boolean {
   for (const event of events) {
     if (event.kind === 'match-found' && event.size >= 4) return true
@@ -43,9 +35,6 @@ export function hasExtraTurnMatch(events: readonly GameEvent[]): boolean {
   return false
 }
 
-// Inject pool-gained events into a copy of the event stream, immediately
-// after each match-found, so the animation/log layer sees one pool credit
-// per match in the same order resolveSwap emitted them.
 export function withPoolGainedEvents(
   events: readonly GameEvent[],
 ): GameEvent[] {

@@ -1,12 +1,3 @@
-// Visual-FX toggles, persisted to localStorage. Mirrors the audio mute /
-// volume pattern in src/audio/sfx.ts so the wiring feels familiar.
-//   - rgbSplit: chromatic-aberration filter on in-board callout text
-//   - shockwave: ripple on big matches + cascade links (board-local)
-//   - crt: fullscreen scanline + grain + vignette overlay
-// Subscribers: OverlayScene (rgbSplit), BoardEffects (shockwave),
-// CRTOverlay (crt). The FXToggle popover writes here so the user can
-// A/B test each effect from the header.
-
 export type FXKey = 'rgbSplit' | 'shockwave' | 'crt'
 
 const STORAGE_KEY = 'fx-settings'

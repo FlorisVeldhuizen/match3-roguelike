@@ -2,12 +2,6 @@ import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { emitGameEvent } from '../../core/events/emitter'
 
-// H4a Volley target picker. Player allocates 3 hits across living
-// enemies. Each click on an enemy adds one hit to that enemy (can
-// repeat — all 3 hits on one target is valid). The card counts hits
-// per enemy. Confirm enabled iff exactly 3 hits allocated. ESC or
-// click-outside cancels without casting.
-
 const VOLLEY_HITS = 3
 
 export function VolleyTargetModal({ onClose }: { onClose: () => void }) {
@@ -24,7 +18,6 @@ export function VolleyTargetModal({ onClose }: { onClose: () => void }) {
   }, [onClose])
 
   const living = enemies.filter((e) => e.hp > 0)
-  // Defensive: if there are no living enemies somehow, just close.
   useEffect(() => {
     if (living.length === 0) onClose()
   }, [living.length, onClose])

@@ -3,14 +3,6 @@ import { useGameStore } from '../../core/state/store'
 import { tryGetRelic } from '../../core/relics/registry'
 import { REST_HEAL_PERCENT } from '../../core/state/actions/nodes'
 
-// Phase I rest node UI. Two mutually-exclusive picks (heal / upgrade) +
-// a "leave" exit. Heal is straightforward; upgrade opens an in-card
-// picker over the player's upgradable relics that aren't already
-// upgraded.
-//
-// The screen mounts on runPhase === 'rest' (App.tsx routing). All three
-// pick actions auto-return to the map; the screen unmounts naturally
-// when runPhase changes.
 export function RestScreen() {
   const runPhase = useGameStore((s) => s.runPhase)
   const playerHp = useGameStore((s) => s.fight.player.hp)
@@ -26,9 +18,6 @@ export function RestScreen() {
   const healAmount = Math.round(playerMaxHp * REST_HEAL_PERCENT)
   const healPreview = Math.min(playerMaxHp, playerHp + healAmount) - playerHp
 
-  // Upgradable = relic def says so AND this instance isn't already
-  // upgraded. The set can be empty (early run before any upgradable
-  // relic is acquired) — the button then disables.
   const upgradableRelics = relics
     .map((inst) => ({ inst, def: tryGetRelic(inst.id) }))
     .filter(
