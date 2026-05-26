@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -15,5 +16,12 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['pixi.js', 'pixi-filters'],
+  },
+  test: {
+    // .claude/worktrees/* are agent sandboxes — vitest scans them by
+    // default and runs the duplicated test files alongside the canonical
+    // ones, which doubles counts and surfaces in-progress agent state
+    // as "failures" in the main run. Exclude them explicitly.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
   },
 })
