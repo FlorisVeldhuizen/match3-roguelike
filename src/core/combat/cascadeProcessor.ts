@@ -106,12 +106,18 @@ export function processCascadeEvents(
     const cascadeMult = getCascadeMultiplier(effectiveCascade)
     const mult = ev.blessed ? cascadeMult * 2 : cascadeMult
     const raw = applyMultiplier(ev.size, mult)
+    // Phase I: gold matches pay 2g per cleared cell (3-match → 6g,
+    // 5-line → 10g) before cascade / blessed multipliers. Doubling at
+    // the base keeps Cascade Crystal & future cascade relics composable
+    // with gold the same way they compose with mana.
+    const goldRaw = applyMultiplier(ev.size * 2, mult)
     const initialDeltas = {
       red: ev.color === 'red' ? raw : 0,
       blue: ev.color === 'blue' ? raw : 0,
       green: ev.color === 'green' ? raw : 0,
       yellow: ev.color === 'yellow' ? raw : 0,
       purple: ev.color === 'purple' ? raw : 0,
+      gold: ev.color === 'gold' ? goldRaw : 0,
     }
     const matchResult = runOnMatch(
       {
@@ -144,6 +150,9 @@ export function processCascadeEvents(
         green: Math.min(MANA_CAPS.green, m.green + finalDeltas.green),
         yellow: Math.min(MANA_CAPS.yellow, m.yellow + finalDeltas.yellow),
       },
+      // Phase I: gold accumulates run-wide. No cap; spending happens at
+      // shop nodes between fights.
+      gold: player.gold + finalDeltas.gold,
     }
 
     // H2c: hex side-effect. If this match's colour is currently hexed,
@@ -180,11 +189,14 @@ export function processCascadeEvents(
       ev.shape === 'T' || ev.shape === 'L' || (ev.shape === 'line' && ev.size === 5)
 
     // Emit pool-gained per non-zero delta in canonical order so the
-    // animator/SFX layer sees a deterministic sequence.
-    for (const color of ['red', 'blue', 'green', 'yellow', 'purple'] as const) {
+    // animator/SFX layer sees a deterministic sequence. Gold is appended
+    // last — it has no in-match side effect (no damage, no heal, no
+    // mana credit), only the HUD-side gold counter bump.
+    for (const color of ['red', 'blue', 'green', 'yellow', 'purple', 'gold'] as const) {
       const amount = finalDeltas[color]
       if (amount <= 0) continue
       stream.push({ kind: 'pool-gained', color, amount })
+      if (color === 'gold') continue
       if (color === 'red') {
         // While Volley is pending, red damage stops landing — pool
         // accumulates instead, consumed at EOP.

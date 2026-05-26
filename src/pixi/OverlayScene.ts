@@ -17,6 +17,7 @@ const COLOR_HEX: Record<GemColor, number> = {
   green: 0x4dd581,
   yellow: 0xf5cf3a,
   purple: 0xb074ff,
+  gold: 0xffc94a,
 }
 
 export type ScreenPoint = { x: number; y: number }

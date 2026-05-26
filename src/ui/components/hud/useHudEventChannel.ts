@@ -51,6 +51,7 @@ export type HudEventChannel = {
   displayedHp: number
   displayedMana: ManaPools
   displayedCharge: number
+  displayedGold: number
   stagedBlue: number
   blockCommitted: boolean
   displayedStatuses: StatusInstance[]
@@ -92,6 +93,7 @@ export function useHudEventChannel(): HudEventChannel {
     green: 0,
     yellow: 0,
     purple: 0,
+    gold: 0,
   })
   const shakeTimerRef = useRef<number | null>(null)
   const triggerShake = (magnitude: number, durationMs: number) => {
@@ -130,6 +132,9 @@ export function useHudEventChannel(): HudEventChannel {
   // H3: per-colour mana pools, mirrored on a particle-trail delay.
   const [displayedMana, setDisplayedMana] = useState(player.mana)
   const [displayedCharge, setDisplayedCharge] = useState(player.skillCharge)
+  // Phase I: run-persistent gold. Same trail-arrival delay as the mana
+  // chips so the "+N" popup syncs with the value bump.
+  const [displayedGold, setDisplayedGold] = useState(player.gold)
   // Single source of truth for the block badge. Climbs as blue trails
   // land; `block-gained` doesn't snap it — engine guarantees the trail
   // sum equals the committed amount, so late trails land into a now-
@@ -159,6 +164,11 @@ export function useHudEventChannel(): HudEventChannel {
               ...m,
               [color]: Math.min(MANA_CAPS[color], m[color] + amount),
             }))
+          } else if (color === 'gold') {
+            // No cap on gold; the chip just climbs. Spending at shops
+            // decrements the store; the gold-source-of-truth effect
+            // below picks that up.
+            setDisplayedGold((g) => g + amount)
           }
           if (color === 'blue') setStagedBlue((s) => s + amount)
           // Red and green still commit per-match via damage-dealt/healed
@@ -406,6 +416,7 @@ export function useHudEventChannel(): HudEventChannel {
       setDisplayedHp(p.hp)
       setDisplayedMana(p.mana)
       setDisplayedCharge(p.skillCharge)
+      setDisplayedGold(p.gold)
       setStagedBlue(p.block)
       setBlockCommitted(p.block > 0)
       setDisplayedStatuses(p.statuses)
@@ -433,6 +444,7 @@ export function useHudEventChannel(): HudEventChannel {
     displayedHp,
     displayedMana,
     displayedCharge,
+    displayedGold,
     stagedBlue,
     blockCommitted,
     displayedStatuses,

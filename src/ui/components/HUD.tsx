@@ -5,6 +5,7 @@ import { useHudEventChannel } from './hud/useHudEventChannel'
 import { usePopOnChange, popClass } from './hud/popAnimation'
 import { ManaChip } from './hud/ManaChip'
 import { ChargeChip } from './hud/ChargeChip'
+import { GoldChip } from './hud/GoldChip'
 
 export function HUD() {
   const player = useGameStore((s) => s.fight.player)
@@ -12,6 +13,7 @@ export function HUD() {
     displayedHp,
     displayedMana,
     displayedCharge,
+    displayedGold,
     stagedBlue,
     blockCommitted,
     displayedStatuses,
@@ -38,6 +40,7 @@ export function HUD() {
   const greenManaPop = usePopOnChange(displayedMana.green)
   const yellowManaPop = usePopOnChange(displayedMana.yellow)
   const chargePop = usePopOnChange(displayedCharge)
+  const goldPop = usePopOnChange(displayedGold)
 
   const hpPct = Math.max(0, (displayedHp / player.maxHp) * 100)
   // Low-HP urgency pulse, ≤30%, excluding 0 (game-over overlay handles that).
@@ -159,6 +162,12 @@ export function HUD() {
             value={displayedCharge}
             pop={chargePop}
             pulsing={pulse.purple > 0}
+          />
+          <span className="hud-divider" aria-hidden />
+          <GoldChip
+            value={displayedGold}
+            pop={goldPop}
+            pulsing={pulse.gold > 0}
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { nextInt, type RngState } from '../rng/mulberry32'
+import { type RngState } from '../rng/mulberry32'
 import type {
   Cell,
   Enemy,
@@ -10,7 +10,7 @@ import type {
   Player,
   Pos,
 } from '../../types'
-import { GEM_COLORS } from '../../types'
+import { pickGemColorWeighted } from '../board/gemSpawn'
 import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage } from './statuses'
 import { getArchetype } from './archetypeRegistry'
@@ -332,10 +332,8 @@ export function resolveColumnSmashIntent(
   const refilled: Cell[][] = fallen.map((row, y) =>
     row.map((c, x): Cell => {
       if (c) return c
-      const [idx, nr] = nextInt(nextRng, GEM_COLORS.length)
+      const [color, nr] = pickGemColorWeighted(nextRng)
       nextRng = nr
-      const color = GEM_COLORS[idx]
-      if (!color) throw new Error('column-smash: refill color oob')
       spawns.push({ at: { x, y }, color })
       return { gemColor: color }
     }),
@@ -486,10 +484,8 @@ export function resolveClusterShoveIntent(
   const refilled: Cell[][] = fallen.map((row, y) =>
     row.map((c, x): Cell => {
       if (c) return c
-      const [idx, nr] = nextInt(nextRng, GEM_COLORS.length)
+      const [color, nr] = pickGemColorWeighted(nextRng)
       nextRng = nr
-      const color = GEM_COLORS[idx]
-      if (!color) throw new Error('cluster-shove: refill color oob')
       spawns.push({ at: { x, y }, color })
       return { gemColor: color }
     }),

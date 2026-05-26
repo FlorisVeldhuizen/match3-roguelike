@@ -21,7 +21,11 @@ import type {
 // in other colors (no Phase G relic does, but the surface is open).
 export type MatchPayload = {
   match: Match
-  deltas: { red: number; blue: number; green: number; yellow: number; purple: number }
+  // Phase I: gold delta is a new currency lane (player.gold, not mana).
+  // Only non-zero on a gold-color match; relic hooks could amplify it
+  // (no Phase I relic does, but the surface is open for future Midas-
+  // style relics).
+  deltas: { red: number; blue: number; green: number; yellow: number; purple: number; gold: number }
   cascadeLevel: number
 }
 

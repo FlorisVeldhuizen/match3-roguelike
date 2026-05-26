@@ -1,6 +1,6 @@
 import { nextInt, type RngState } from '../rng/mulberry32'
 import type { Enemy, GemColor, Intent, Pos } from '../../types'
-import { BOARD_HEIGHT, BOARD_WIDTH, GEM_COLORS } from '../../types'
+import { BOARD_HEIGHT, BOARD_WIDTH, MANA_GEM_COLORS } from '../../types'
 import { type ArchetypeDef, type IntentRange } from './archetypeRegistry'
 
 // Per-intent-kind rollers. Each is pure: takes only what it needs (rng,
@@ -157,7 +157,8 @@ export function rollPetrifyRowIntent(
 
 // H2c: Caster picks the colour at roll time so the telegraph can render
 // the threat (which colour to avoid matching next phase). Uniform over
-// the 5 gem colours; future tuning could weight by board presence.
+// the 5 mana-bearing gem colours (never gold — hex over a 10%-spawn
+// colour that gives no mana would feel arbitrary and read as a dud).
 export function rollColorHexIntent(
   rng: RngState,
   claimedColors: ReadonlySet<GemColor> = new Set(),
@@ -169,15 +170,15 @@ export function rollColorHexIntent(
   let r = rng
   let lastIdx = 0
   for (let i = 0; i < 16; i++) {
-    const [idx, nr] = nextInt(r, GEM_COLORS.length)
+    const [idx, nr] = nextInt(r, MANA_GEM_COLORS.length)
     r = nr
     lastIdx = idx
-    const color = GEM_COLORS[idx]
+    const color = MANA_GEM_COLORS[idx]
     if (color && !claimedColors.has(color)) {
       return { intent: { kind: 'color-hex', color }, rng: r }
     }
   }
-  const color = GEM_COLORS[lastIdx]
+  const color = MANA_GEM_COLORS[lastIdx]
   if (!color) throw new Error('rollColorHexIntent: gem-color index oob')
   return { intent: { kind: 'color-hex', color }, rng: r }
 }

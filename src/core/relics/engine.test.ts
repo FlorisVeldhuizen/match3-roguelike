@@ -28,6 +28,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   pendingSpells: [],
   carryBlockNextPhase: false,
   relics: [],
+  gold: 0,
   ...overrides,
 })
 
@@ -63,6 +64,7 @@ const baseDeltas = {
   green: 0,
   yellow: 0,
   purple: 0,
+  gold: 0,
 }
 
 const snap = (player: Player) =>

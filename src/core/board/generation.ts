@@ -4,10 +4,11 @@ import {
   type Pos,
   BOARD_HEIGHT,
   BOARD_WIDTH,
-  GEM_COLORS,
+  MANA_GEM_COLORS,
 } from '../../types'
 import { nextInt, type RngState } from '../rng/mulberry32'
 import { detectMatches } from './detectMatches'
+import { pickGemColorWeighted } from './gemSpawn'
 
 // Generates a playable starting board:
 //  1. fill with random gems, then walk row-major and replace any cell that
@@ -32,15 +33,20 @@ export function generateBoard(
   petrifiedRows: Readonly<Record<number, number>> = {},
 ): { board: Cell[][]; rng: RngState } {
   let r = rng
-  const rand = (): number => {
-    const [v, n] = nextInt(r, GEM_COLORS.length)
+  const randColor = (): GemColor => {
+    const [color, n] = pickGemColorWeighted(r)
+    r = n
+    return color
+  }
+  const randIntBelow = (max: number): number => {
+    const [v, n] = nextInt(r, max)
     r = n
     return v
   }
 
-  let board = fillAndDematch(width, height, rand)
+  let board = fillAndDematch(width, height, randColor)
   if (!hasValidSwap(board, petrifiedRows)) {
-    board = forcePlaceSwap(board, rand, petrifiedRows)
+    board = forcePlaceSwap(board, randIntBelow, petrifiedRows)
   }
   return { board, rng: r }
 }
@@ -48,14 +54,10 @@ export function generateBoard(
 function fillAndDematch(
   width: number,
   height: number,
-  randIdx: () => number,
+  randColor: () => GemColor,
 ): Cell[][] {
   const board: Cell[][] = Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => {
-      const color = GEM_COLORS[randIdx()]
-      if (!color) throw new Error('fill: oob color idx')
-      return { gemColor: color }
-    }),
+    Array.from({ length: width }, () => ({ gemColor: randColor() })),
   )
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -63,7 +65,10 @@ function fillAndDematch(
       const current = board[y]?.[x]
       if (!current) throw new Error('fill: missing cell')
       if (!forbidden.has(current.gemColor)) continue
-      const choice = GEM_COLORS.find((c) => !forbidden.has(c))
+      // Anti-match fallback walks the mana colours first (never gold),
+      // so de-matching can never spawn a forced gold cluster during
+      // initial board cleanup.
+      const choice = MANA_GEM_COLORS.find((c) => !forbidden.has(c))
       if (!choice) throw new Error('fill: no safe color')
       current.gemColor = choice
     }
@@ -172,7 +177,7 @@ function swapMakesMatch(
 // the rest of the board (preserving the forced segment).
 function forcePlaceSwap(
   board: Cell[][],
-  randIdx: () => number,
+  randIntBelow: (max: number) => number,
   // H2b: skip petrified rows when picking the "force placement" row —
   // and use the petrify-aware hasValidSwap check at the end, so the
   // forced board is genuinely playable under the active lockout.
@@ -188,7 +193,7 @@ function forcePlaceSwap(
     (y) => (petrifiedRows[y] ?? 0) === 0,
   )
   for (let i = rowOrder.length - 1; i > 0; i--) {
-    const j = randIdx() % (i + 1)
+    const j = randIntBelow(i + 1)
     const a = rowOrder[i]
     const b = rowOrder[j]
     if (a === undefined || b === undefined) continue
@@ -196,11 +201,13 @@ function forcePlaceSwap(
     rowOrder[j] = a
   }
   for (const y of rowOrder) {
-    for (let ai = 0; ai < GEM_COLORS.length; ai++) {
-      for (let bi = 0; bi < GEM_COLORS.length; bi++) {
+    // Force-place pairs are drawn from MANA_GEM_COLORS only — a guaranteed
+    // playable segment should pay mana on the first swap, not gold.
+    for (let ai = 0; ai < MANA_GEM_COLORS.length; ai++) {
+      for (let bi = 0; bi < MANA_GEM_COLORS.length; bi++) {
         if (ai === bi) continue
-        const colA = GEM_COLORS[ai]
-        const colB = GEM_COLORS[bi]
+        const colA = MANA_GEM_COLORS[ai]
+        const colB = MANA_GEM_COLORS[bi]
         if (!colA || !colB) continue
         if (tryForceSegment(board, y, colA, colB)) {
           // Re-clean rest of board (preserving forced segment).
@@ -254,7 +261,9 @@ function dematchExceptSegment(board: Cell[][], reservedRow: number): void {
       const forbidden = forbiddenColorsAt(board, x, y)
       const cur = board[y]?.[x]
       if (!cur || !forbidden.has(cur.gemColor)) continue
-      const choice = GEM_COLORS.find((c) => !forbidden.has(c))
+      // Same rationale as fillAndDematch: anti-match fallback walks the
+      // mana colours first so re-cleaning can't manufacture gold runs.
+      const choice = MANA_GEM_COLORS.find((c) => !forbidden.has(c))
       if (!choice) continue
       cur.gemColor = choice
     }

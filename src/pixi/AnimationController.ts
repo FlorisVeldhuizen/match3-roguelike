@@ -159,6 +159,7 @@ const CALLOUT_PALETTE: Record<GemColor, number> = {
   green: 0x68e599,
   yellow: 0xf5d650,
   purple: 0xc080ff,
+  gold: 0xffd76a,
 }
 
 // Shared visual hex — mirrors the CSS palette in index.css.
@@ -229,6 +230,7 @@ const POOL_TRAIL_HEX: Record<GemColor, number> = {
   green: 0x4dd581,
   yellow: 0xf5cf3a,
   purple: 0xb074ff,
+  gold: 0xffc94a,
 }
 
 // Per-status palette + core for the "status apply" particle trail
@@ -284,6 +286,7 @@ const STORED_HEX: Record<GemColor, number> = {
   green: 0x5fb87a,
   yellow: 0xe6b830,
   purple: 0xa46be3,
+  gold: 0xd4a020,
 }
 
 // Pazudora-style numeric multiplier. The rising chime + intensifying
@@ -1667,7 +1670,11 @@ export class AnimationController {
       const el = this.findEl(`[data-pool-target="${color}"]:not(.dead)`)
       return el ? elementCenter(el) : null
     }
-    const hasSecondary = color !== 'purple' && color !== 'yellow'
+    // Yellow, purple, and gold all skip the secondary mana-chip trail.
+    // For yellow and gold, the chip itself IS the effect target — a
+    // second trail to the same DOM node would just stack particles. For
+    // purple there's no mana chip at all (the chip is the ult charge).
+    const hasSecondary = color !== 'purple' && color !== 'yellow' && color !== 'gold'
     const manaAttractor: Attractor | null = hasSecondary
       ? () => {
           const el = this.findEl(`[data-mana-target="${color}"]`)

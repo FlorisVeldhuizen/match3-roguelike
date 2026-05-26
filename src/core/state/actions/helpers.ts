@@ -45,6 +45,10 @@ export function freshPlayer(relics: RelicInstance[] = []) {
     pendingSpells: [],
     carryBlockNextPhase: false,
     relics,
+    // Phase I: run-persistent currency. freshPlayer is called per-fight,
+    // so callers that want to carry gold across fights (enterNode) must
+    // copy it over after — same pattern as HP.
+    gold: 0,
   }
 }
 

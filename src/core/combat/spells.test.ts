@@ -26,6 +26,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   pendingSpells: [],
   carryBlockNextPhase: false,
   relics: [],
+  gold: 0,
   ...overrides,
 })
 
@@ -114,8 +115,8 @@ describe('Bulwark at end of phase', () => {
 
   it('Bulwark accumulates blue across extra-turn cycles via applyPoolDeltas', () => {
     let player = makePlayer({ pendingSpells: ['bulwark'] })
-    player = applyPoolDeltas(player, { red: 0, blue: 3, green: 0, yellow: 0, purple: 0 })
-    player = applyPoolDeltas(player, { red: 0, blue: 4, green: 0, yellow: 0, purple: 0 })
+    player = applyPoolDeltas(player, { red: 0, blue: 3, green: 0, yellow: 0, purple: 0, gold: 0 })
+    player = applyPoolDeltas(player, { red: 0, blue: 4, green: 0, yellow: 0, purple: 0, gold: 0 })
     expect(player.phasePools.blue).toBe(7)
     const enemy = makeEnemy()
     const res = resolveEndOfPhase(player, [enemy], enemy.id)

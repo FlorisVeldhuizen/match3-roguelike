@@ -152,6 +152,24 @@ const ROLE_MIXED_COMPOSITIONS: EnemyArchetype[][] = [
 const ROLE_MIXED_CHANCE_NUMERATOR = 4
 const ROLE_MIXED_CHANCE_DENOMINATOR = 10
 
+// Archetypes that may never appear at a solo (count === 1) node. Their
+// identity requires multi-enemy plumbing, so a lone instance reads wrong.
+// Filtered out of the weighted roller when a solo slot is being rolled;
+// they still reach the board via ROLE_MIXED_COMPOSITIONS or via an
+// independent col-2 multi-enemy roll where they sit alongside another
+// archetype.
+//   - swarmer: design identity is "spawn in groups" (see enemies.ts);
+//     a single swarmer at col 0/1/3 or as the elite reads as filler.
+//   - rallier: pattern includes buff-ally — solo, the ally phase has
+//     no valid target. Today it's de facto solo-banned by absence from
+//     COLUMN_ARCHETYPE_WEIGHTS (only reaches the board via
+//     ROLE_MIXED_COMPOSITIONS), but listing it here makes the rule
+//     explicit so a future weight-table edit can't break it.
+const SOLO_BANNED_ARCHETYPES: ReadonlySet<EnemyArchetype> = new Set([
+  'swarmer',
+  'rallier',
+])
+
 // Group sizes per column: cols 0-1 = solo (1 enemy), col 2 = 2-3 enemies
 // (mixed), elite = solo but tougher (handled by archetype bias, not
 // count, today), boss = solo. Returns the count to roll for this node.
@@ -174,17 +192,21 @@ function rollEnemyCount(
 function rollWeightedArchetype(
   column: number,
   rng: RngState,
+  options: { soloNode: boolean } = { soloNode: false },
 ): { archetype: EnemyArchetype; rng: RngState } {
   const table = COLUMN_ARCHETYPE_WEIGHTS[column] ?? COLUMN_ARCHETYPE_WEIGHTS[0]!
-  const total = table.reduce((acc, w) => acc + w.weight, 0)
+  const filtered = options.soloNode
+    ? table.filter((w) => !SOLO_BANNED_ARCHETYPES.has(w.archetype))
+    : table
+  const total = filtered.reduce((acc, w) => acc + w.weight, 0)
   const [pick, next] = nextInt(rng, total)
   let acc = 0
-  for (const entry of table) {
+  for (const entry of filtered) {
     acc += entry.weight
     if (pick < acc) return { archetype: entry.archetype, rng: next }
   }
   // Fallback (unreachable as long as total > 0 — guard for sanity).
-  return { archetype: table[0]!.archetype, rng: next }
+  return { archetype: filtered[0]!.archetype, rng: next }
 }
 
 function rollColumnKinds(
@@ -268,9 +290,14 @@ function buildNodes(rng: RngState): {
             }
           }
         } else {
+          // Solo path: count is always 1 here (col 0/1/3 fights and the
+          // col-2 elite). Apply SOLO_BANNED so e.g. a lone swarmer can't
+          // become the elite or a col-3 post-elite fight.
           archetypes = []
           for (let i = 0; i < count; i++) {
-            const { archetype, rng: rArch } = rollWeightedArchetype(col, r)
+            const { archetype, rng: rArch } = rollWeightedArchetype(col, r, {
+              soloNode: true,
+            })
             r = rArch
             archetypes.push(archetype)
           }

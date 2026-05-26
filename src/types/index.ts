@@ -1,6 +1,19 @@
-export type GemColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple'
+export type GemColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'gold'
 
 export const GEM_COLORS: readonly GemColor[] = [
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'purple',
+  'gold',
+] as const
+
+// Mana-bearing colors: the 5 that fill mana / charge / phase pools. Used by
+// enemy intents that need to pick a "useful" colour (color-hex, future hex
+// variants) — they should never target gold, which gives no mana and is too
+// rare to make a meaningful hex.
+export const MANA_GEM_COLORS: readonly GemColor[] = [
   'red',
   'blue',
   'green',
@@ -482,6 +495,10 @@ export type Player = {
   carryBlockNextPhase: boolean
   // Acquisition-ordered. Cleared on restart, grown by acquireRelic.
   relics: RelicInstance[]
+  // Phase I: run-persistent gold. Earned from matching gold-color gems
+  // (the 6th gem colour, ~10% spawn) and from post-fight reward drops.
+  // Spent at shop nodes. Reset on restart.
+  gold: number
 }
 
 // Rolled at fight-end from rng.loot; persists in the store while the

@@ -93,6 +93,7 @@ describe('computeMatchPayouts', () => {
       green: 4,
       yellow: 10,
       purple: 9,
+      gold: 0,
     })
   })
 })

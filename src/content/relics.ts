@@ -91,6 +91,10 @@ const cascadeCrystal: RelicDef = {
           green: Math.floor(payload.deltas.green * mult),
           yellow: Math.floor(payload.deltas.yellow * mult),
           purple: Math.floor(payload.deltas.purple * mult),
+          // Phase I: cascade amplification applies to gold too — same
+          // tempo, same multiplier rule. Future gold-specific relics
+          // could opt out by mutating deltas.gold separately.
+          gold: Math.floor(payload.deltas.gold * mult),
         },
       }
     },

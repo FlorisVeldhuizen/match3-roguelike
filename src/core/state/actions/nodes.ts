@@ -78,6 +78,9 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
       enemyRoll.fight.player.maxHp,
       current.fight.player.hp,
     )
+    // Phase I: gold is run-persistent (spent at shops between fights).
+    // freshPlayer always seeds 0; copy the live total forward here.
+    enemyRoll.fight.player.gold = current.fight.player.gold
     const boardRoll = generateBoard(current.rng.board)
     // onRoundStarted fires for the new encounter. Events are dropped on
     // the floor here — there's no animation queue between map clicks and

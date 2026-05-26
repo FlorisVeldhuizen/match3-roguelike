@@ -227,6 +227,17 @@
 .mana-dot[data-color='yellow'] {
   background-image: url('/gems/yellow.svg');
 }
+.mana-dot[data-color='gold'] {
+  background-image: url('/gems/gold.svg');
+}
+/* Gold chip: same pip shape as mana, but a warmer halo so the eye
+   reads it as currency, not a 5th colour mana. The dot already carries
+   the amber tone from the SVG; the chip just doesn't get the mana-cap
+   line since gold uncapped. */
+.mana-chip.mana-gold .mana-dot {
+  filter: drop-shadow(0 0 4px rgba(255, 195, 80, 0.55))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
 
 .mana-value {
   display: inline-flex;

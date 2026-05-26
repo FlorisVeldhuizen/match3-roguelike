@@ -24,6 +24,7 @@ const makePlayer = (relics: RelicInstance[]): Player => ({
   pendingSpells: [],
   carryBlockNextPhase: false,
   relics,
+  gold: 0,
 })
 
 const inst = (id: string): RelicInstance => ({
@@ -64,6 +65,7 @@ function simulate(relics: RelicInstance[]) {
       green: 0,
       yellow: 0,
       purple: 0,
+      gold: 0,
       [step.match.color]: step.match.size, // simplified: raw amount = size
     }
     const result = runOnMatch(

@@ -283,6 +283,28 @@ describe('generateMap', () => {
     }
   })
 
+  // SOLO_BANNED invariant: certain archetypes must never be the sole
+  // archetype on a node.
+  //   - swarmer: design identity is "spawn in groups" — a lone swarmer
+  //     at col 0/1/3 or as the elite reads as filler. May still appear
+  //     alongside other archetypes via independent col-2 rolls and via
+  //     the swarmer-cluster role-mixed compositions.
+  //   - rallier: pattern includes buff-ally, which has no valid target
+  //     solo. Only reaches the board via ROLE_MIXED_COMPOSITIONS.
+  it('SOLO_BANNED archetypes never appear as a solo archetype', () => {
+    const banned: ReadonlySet<string> = new Set(['swarmer', 'rallier'])
+    for (let seed = 1; seed <= 500; seed++) {
+      const map = build(seed)
+      for (const node of map.nodes) {
+        if (node.archetypes?.length === 1 && banned.has(node.archetypes[0]!)) {
+          throw new Error(
+            `seed ${seed}: lone ${node.archetypes[0]} at ${node.id} (kind=${node.kind})`,
+          )
+        }
+      }
+    }
+  })
+
   // Post-elite fight column exists and only carries solo fight nodes.
   it('column 3 carries solo fight nodes only', () => {
     for (let seed = 1; seed <= 100; seed++) {

@@ -4,12 +4,12 @@ import {
   type GemColor,
   type Match,
   type Pos,
-  GEM_COLORS,
 } from '../../types'
 import { detectMatches } from './detectMatches'
 import { applyFlagToCells, hasFlag } from './flags'
+import { pickGemColorWeighted } from './gemSpawn'
 import { applyGravity } from './gravity'
-import { nextInt, type RngState } from '../rng/mulberry32'
+import { type RngState } from '../rng/mulberry32'
 
 export type SwapResolution = {
   valid: boolean
@@ -243,17 +243,14 @@ export function runCascade(
     if (movements.length > 0) events.push({ kind: 'gems-fell', movements })
 
     const spawns: { at: Pos; color: GemColor }[] = []
-    // Inlined nextInt for refill — saves one allocation per gem (the
-    // pickColor wrapper used to return its own [color, rng] tuple on top
-    // of nextInt's tuple). A full 8×8 board refill on a cascade walks 64
-    // gems, so this matters during deep chains.
+    // Weighted picker handles the 10% gold / 90% mana split (see gemSpawn.ts).
+    // Same single-nextInt-per-gem cost as the pre-gold path; the weighting
+    // collapses to one draw via a bucketed range.
     const refilled: Cell[][] = fallen.map((row, y) =>
       row.map((c, x): Cell => {
         if (c) return c
-        const [idx, nr] = nextInt(curRng, GEM_COLORS.length)
+        const [color, nr] = pickGemColorWeighted(curRng)
         curRng = nr
-        const color = GEM_COLORS[idx]
-        if (!color) throw new Error('cascade: refill color oob')
         spawns.push({ at: { x, y }, color })
         return { gemColor: color }
       }),

@@ -10,6 +10,7 @@ export const ZERO_DELTAS: PoolDeltas = {
   green: 0,
   yellow: 0,
   purple: 0,
+  gold: 0,
 }
 
 // Walk a settled cascade event stream and tally per-color pool deltas.
