@@ -20,7 +20,20 @@ export const GEM_COLORS: readonly GemColor[] = [
 export type CellFlags = {
   burning?: number
   blessed?: true
+  // H2b: Brute's column-smash telegraphs by pre-flagging every cell in
+  // the threatened column. Counts down each player phase; when it hits
+  // 0, executeEnemyTurn fires the smash on those cells. Matching a
+  // flagged cell clears its flag (the gem is gone) — that's the counter.
+  // Gem-bound (travels with the gem via gravity), like burning/blessed.
+  pendingSmash?: number
 }
+
+// H2b: Defender's petrify-row is *position-bound*, not gem-bound — the
+// lockout is on a row's positions, not on the gems passing through it.
+// Stored in BoardState as a row-index → turns-remaining map. Cleared
+// when ticking to 0. detectMatches reads this to exclude rows as match
+// anchors. Gems still cascade *through* — only matching is blocked.
+export type PetrifiedRows = Record<number, number>
 
 export type Cell = {
   gemColor: GemColor
@@ -186,6 +199,16 @@ export type GameEvent =
       // earlier flame is already at a lower remaining count.
       duration: number
     }
+  // H2b: Brute pre-flags a column at telegraph time. Cells carries
+  // every cell in that column. Overlay reads this to render the threat.
+  | { kind: 'column-smash-placed'; enemyId: string; column: number; cells: Pos[]; duration: number }
+  // H2b: Smash fires — the flagged cells are cleared with no payout.
+  // Carries the cells that actually got cleared (i.e. the flag survived
+  // counter-matching). May be empty if the player cleared the column.
+  | { kind: 'column-smash-resolved'; enemyId: string; column: number; cells: Pos[] }
+  // H2b: Defender pre-flags a row at telegraph time. detectMatches
+  // excludes these cells as match anchors for the duration.
+  | { kind: 'petrify-placed'; enemyId: string; row: number; cells: Pos[]; duration: number }
   // Emitted when a match clears one or more cells whose `burning` flag was
   // active. The consumer (store) computes Burn magnitude from cells.length
   // plus a content-side bonus (see BURN_FROM_TILE_BONUS in content/statuses).
@@ -255,7 +278,15 @@ export type CombatPhase =
   | 'victory'
   | 'game-over'
 
-export type IntentKind = 'attack' | 'block' | 'tile-burn' | 'heal-ally' | 'buff-ally' | 'shield-ally'
+export type IntentKind =
+  | 'attack'
+  | 'block'
+  | 'tile-burn'
+  | 'heal-ally'
+  | 'buff-ally'
+  | 'shield-ally'
+  | 'column-smash'
+  | 'petrify-row'
 
 // Optional status rider carried on attack intents. Smolder uses this
 // to apply Burn on hit. Surfaced on the intent badge so the player
@@ -274,8 +305,12 @@ export type Intent =
   | { kind: 'heal-ally'; amount: number; targetAllyId: string }
   | { kind: 'buff-ally'; stacks: number; targetAllyId: string }
   | { kind: 'shield-ally'; amount: number; targetAllyId: string }
+  // H2b board verbs: column / row resolved at roll time so the
+  // telegraph can pre-flag the threatened cells (counter-play loop).
+  | { kind: 'column-smash'; column: number }
+  | { kind: 'petrify-row'; row: number }
 
-export type EnemyArchetype = 'brute' | 'smolder' | 'skirmisher' | 'rallier'
+export type EnemyArchetype = 'brute' | 'smolder' | 'skirmisher' | 'rallier' | 'defender'
 
 export type PhasePools = {
   red: number

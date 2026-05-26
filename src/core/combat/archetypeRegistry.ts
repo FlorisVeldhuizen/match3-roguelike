@@ -28,6 +28,15 @@ export type ArchetypeDef = {
   // buff-ally applies a fixed stack count (no range — balance parity with
   // standard status application).
   buffAllyStacks?: number
+  // H2b: column-smash flag lifetime (player phases between telegraph and
+  // fire). 1 = telegraphed this turn, smashes next turn — the standard
+  // single-phase warning. Counter-play: clear the column before the tick.
+  columnSmashDuration?: number
+  // H2b: petrify-row flag lifetime (player phases of matchability lock).
+  // Different semantics than smash: counts down each tick and is the
+  // *active* effect (no fire-time payload). 2-3 is a meaningful lockout
+  // without grinding the fight to a halt.
+  petrifyDuration?: number
 }
 
 // Registry pattern (per 03-architecture §11): core can't import from content,

@@ -1,4 +1,4 @@
-import type { Cell, CellFlags, GameEvent, Pos } from '../../types'
+import type { Cell, CellFlags, GameEvent, PetrifiedRows, Pos } from '../../types'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
 // Generic read/write/tick layer over `Cell.flags`. Phase F only uses the
@@ -99,6 +99,23 @@ export function tickFlagDuration(
     })
   }
   return { board: anyChange ? out : (board as Cell[][]), events }
+}
+
+// H2b: tick the position-bound petrifiedRows map by one phase. Rows
+// that hit 0 are removed from the map; FX layer can read `expired` for
+// "row unlocked" animations.
+export function tickPetrifiedRows(
+  petrifiedRows: PetrifiedRows,
+): { petrifiedRows: PetrifiedRows; expired: number[] } {
+  const next: PetrifiedRows = {}
+  const expired: number[] = []
+  for (const [rowStr, turns] of Object.entries(petrifiedRows)) {
+    const remaining = turns - 1
+    const row = Number(rowStr)
+    if (remaining > 0) next[row] = remaining
+    else expired.push(row)
+  }
+  return { petrifiedRows: next, expired }
 }
 
 // Pick N cells from `rng` that don't already carry `flag` (Smolder won't

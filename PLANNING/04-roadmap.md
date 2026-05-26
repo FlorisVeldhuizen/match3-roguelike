@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase H3 complete.** Working on H4a (spell roster expansion) next. H4 split into H4a (spells) / H4b (ally-target intents + new compositions) / H4c (hero power, **deferred** — re-evaluate after H4a/b ship; expanded spell roster may make a hero power feel redundant). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents + hero power** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued but happen *after* H4 because the spell-economy work elevates the verb work.
+Status: **Phase H4b complete.** Working on H2b (Brute column-smash + Defender petrify-row) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
@@ -262,19 +262,44 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 **Scope:**
 - New `CellFlags`: `pendingSmash?: number` (turns until smash fires), `petrified?: number` (turns remaining matchability lock). Both reuse the existing `tickFlagDuration` helper
-- New `IntentKind`s: `column-smash`, `petrify-row`. Pre-flag at telegraph time (mirrors how `tile-burn` already telegraphs by flagging cells when the intent rolls)
+- New `IntentKind`s: `column-smash`, `petrify-row`. Pre-flag at telegraph time (mirrors how `tile-burn` already telegraphs by flagging cells when the intent rolls — confirm current Smolder behaviour during implementation; if Smolder picks cells at fire time today, align both styles)
 - Brute pattern becomes `attack, column-smash, attack, block, attack`. On resolve, clears the flagged column with no payout, refill from top via existing gravity. Matching the column before the smash phase clears the flag from those cells, denying the verb on those cells
-- Defender pattern: alternates block + petrify-row (per `02-scope` "gains block each turn; petrify forces the player to route matches around the wall"). `detectMatches` reads the `petrified` flag and excludes matches that include a petrified cell. Gems still cascade *through* — only the anchor check changes
+- Defender: new archetype. Pattern `['block', 'petrify-row', 'attack', 'petrify-row']` (length-4 — aggressive petrify cadence). Stats: HP 22, attack 2-3, block 3-5. Persistent block accumulation already supported by H4b-era enemy block rules
+- `detectMatches` reads the `petrified` flag and excludes matches that include a petrified cell as an anchor. Gems still cascade *through* — only the anchor check changes
+- Map gen: add Defender to column weights (mid-column heavier); add Defender + Smolder as a role-mixed composition template (the wall + the burner)
 - Pixi rendering passes for both flags (column-smash overlay + petrified-row overlay), wired into `BoardEffects`
+- Intent telegraph UI for both kinds in `EnemyFrame.tsx`
 
-**Out of scope:** Caster, Swarmer (H2c), shop, Corruptor, save/load.
+**Out of scope:** Caster, Swarmer (H2c), shop, Corruptor, save/load, player-side board verb (deferred to H2b.5).
 
 **Acceptance:**
 - ✓ Brute telegraphs column-smash one phase before; on the smash turn, the column is wiped without paying pools; refill works
 - ✓ Matching cells in the threatened column clears them from the smash set (counterable through play)
 - ✓ Defender telegraphs petrify-row one phase before; matched rows are skipped as anchors for the duration; cascades still flow through
 - ✓ Both flags tick down + clear automatically via `tickFlagDuration`
-- ✓ **Tests:** column-smash resolution unit test (no payout, correct cells); petrify-row excludes anchors but allows cascade through; flag tick + expire behavior
+- ✓ Defender appears in map gen + at least one role-mixed composition (Defender + Smolder) lands
+- ✓ **Tests:** column-smash resolution unit test (no payout, correct cells); petrify-row excludes anchors but allows cascade through; flag tick + expire behavior; counter-play (matching flagged cells before smash clears them from the verb)
+
+---
+
+### Phase H2b.5 — First player-side verb spell (micro-phase)
+
+**Goal:** fill the design-doc requirement that "the slice should ship at least one player-side board verb" (§"Parallel play"). Drops one verb spell into the discoverable spell pool so player and enemy both gain board verbs in the same arc (H2b ships enemy verbs; H2b.5 ships the symmetric player half).
+
+**Scope:**
+- Pick one verb from the parked H4c candidate pool (Shatter Color / Detonator / Petrify-player / Transmute / Sweep / Banish — locked during phase open)
+- Implement as a discoverable spell (mana cost, not free; goes into the reward pool, not class baseline)
+- Wire into existing spell registry, picker modal where needed, pixi rendering for any spawned flag, tests
+- Effect must run through normal match resolution where applicable (cascade multiplier, pool fills, relic hooks) — the verb is a board-state modifier, not a damage shortcut
+
+**Out of scope:** the other 5 verb candidates (they ship as Phase I+ shop content); spell-acquisition shop UI (Phase I); spell-upgrade UI.
+
+**Acceptance:**
+- ✓ One verb spell live, mana-costed, in the reward pool (or temporarily granted at run start until shop ships)
+- ✓ Verb composes correctly with cascade multiplier, blessed cells, and at least one existing relic
+- ✓ Tests: cost+gate, effect resolution, composition with cascade/blessed
+
+**Estimate:** 1-2h depending on verb pick (Sweep is simplest, Detonator is heaviest due to two-step trigger).
 
 ---
 
@@ -330,11 +355,11 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-## Phase H4 — Spell roster expansion + ally-target intents + hero power
+## Phase H4 — Spell roster expansion + ally-target intents
 
-> **Split (2026-05-25):** Original single-phase H4 estimated at 8-10h. Split into H4a/H4b/(H4c deferred) so each ends at a runnable, demoable state and the hero-power decision can be re-litigated after the spell roster is in play. With 5 new spells covering offence / defence / heal / cleanse / mana conversion, a Knight hero power risks redundancy with the expanded spell list; defer the decision until the new spells have been played against multi-enemy fights and a clear gap (or none) emerges.
+> **Split (2026-05-25):** Original single-phase H4 estimated at 8-10h. Split into H4a (spells, shipped) / H4b (ally intents, shipped) / H4c (hero power, **DROPPED 2026-05-26** — see H4c section). The hero-power decision was deferred to be re-litigated after the spell roster was in play; the re-litigation concluded that the gap was real (no player-side board verb) but not hero-power-shaped (the candidate verbs are too impactful to be free + cooldown). Parked verbs moved to the discoverable-spell pool.
 
-**Goal (parent phase):** broaden response heterogeneity (player side) and threat heterogeneity (enemy side). Add 3-5 new spells with multi-color costs. Add ally-target enemy intents (heal-ally, buff-ally, shield-ally) so enemy compositions can be role-mixed (healer + tank, rally brute + minions, shielder + squishy mage) — but **also keep simple block/attack compositions in the pool** so multi-enemy variety doesn't require role-based units in every fight. Introduce a class hero power with a cooldown framing.
+**Goal (parent phase):** broaden response heterogeneity (player side) and threat heterogeneity (enemy side). Add new spells with multi-color costs. Add ally-target enemy intents (heal-ally, buff-ally, shield-ally) so enemy compositions can be role-mixed — but **also keep simple block/attack compositions in the pool** so multi-enemy variety doesn't require role-based units in every fight.
 
 ### Phase H4a — Spell roster expansion
 
@@ -366,7 +391,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 **Picker modals:** `PurifyPickerModal`, `FocusPickerModal`, `VolleyTargetModal`. Modal overlay style consistent with `RewardScreen`. ESC and backdrop-click close (cast aborts, mana not consumed).
 
-**Out of scope:** ally-target intents (H4b), hero power (H4c deferred), spell acquisition / 6-slot cap (next sub-phase), new enemy compositions, spell upgrades, spell-acquisition shop UI (Phase I integration).
+**Out of scope:** ally-target intents (H4b), hero power (H4c dropped), spell acquisition / 6-slot cap (next sub-phase), new enemy compositions, spell upgrades, spell-acquisition shop UI (Phase I integration).
 
 **Acceptance:**
 - ✓ 10 spells + 1 ultimate visible in the spell tray, costs rendered as colored mana pips
@@ -398,7 +423,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - **Composition design:** map generation includes role-mixed compositions *and* simple stacking compositions. Two new role-mixed templates seeded: e.g. "Brute + Skirmisher-as-rallier (buff-ally)", "Defender + Smolder (shield-ally on Smolder so the burn-applier survives longer)". Simple-stacking compositions stay in the pool.
 - One existing archetype gains an ally-target verb variant via intent pattern injection (no new archetype needed). Pick the lightest fit — likely Skirmisher (low HP, attacks fast) gaining a `buff-ally` variant.
 
-**Out of scope:** new archetypes, Corruptor (J1), hero power (H4c deferred).
+**Out of scope:** new archetypes, Corruptor (J1), hero power (H4c dropped).
 
 **Acceptance:**
 - ✓ Three new intent kinds wired through `executeEnemyTurn`; resolution applies the correct effect to the named ally
@@ -410,18 +435,28 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-### Phase H4c — Hero power (DEFERRED)
+### Phase H4c — Hero power (DROPPED 2026-05-26)
 
-**Status:** deferred 2026-05-25 until after H4a/H4b ship. Original H4 spec assumed a Knight hero power was needed; with the expanded spell roster from H4a (5 new spells covering offence / defence / heal / cleanse / mana conversion), the design space left for a hero power has shrunk substantially. Re-evaluate after playing through H4a/H4b: if there's a clear gap the new spells don't cover, design the hero power against that gap; if the kit feels complete, drop H4c entirely and update `01-design.md` to reflect that the class identity is "kit + ultimate", no separate hero power.
+**Status:** **dropped** after H4a/H4b shipped. The deferral question was "is there a clear gap the expanded spell roster doesn't cover?" Answer landed in two parts:
 
-Open candidates parked from `08-multi-color-mana-proposal.md`:
-- Stun (skip enemy intent) — strong tempo tool
-- Shatter color (clear all of 1 color) — board manipulation, indirect mana gen
-- Big heal (8 HP) — likely redundant with Steel Heart now
-- Reveal next 2 intents (all enemies) — info advantage
-- Cooldown duration: lean 2-3 phases if it ships
+1. **The gap is real but isn't a hero-power-shaped gap.** The kit has no player-side board verb (the demo feedback in `01-design.md` §"Parallel play" called this out as load-bearing). Filling it matters.
+2. **The candidate verbs are too impactful to be free.** Shatter Color, Detonator/Mark, Petrify (player-side), Transmute, Sweep, Banish — each is strong enough that "free + cooldown" undersells the decision. Tying them to mana cost (and putting them in the discoverable spell pool) keeps the verb scarcity honest: a player earns them through play, pays for each cast, and the slot stays composable with relics and other spells.
 
-**Acceptance:** N/A while deferred. To be filled in if the phase re-activates.
+**What replaces it:** the parked verbs become candidates for the **discoverable spell pool** (acquired via shop / post-fight reward / future class-spell-discovery system — Phase I and onward). They are NOT class-baseline. A Knight run might or might not roll any of them; that's fine, because the run-shape variability is part of the roguelike loop.
+
+**Knight class identity is now locked as "kit + ultimate":** 10 baseline spells from H4a + Riposte ultimate + Resolute passive. No third "hero power" button slot. `01-design.md` updated to reflect.
+
+**Parked verb candidates** (for discoverable-spell design in a later phase — order is rough strength gradient, not priority):
+- **Shatter Color** — pick color → all gems of that color clear through normal match resolution (cascade multiplier applies, pools fill). Maximum payoff. Likely mana cost: high (e.g. 4-5 of any single color), so it's expensive and rare.
+- **Detonator / Mark** — mark a gem; next time matched, all of that color clears + bonus pooled damage. Two-step, tactical. Composes with enemy board verbs (disruptable mark = real cost).
+- **Petrify (player-side)** — lock N cells against enemy board verbs for one turn. Reactive; valuable against Brute/Defender/Smolder/Corruptor.
+- **Transmute** — convert N gems of color A → color B. Tactical fix; less explosive than Shatter.
+- **Sweep** — clear one row or column. Clean AoE; sets up cascades from above.
+- **Banish** — permanently remove one gem. Smallest verb; useful for breaking clusters.
+
+**Open design question (parked, not blocking):** the "per-fight (1 use per encounter)" framing came up during this decision and may be a better fit for **ultimates** than the current charge-based model (Riposte = 8 purple). Re-litigate when more class ults are designed (post-slice).
+
+**Acceptance:** N/A. Phase removed from the dependency chain.
 
 ---
 
@@ -549,7 +584,7 @@ Audio (sfx, music) is a non-goal for the slice — see `02-scope.md`. Not in thi
 ## Dependency graph
 
 ```
-A → B → C → D → E → F → G → H1 → H2a → H3 → H4a → H4b → (H4c?) → H2b → H2c → I → J1 → J2 → K → L
+A → B → C → D → E → F → G → H1 → H2a → H3 → H4a → H4b → H2b → H2b.5 → H2c → I → J1 → J2 → K → L
 ```
 
 Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) and the spell roster expansion (H4) need to land before the verb work because verb threats become much more interesting once the player has a richer response toolkit. Without H3/H4, H2b/H2c verbs would feel like one-note board hazards rather than threats the player engages with through spell choice. H1 must precede H2a (multi-enemy combat needs the run-flow scaffolding); H3 must precede H4 (spells are designed around the multi-color economy from day 1); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
@@ -570,10 +605,11 @@ Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) 
 | H1 | Map + run flow (single-enemy) | 4-5h |
 | H2a | Multi-enemy plumbing + AOE + Skirmisher | 4-5h ✅ |
 | H3 | Multi-color mana economy | 6-9h ✅ |
-| H4a | Spell roster expansion (5 new spells) | 5-7h |
-| H4b | Ally-target intents + role-mixed compositions | 3-4h |
-| H4c | Hero power | deferred (re-evaluate) |
+| H4a | Spell roster expansion (5 new spells) | 5-7h ✅ |
+| H4b | Ally-target intents + role-mixed compositions | 3-4h ✅ |
+| H4c | Hero power | DROPPED — verbs moved to discoverable-spell pool |
 | H2b | Brute column-smash + Defender petrify-row | 5-6h |
+| H2b.5 | First player-side verb spell (micro-phase) | 1-2h |
 | H2c | Caster color-hex + Swarmer cluster-shove | 5-7h |
 | I | Shop + rest | 3-4h |
 | J1 | Boss gimmick (Corruptor) | 3-4h |

@@ -40,6 +40,7 @@ import {
   type GemColor,
   type MapState,
   type PendingReward,
+  type PetrifiedRows,
   type Player,
   type Pos,
   type RelicInstance,
@@ -66,13 +67,19 @@ import {
   resolvePurify,
   resolveRegenerate,
 } from '../combat/spellResolvers'
-import { tickFlagDuration } from '../board/flags'
+import { tickFlagDuration, tickPetrifiedRows } from '../board/flags'
 
 export type BoardState = {
   width: number
   height: number
   cells: Cell[][]
   selected: Pos | null
+  // H2b: row index → player phases remaining for Defender's petrify
+  // lockout. detectMatches reads this to exclude petrified rows as
+  // match anchors. Position-bound (does NOT travel with gems via
+  // gravity — the row stays locked regardless of which gems flow
+  // through). Empty by default; entries cleared when ticking to 0.
+  petrifiedRows: PetrifiedRows
 }
 
 export type GameStore = {
@@ -235,6 +242,7 @@ function initialState(seed: string): {
       height: BOARD_HEIGHT,
       cells: board,
       selected: null,
+      petrifiedRows: {},
     },
     rng: { ...streams, board: nextBoardRng, map: nextMapRng },
     rootSeed: seed,
@@ -521,6 +529,10 @@ export const useGameStore = create<GameStore>()(
       }
 
       const tailEvents: GameEvent[] = []
+      // H2b: petrify-row state is staged here for the enemy-acting
+      // branch below; defaults to current state so non-enemy paths
+      // (extra-turn cascades, victory) leave petrified rows untouched.
+      let tickedPetrifiedRows: PetrifiedRows = current.board.petrifiedRows
 
       // 4+ matches grant an extra turn — UNLESS the swap also killed the
       // last enemy, in which case we want to fall through to
@@ -580,16 +592,28 @@ export const useGameStore = create<GameStore>()(
           const tickResult = tickFlagDuration(finalBoard, 'burning')
           finalBoard = tickResult.board
           tailEvents.push(...tickResult.events)
+          // H2b: tick column-smash countdown (gem-bound, on Cell.flags)
+          // and petrify-row countdown (position-bound, on BoardState).
+          // Both tick per phase, mirroring burning's cadence.
+          const smashTick = tickFlagDuration(finalBoard, 'pendingSmash')
+          finalBoard = smashTick.board
+          tailEvents.push(...smashTick.events)
+          const petrifyTick = tickPetrifiedRows(current.board.petrifiedRows)
+          // petrifiedRows update is staged into `s.board.petrifiedRows` in
+          // the `set` block below — accumulate locally for now.
+          tickedPetrifiedRows = petrifyTick.petrifiedRows
 
           const enemyResult = executeEnemyTurn(
             player,
             enemies,
             finalBoard,
             enemyRng,
+            tickedPetrifiedRows,
           )
           player = enemyResult.player
           enemies = enemyResult.enemies
           finalBoard = enemyResult.board
+          tickedPetrifiedRows = enemyResult.petrifiedRows
           enemyRng = enemyResult.rng
           phase = enemyResult.phase
           tailEvents.push(...enemyResult.events)
@@ -661,6 +685,7 @@ export const useGameStore = create<GameStore>()(
 
       set((s) => {
         s.board.cells = finalBoard
+        s.board.petrifiedRows = tickedPetrifiedRows
         s.rng.board = finalBoardRng
         s.rng.enemy = enemyRng
         s.rng.loot = nextLootRng

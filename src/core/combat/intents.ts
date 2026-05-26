@@ -1,5 +1,16 @@
 import { nextInt, type RngState } from '../rng/mulberry32'
-import type { Enemy, EnemyArchetype, Intent, IntentKind } from '../../types'
+import type {
+  Cell,
+  Enemy,
+  EnemyArchetype,
+  GameEvent,
+  Intent,
+  IntentKind,
+  PetrifiedRows,
+  Pos,
+} from '../../types'
+import { BOARD_HEIGHT, BOARD_WIDTH } from '../../types'
+import { applyFlagToCells } from '../board/flags'
 import { getArchetype, type IntentRange } from './archetypeRegistry'
 
 // Roll an intent at a given pattern index. The kind is scripted per archetype
@@ -93,6 +104,21 @@ export function rollIntent(
     return { intent: { kind: 'buff-ally', stacks, targetAllyId }, rng: r2 }
   }
 
+  // --- H2b board verbs ---
+  // Column / row choice rolls from rng.enemy. The caller is responsible for
+  // pre-flagging the cells in the chosen column/row via applyFlagToCells —
+  // rollIntent stays pure (no board access). The column/row number is baked
+  // into the intent so the telegraph (pre-flag) and the resolution (fire)
+  // both reference the same lane.
+  if (kind === 'column-smash') {
+    const [column, r2] = nextInt(rng, BOARD_WIDTH)
+    return { intent: { kind: 'column-smash', column }, rng: r2 }
+  }
+  if (kind === 'petrify-row') {
+    const [row, r2] = nextInt(rng, BOARD_HEIGHT)
+    return { intent: { kind: 'petrify-row', row }, rng: r2 }
+  }
+
   // Exhaustive guard — every IntentKind must be handled above.
   throw new Error(`rollIntent: unhandled intent kind ${kind as string}`)
 }
@@ -101,4 +127,80 @@ function rollInRange(rng: RngState, range: IntentRange): [number, RngState] {
   const span = range.max - range.min + 1
   const [delta, next] = nextInt(rng, span)
   return [range.min + delta, next]
+}
+
+// H2b: apply the telegraph flag for board-verb intents (column-smash,
+// petrify-row). Called by both freshFight (initial intent) and
+// executeEnemyTurn (next intent at end of enemy turn). Returns the
+// updated board and petrifiedRows plus any telegraph events for the FX
+// layer. No-op for intent kinds that don't have a telegraph flag.
+export function applyIntentTelegraph(
+  board: Cell[][],
+  petrifiedRows: PetrifiedRows,
+  intent: Intent,
+  enemyId: string,
+  archetype: EnemyArchetype,
+): {
+  board: Cell[][]
+  petrifiedRows: PetrifiedRows
+  events: GameEvent[]
+} {
+  if (intent.kind === 'column-smash') {
+    const def = getArchetype(archetype)
+    // Default 1 phase (telegraph-this-turn, fire-next-turn). Per-archetype
+    // overrides via columnSmashDuration if a future archetype wants a
+    // slower or faster cycle.
+    const duration = def.columnSmashDuration ?? 1
+    const cells: Pos[] = []
+    const h = board.length
+    for (let y = 0; y < h; y++) {
+      cells.push({ x: intent.column, y })
+    }
+    const nextBoard = applyFlagToCells(board, cells, 'pendingSmash', duration)
+    return {
+      board: nextBoard,
+      petrifiedRows,
+      events: [
+        {
+          kind: 'column-smash-placed',
+          enemyId,
+          column: intent.column,
+          cells,
+          duration,
+        },
+      ],
+    }
+  }
+  if (intent.kind === 'petrify-row') {
+    const def = getArchetype(archetype)
+    // Default 2 phases of lockout. The row stays petrified across the
+    // telegraph phase AND the next phase, decremented at phase start.
+    const duration = def.petrifyDuration ?? 2
+    const nextPetrifiedRows: PetrifiedRows = {
+      ...petrifiedRows,
+      [intent.row]: Math.max(petrifiedRows[intent.row] ?? 0, duration),
+    }
+    // Emit cells for the FX layer even though storage is row-level —
+    // overlays render per cell, so packaging the positions here keeps
+    // the consumer simple.
+    const cells: Pos[] = []
+    const w = board[0]?.length ?? 0
+    for (let x = 0; x < w; x++) {
+      cells.push({ x, y: intent.row })
+    }
+    return {
+      board,
+      petrifiedRows: nextPetrifiedRows,
+      events: [
+        {
+          kind: 'petrify-placed',
+          enemyId,
+          row: intent.row,
+          cells,
+          duration,
+        },
+      ],
+    }
+  }
+  return { board, petrifiedRows, events: [] }
 }
