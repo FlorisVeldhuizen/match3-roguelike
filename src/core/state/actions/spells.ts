@@ -4,14 +4,18 @@ import {
   snapshotOf,
 } from '../../relics/engine'
 import {
+  type CombatPhase,
   type Enemy,
   type GameEvent,
   type GemColor,
+  type PendingReward,
   type Player,
+  type RunPhase,
   type SpellId,
   type StatusKind,
   type UltimateId,
 } from '../../../types'
+import { rollReward } from '../../relics/reward'
 import { getSpell, getUltimate } from '../../combat/spellRegistry'
 import { canAffordSpell, consumeSpellCost } from '../../combat/mana'
 import {
@@ -21,7 +25,10 @@ import {
   resolveIgnite,
   resolvePurify,
   resolveRegenerate,
+  resolveShatter,
 } from '../../combat/spellResolvers'
+import { pickNextTarget } from '../../combat/aoe'
+import { runOnEnemyKilled } from '../../relics/engine'
 import type { StoreSet, StoreGet } from './types'
 
 export function makeCastSpell(set: StoreSet, get: StoreGet) {
@@ -173,6 +180,142 @@ export function makeCastPurify(set: StoreSet, get: StoreGet) {
       s.fight.player = r.player
     })
     return { ok: true, events: [event, ...hookEvents, ...r.events] }
+  }
+}
+
+export function makeCastShatter(set: StoreSet, get: StoreGet) {
+  // H2b.5 first player-side board verb. Picker picks the target gem
+  // colour; every cell of that colour shatters and applies its normal
+  // per-colour effect (red dmg / blue block pool / green heal /
+  // yellow mana / purple skill charge) scaled by cell count, then
+  // gravity + refill spawns fresh gems. Uses rng.board for the spawn
+  // roll — shatter is a player action, so its determinism rides the
+  // board rng stream rather than rng.enemy.
+  //
+  // MVP scope: does NOT route through runOnMatch, so Sharp Edge /
+  // Iron Buckler / Cascade Crystal don't fire on the cleared cells.
+  // runOnSpellCast DOES fire (handled here, like every other spell).
+  return (color: GemColor): { ok: boolean; events: GameEvent[] } => {
+    const current = get()
+    if (current.fight.phase !== 'player-acting') {
+      return { ok: false, events: [] }
+    }
+    const def = getSpell('shatter')
+    if (!canAffordSpell(current.fight.player.mana, def.cost)) {
+      return { ok: false, events: [] }
+    }
+    // Refuse no-op casts (no cells of the picked colour on the board).
+    // The picker UI should disable the option in this case but the
+    // gate stays here as a defensive backstop.
+    const hasAny = current.board.cells.some((row) =>
+      row.some((c) => c.gemColor === color),
+    )
+    if (!hasAny) {
+      return { ok: false, events: [] }
+    }
+
+    const event: GameEvent = { kind: 'spell-cast', spellId: 'shatter' }
+    const writeRelics = current.fight.player.relics.map((r) => ({
+      ...r,
+      runFlags: { ...r.runFlags },
+      fightFlags: { ...r.fightFlags },
+    }))
+    const hookEvents = runOnSpellCast(
+      { spellId: 'shatter' },
+      writeRelics,
+      snapshotOf(
+        current.fight.player,
+        current.fight.enemies,
+        current.fight.targetEnemyId,
+        0,
+      ),
+    )
+    const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
+    const r = resolveShatter(
+      { ...current.fight.player, mana: nextMana, relics: writeRelics },
+      current.fight.enemies,
+      current.board.cells,
+      current.rng.board,
+      color,
+      current.fight.targetEnemyId,
+    )
+
+    // Per-kill chain — emit enemy-killed + runOnEnemyKilled relic
+    // hooks + re-point the current target if it died. Mirrors the
+    // sequence in attemptSwap so onKill relics (e.g. Vampiric Sigil)
+    // still proc when shatter delivers the killing blow.
+    let nextTargetId = current.fight.targetEnemyId
+    const killEvents: GameEvent[] = []
+    for (const killedId of r.killedIds) {
+      killEvents.push({ kind: 'enemy-killed', enemyId: killedId })
+      const onKill = runOnEnemyKilled(
+        { enemyId: killedId },
+        r.player.relics,
+        snapshotOf(r.player, r.enemies, nextTargetId, 0),
+      )
+      killEvents.push(...onKill)
+      if (killedId === nextTargetId) {
+        nextTargetId = pickNextTarget(r.enemies, null)
+      }
+    }
+
+    // Victory check — Shatter is the first immediate-damage spell that
+    // can kill an enemy from a free action mid-phase, so the phase
+    // transition can't wait for resolveEndOfPhase like a swap-driven
+    // kill does. Mirror the victory branch in attemptSwap: roll the
+    // reward, advance runPhase, append the node to completedNodeIds,
+    // emit phase-changed.
+    const anyEnemyAlive = r.enemies.some((e) => e.hp > 0)
+    let nextFightPhase: CombatPhase = current.fight.phase
+    let nextRunPhase: RunPhase = current.runPhase
+    let nextPendingReward: PendingReward | null = current.pendingReward
+    let nextLootRng = current.rng.loot
+    const completedNodeIds = current.map.completedNodeIds.slice()
+    let finalPlayer = r.player
+    if (!anyEnemyAlive) {
+      nextFightPhase = 'victory'
+      killEvents.push({ kind: 'phase-changed', phase: 'victory' })
+      const curNode = current.map.currentNodeId
+      if (curNode != null && !completedNodeIds.includes(curNode)) {
+        completedNodeIds.push(curNode)
+      }
+      if (current.fight.isBoss) {
+        // Boss kill heals to full (same rule as the swap-driven boss
+        // kill in attemptSwap). The run-victory screen follows.
+        finalPlayer = { ...finalPlayer, hp: finalPlayer.maxHp }
+        nextRunPhase = 'victory'
+      } else if (nextPendingReward == null) {
+        const rolled = rollReward(finalPlayer.relics, 'common', nextLootRng, 0)
+        nextPendingReward = rolled.reward
+        nextLootRng = rolled.rng
+        killEvents.push({
+          kind: 'reward-offered',
+          offeredRelicIds: rolled.reward.offeredRelicIds,
+          gold: rolled.reward.gold,
+        })
+        nextRunPhase = 'reward'
+      }
+    }
+
+    set((s) => {
+      s.fight.player = finalPlayer
+      s.fight.enemies = r.enemies
+      s.fight.targetEnemyId = nextTargetId
+      s.fight.phase = nextFightPhase
+      s.board.cells = r.board
+      s.rng.board = r.rng
+      s.rng.loot = nextLootRng
+      s.pendingReward = nextPendingReward
+      s.runPhase = nextRunPhase
+      s.map.completedNodeIds = completedNodeIds
+      // Whichever path triggered the cast, the board-targeting mode
+      // is consumed by it.
+      s.boardTargetingSpell = null
+    })
+    return {
+      ok: true,
+      events: [event, ...hookEvents, ...r.events, ...killEvents],
+    }
   }
 }
 

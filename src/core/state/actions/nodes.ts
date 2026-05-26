@@ -59,14 +59,17 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     }
 
     // Fight / elite / boss: roll a fresh fight from the node's archetypes.
-    // Player HP and mana (H3) carry from the previous fight; freshFight
-    // resets to defaults and we overwrite below. Boss victory heals to
-    // full (see attemptSwap victory block), so the player enters the
-    // next map's run topped up. Mana persistence is locked by the H3
-    // proposal — it would feel terrible to walk into shop, lose your
-    // saved-up mana, and walk into the next fight resource-starved.
-    // skillCharge stays reset between fights (existing behaviour) —
-    // ultimates are designed as per-fight commitments.
+    // Player HP carries from the previous fight; freshFight resets to
+    // defaults and we overwrite HP below. Boss victory heals to full
+    // (see attemptSwap victory block), so the player enters the next
+    // map's run topped up.
+    //
+    // Mana and skillCharge BOTH reset to zero between fights. Original
+    // H3 design carried mana over, but in practice that let players
+    // arrive at later fights with a full bank that trivialised pacing
+    // — and rewarded sitting on saved mana through trivial fights
+    // rather than spending it. Per-fight reset puts every encounter
+    // back on the same starting line and forces in-fight decisions.
     const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics, {
       archetypes: node.archetypes,
       isBoss: node.kind === 'boss',
@@ -75,7 +78,6 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
       enemyRoll.fight.player.maxHp,
       current.fight.player.hp,
     )
-    enemyRoll.fight.player.mana = { ...current.fight.player.mana }
     const boardRoll = generateBoard(current.rng.board)
     // onRoundStarted fires for the new encounter. Events are dropped on
     // the floor here — there's no animation queue between map clicks and
@@ -104,6 +106,9 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
       s.rng.board = boardRoll.rng
       s.fightCounter += 1
       s.runPhase = 'fight'
+      // Stale board-targeting mode left over from the previous fight
+      // gets cleared so the new fight starts in normal swap mode.
+      s.boardTargetingSpell = null
     })
   }
 }

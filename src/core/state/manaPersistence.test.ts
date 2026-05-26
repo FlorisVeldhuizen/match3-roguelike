@@ -5,10 +5,12 @@ import '../../content/relics'
 import '../../content/statuses'
 import { useGameStore } from './store'
 
-// H3: mana persists across fight transitions but is wiped on restart.
-// Locked by 08-multi-color-mana-proposal.md — without persistence,
-// stockpiling mana between fights becomes impossible and walking into a
-// shop drops your saved-up resources.
+// Original H3 design carried mana over between fights. In playtesting
+// that let players bank mana through trivial fights and arrive at
+// later ones with a full kit, which trivialised pacing. Per-fight
+// reset puts every encounter on the same starting line. Same
+// reasoning extends to restart (always reset) and skill charge
+// (which already reset per fight).
 
 function setMana(red: number, blue: number, green: number, yellow: number) {
   useGameStore.setState((s) => {
@@ -16,8 +18,8 @@ function setMana(red: number, blue: number, green: number, yellow: number) {
   })
 }
 
-describe('mana persistence across fights', () => {
-  it('carries mana when entering a new fight node', () => {
+describe('mana resets on each new fight', () => {
+  it('zeros mana when entering a fight node', () => {
     // Reset to a clean run.
     useGameStore.getState().restart()
     // Hand-seed some mana on the lingering fight state.
@@ -33,7 +35,7 @@ describe('mana persistence across fights', () => {
     useGameStore.getState().enterNode(startFight!.id)
 
     const mana = useGameStore.getState().fight.player.mana
-    expect(mana).toEqual({ red: 3, blue: 5, green: 2, yellow: 4 })
+    expect(mana).toEqual({ red: 0, blue: 0, green: 0, yellow: 0 })
   })
 
   it('wipes mana on restart', () => {

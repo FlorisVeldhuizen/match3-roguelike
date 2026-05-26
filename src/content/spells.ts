@@ -185,6 +185,27 @@ const cinderLash: SpellDef = {
   pendingDescription: '',
 }
 
+// H2b.5: Shatter Color — first player-side board verb. Picker spell
+// (player selects target color at cast time). Clears every gem of the
+// chosen colour and applies the standard per-colour effect (red →
+// damage, blue → block pool, green → heal, yellow → mana, purple →
+// skill charge), scaled by cell count. Heavy yellow cost forces the
+// player to bank wild mana before cashing in. MVP scope: bypasses the
+// relic onMatch hooks — a future refactor will route through the
+// shared match-processing pipeline so Sharp Edge / Iron Buckler /
+// Cascade Crystal fire here too.
+const shatter: SpellDef = {
+  id: 'shatter',
+  name: 'Shatter',
+  icon: '💎',
+  cost: { yellow: 4 },
+  resolution: 'immediate',
+  description:
+    'Pick a gem on the board. Every gem of that colour shatters, paying out its usual effect (damage, block, heal, mana, or charge) scaled by how many cleared.',
+  pendingLabel: '',
+  pendingDescription: '',
+}
+
 const riposte: UltimateDef = {
   id: 'riposte',
   name: 'Riposte',
@@ -208,4 +229,5 @@ registerSpell(skewer)
 registerSpell(brittle)
 registerSpell(surge)
 registerSpell(cinderLash)
+registerSpell(shatter)
 registerUltimate(riposte)

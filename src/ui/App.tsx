@@ -27,6 +27,7 @@ export const BOARD_MOUNT_ID = 'board-mount'
 export function App() {
   const seed = useGameStore((s) => s.rootSeed)
   const runPhase = useGameStore((s) => s.runPhase)
+  const boardTargetingSpell = useGameStore((s) => s.boardTargetingSpell)
 
   useEffect(() => {
     ;(window as unknown as { __store?: typeof useGameStore }).__store = useGameStore
@@ -73,7 +74,14 @@ export function App() {
         <div className="game-scene">
           <EnemyFrame />
           <section className="board-shell" aria-label="Game board">
-            <div id={BOARD_MOUNT_ID} className="board-mount">
+            <div
+              id={BOARD_MOUNT_ID}
+              className={`board-mount${
+                boardTargetingSpell !== null
+                  ? ` is-board-targeting is-targeting-${boardTargetingSpell}`
+                  : ''
+              }`}
+            >
               {/* Pixi appends its canvas to board-mount via appendChild.
                   React leaves DOM nodes it didn't create alone, so the
                   canvas and this overlay coexist as siblings inside the

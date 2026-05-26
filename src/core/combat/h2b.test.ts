@@ -4,6 +4,7 @@ import {
   resolveColumnSmashIntent,
   resolvePetrifyRowIntent,
 } from './intentResolvers'
+import { resolveShatter } from './spellResolvers'
 import { executeEnemyTurn } from './enemyTurn'
 import { registerArchetype } from './archetypeRegistry'
 import { resolveSwap } from '../board/cascade'
@@ -14,7 +15,14 @@ import {
   hasValidSwap,
 } from '../board/generation'
 import { tickPetrifiedRows } from '../board/flags'
-import type { Cell, Enemy, Intent, PetrifiedRows, Player } from '../../types'
+import type {
+  Cell,
+  Enemy,
+  GemColor,
+  Intent,
+  PetrifiedRows,
+  Player,
+} from '../../types'
 
 // Local archetype registration so the test doesn't depend on
 // `content/enemies.ts` loading. Mirrors the Smolder test setup.
@@ -501,6 +509,120 @@ describe('generateBoard — petrify-aware regen', () => {
 // ----------------------------------------------------------------------
 // tickPetrifiedRows
 // ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
+// resolveShatter (H2b.5)
+// ----------------------------------------------------------------------
+describe('resolveShatter', () => {
+  // Tiny helper to count cells of a given colour.
+  const countColor = (board: Cell[][], color: GemColor): number =>
+    board.flat().filter((c) => c.gemColor === color).length
+
+  it('clears every cell of the target colour and refills', () => {
+    const board = mkBoard8()
+    const redsBefore = countColor(board, 'red')
+    expect(redsBefore).toBeGreaterThan(0)
+    const player = makePlayer()
+    const r = resolveShatter(player, [], board, { seed: 1 }, 'red', null)
+    expect(countColor(r.board, 'red')).toBeLessThan(redsBefore)
+    // No null holes — every cell is filled after the gravity + refill.
+    expect(r.board.flat().every((c) => c !== null && c !== undefined)).toBe(true)
+    expect(r.events.some((e) => e.kind === 'gems-cleared')).toBe(true)
+    expect(r.events.some((e) => e.kind === 'gems-spawned')).toBe(true)
+  })
+
+  it('no-ops cleanly when the board has no cells of the picked colour', () => {
+    // Single-colour board (all red) → shatter blue is a no-op.
+    const board: Cell[][] = Array.from({ length: 8 }, () =>
+      Array.from({ length: 8 }, (): Cell => ({ gemColor: 'red' })),
+    )
+    const player = makePlayer()
+    const r = resolveShatter(player, [], board, { seed: 1 }, 'blue', null)
+    expect(r.events).toEqual([])
+    expect(r.board).toBe(board)
+    expect(r.player).toBe(player)
+  })
+
+  it('red shatter deals single-target damage scaled by cell count', () => {
+    const board = mkBoard8()
+    const reds = countColor(board, 'red')
+    const player = makePlayer()
+    const enemy = makeBrute({ hp: 100 })
+    const r = resolveShatter(
+      player,
+      [enemy],
+      board,
+      { seed: 1 },
+      'red',
+      enemy.id,
+    )
+    const dmgEvent = r.events.find((e) => e.kind === 'damage-dealt')
+    expect(dmgEvent).toBeTruthy()
+    // Single-target — should hit the named target with damage equal
+    // to (count) minus any block (enemy starts at 0 block).
+    if (dmgEvent?.kind === 'damage-dealt') {
+      expect(dmgEvent.targetId).toBe(enemy.id)
+      expect(dmgEvent.amount).toBeGreaterThan(0)
+    }
+    const updated = r.enemies.find((e) => e.id === enemy.id)
+    expect(updated?.hp).toBe(100 - reds)
+  })
+
+  it('blue shatter fills phasePools.blue + mana.blue (capped by MANA_CAPS)', () => {
+    const board = mkBoard8()
+    const blues = countColor(board, 'blue')
+    const player = makePlayer()
+    const r = resolveShatter(player, [], board, { seed: 1 }, 'blue', null)
+    // phasePools is uncapped — accumulates the full count.
+    expect(r.player.phasePools.blue).toBe(blues)
+    // mana.blue caps at MANA_CAPS.blue (= 8). If the board has more
+    // blues than the cap, the rest is lost.
+    expect(r.player.mana.blue).toBe(Math.min(8, blues))
+  })
+
+  it('green shatter heals up to maxHp + emits healed event', () => {
+    const board = mkBoard8()
+    const greens = countColor(board, 'green')
+    const player = makePlayer({ hp: 10 })
+    const r = resolveShatter(player, [], board, { seed: 1 }, 'green', null)
+    expect(r.player.hp).toBe(Math.min(40, 10 + greens))
+    expect(r.events.some((e) => e.kind === 'healed')).toBe(true)
+  })
+
+  it('yellow shatter only refills yellow mana (no damage / heal / block)', () => {
+    const board = mkBoard8()
+    const yellows = countColor(board, 'yellow')
+    const player = makePlayer({ hp: 20 })
+    const r = resolveShatter(player, [], board, { seed: 1 }, 'yellow', null)
+    // Yellow caps at MANA_CAPS.yellow (= 5).
+    expect(r.player.mana.yellow).toBe(Math.min(5, yellows))
+    expect(r.player.hp).toBe(20)
+    expect(r.player.phasePools).toEqual(player.phasePools)
+    expect(r.events.some((e) => e.kind === 'healed')).toBe(false)
+    expect(r.events.some((e) => e.kind === 'damage-dealt')).toBe(false)
+  })
+
+  it('purple shatter accumulates skillCharge', () => {
+    // Force some purple gems onto the board (mkBoard8 omits purple).
+    const board = mkBoard8()
+    board[0]![0] = { gemColor: 'purple' }
+    board[3]![3] = { gemColor: 'purple' }
+    board[7]![7] = { gemColor: 'purple' }
+    const player = makePlayer({ skillCharge: 1 })
+    const r = resolveShatter(player, [], board, { seed: 1 }, 'purple', null)
+    expect(r.player.skillCharge).toBe(1 + 3)
+  })
+
+  it('reports killedIds when red shatter delivers the killing blow', () => {
+    const board = mkBoard8()
+    const reds = countColor(board, 'red')
+    expect(reds).toBeGreaterThan(2)
+    const player = makePlayer()
+    const enemy = makeBrute({ hp: 2 }) // 2 HP, plenty of red → dies
+    const r = resolveShatter(player, [enemy], board, { seed: 1 }, 'red', enemy.id)
+    expect(r.killedIds).toContain(enemy.id)
+  })
+})
+
 describe('tickPetrifiedRows', () => {
   it('decrements every row and emits per-row tick events', () => {
     const result = tickPetrifiedRows({ 2: 2, 5: 1 })

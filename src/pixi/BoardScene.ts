@@ -792,6 +792,25 @@ export class BoardScene {
       this.cachedCanvasRect = null
       const cell = this.clientToCell(ev.clientX, ev.clientY)
       if (!cell) return
+      // Board-pick spell dispatch. When boardTargetingSpell is set,
+      // the next gem click resolves that spell's arg from the clicked
+      // cell and fires the cast. Bypasses the swap-pickup path —
+      // no lift, no selection ring, no petrify gate. Add new spells
+      // to the switch below as they ship; each picks its own
+      // arg-from-cell semantics + its own perform* method so the
+      // event stream goes through the animator (without that, gems
+      // just snap to the refilled state).
+      const targetingSpell = storeState.boardTargetingSpell
+      if (targetingSpell !== null) {
+        const gem = storeState.board.cells[cell.y]?.[cell.x]
+        if (gem && targetingSpell === 'shatter') {
+          void this.performShatter(gem.gemColor)
+        }
+        // Drop targeting mode either way — failed / no-gem clicks
+        // get a clean reset rather than leaving the player stuck.
+        storeState.cancelBoardTargeting()
+        return
+      }
       // H2b: gems on a petrified row are stuck — refuse to even pick
       // them up. Without this the player gets a "phantom" lift + a
       // post-swap revert with no explanation. Visually the row already
@@ -955,6 +974,14 @@ export class BoardScene {
       const primed = store.board.selected
 
       if (ev.key === 'Escape') {
+        // ESC bails out of board-targeting mode first — it's the
+        // most recently-entered mode and the player expects ESC to
+        // cancel "what they just clicked on".
+        if (store.boardTargetingSpell !== null) {
+          ev.preventDefault()
+          store.cancelBoardTargeting()
+          return
+        }
         if (primed) {
           ev.preventDefault()
           store.selectCell(null)
@@ -1042,6 +1069,29 @@ export class BoardScene {
     // falls off the bottom. Awaited so the modal lands AFTER the board
     // has cleared, not while gems are still in flight. Skipped when the
     // user prefers reduced motion.
+    const fightPhase = useGameStore.getState().fight.phase
+    const fightEnded = fightPhase === 'victory' || fightPhase === 'game-over'
+    if (fightEnded && !prefersReducedMotion()) {
+      await animator.sweepBoard()
+    }
+    emitGameEvent({ kind: 'gameplay-settled' })
+  }
+
+  // H2b.5: shatter goes through its own performance path because the
+  // store action is castShatter (not attemptSwap), but the event stream
+  // is the same shape as a swap's cascade (gems-cleared, gems-fell,
+  // gems-spawned, plus damage / kill / phase-changed). Routing through
+  // the animator is what drives the actual clear+drop visuals — without
+  // it, gems just snap to the refilled state because emitGameEvent only
+  // dispatches to subscribers, not to the Pixi animation queue.
+  private async performShatter(color: GemColor): Promise<void> {
+    const animator = this.animator
+    if (!animator || animator.isAnimating) return
+    this.setHover(null)
+    const result = useGameStore.getState().castShatter(color)
+    if (!result.ok) return
+    await animator.play(result.events)
+    // Mirror the post-swap sweep when shatter ended the fight.
     const fightPhase = useGameStore.getState().fight.phase
     const fightEnded = fightPhase === 'victory' || fightPhase === 'game-over'
     if (fightEnded && !prefersReducedMotion()) {

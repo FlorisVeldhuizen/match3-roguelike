@@ -48,6 +48,41 @@
   position: relative;
 }
 
+/* H2b.5: when a board-pick spell is awaiting a click, swap the cursor
+   to a crosshair so the affordance reads as "select a gem" rather
+   than "drag to swap". Per-spell modifier classes (is-targeting-
+   shatter, future is-targeting-banish, etc.) let each spell tune its
+   own tint or outline if needed. */
+.board-mount.is-board-targeting {
+  cursor: crosshair;
+}
+.board-mount.is-board-targeting canvas {
+  cursor: crosshair;
+}
+/* Subtle gold ring so the player can see they're in a special mode
+   from the corner of their eye. Pulses slowly so it doesn't compete
+   with the gem hover lift. */
+.board-mount.is-board-targeting::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 0.4rem;
+  border: 2px solid rgba(255, 215, 110, 0.55);
+  pointer-events: none;
+  z-index: 6;
+  animation: board-targeting-pulse 1.4s ease-in-out infinite;
+}
+@keyframes board-targeting-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    box-shadow: 0 0 12px rgba(255, 215, 110, 0.25);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 22px rgba(255, 215, 110, 0.55);
+  }
+}
+
 .board-mount canvas {
   display: block;
   border-radius: 0.3rem;

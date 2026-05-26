@@ -23,6 +23,12 @@ const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
   'volley',
 ])
 
+// Spells whose cast args come from a click on the board (gem or cell).
+// Clicking the tray button enters targeting mode; BoardScene reads
+// the next click and dispatches per-spell. Future Banish / Mark /
+// Petrify-player slot in here.
+const BOARD_TARGETING_SPELLS: ReadonlySet<SpellId> = new Set(['shatter'])
+
 // Purify only acts on harmful statuses. Regen is beneficial; the
 // player would never want to strip it, so the spell-tray gate
 // excludes Regen-only state.
@@ -89,6 +95,13 @@ export function SpellTray() {
   const enemies = useGameStore((s) => s.fight.enemies)
   const castSpell = useGameStore((s) => s.castSpell)
   const castUltimate = useGameStore((s) => s.castUltimate)
+  // Board-pick UX state. Generic across all board-targeting spells
+  // (Shatter is the first; Banish / Mark / Petrify-player will join).
+  // The button toggles targeting on/off; BoardScene reads the spell id
+  // and dispatches per-spell on the next gem click.
+  const boardTargetingSpell = useGameStore((s) => s.boardTargetingSpell)
+  const beginBoardTargeting = useGameStore((s) => s.beginBoardTargeting)
+  const cancelBoardTargeting = useGameStore((s) => s.cancelBoardTargeting)
   const onPlayerPhase = phase === 'player-acting'
   // 01-design §Spell-timing: "cast window = player phase + board
   // settled + can pay cost". Without this gate, the spell-tray button
@@ -185,13 +198,25 @@ export function SpellTray() {
           >
             <button
               type="button"
-              className={`spell-btn${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}${(flashKey[def.id] ?? 0) > 0 ? ' just-cast' : ''}`}
+              className={`spell-btn${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}${(flashKey[def.id] ?? 0) > 0 ? ' just-cast' : ''}${boardTargetingSpell === def.id ? ' is-targeting' : ''}`}
               // key re-mount on cast so the .just-cast keyframe replays
               // even if rapid casts land within the same flash window.
               key={`${def.id}-${flashKey[def.id] ?? 0}`}
               aria-disabled={blocked}
               onClick={() => {
                 if (blocked) return
+                // Board-targeting spells (Shatter; future Banish / Mark
+                // / Petrify-player) toggle a mode; BoardScene picks up
+                // the next gem click and fires the cast. Re-clicking
+                // the same button while in targeting mode cancels.
+                if (BOARD_TARGETING_SPELLS.has(def.id)) {
+                  if (boardTargetingSpell === def.id) {
+                    cancelBoardTargeting()
+                  } else {
+                    beginBoardTargeting(def.id)
+                  }
+                  return
+                }
                 // Picker-arg spells open a modal; the modal dispatches
                 // the dedicated cast action (castCleanse / castFocus /
                 // castVolley) on confirm. Cast-flash plays only on the

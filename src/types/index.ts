@@ -94,6 +94,7 @@ export type SpellId =
   | 'brittle'
   | 'surge'
   | 'cinder-lash'
+  | 'shatter'
 export type UltimateId = 'riposte'
 export type PendingSpellId = SpellId | UltimateId
 

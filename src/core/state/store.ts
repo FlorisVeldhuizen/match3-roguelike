@@ -18,6 +18,8 @@ import {
   type UltimateId,
 } from '../../types'
 import { generateMap } from '../map/generate'
+import { getSpell } from '../combat/spellRegistry'
+import { canAffordSpell } from '../combat/mana'
 import { makeDebugForceFight } from './actions/debug'
 import { makeAcquireRelic, makeSkipReward } from './actions/rewards'
 import { makeEnterNode, makeRestart } from './actions/nodes'
@@ -27,6 +29,7 @@ import {
   makeCastPurify,
   makeCastFocus,
   makeCastVolley,
+  makeCastShatter,
   makeCastUltimate,
 } from './actions/spells'
 import { makeSelectCell, makeSetTargetEnemy, makeAttemptSwap } from './actions/swap'
@@ -84,6 +87,20 @@ export type GameStore = {
     ok: boolean
     events: GameEvent[]
   }
+  castShatter: (color: GemColor) => { ok: boolean; events: GameEvent[] }
+  // Board-pick targeting mode for spells that read a cell click as
+  // their arg (H2b.5 Shatter is the first; future Banish / Mark /
+  // Petrify-player will plug into the same field). null = normal swap
+  // mode; otherwise the id of the spell currently awaiting a click.
+  // BoardScene reads this and dispatches per-spell on pointer-down.
+  // Cleared by a successful cast, by ESC, or on fight reset.
+  boardTargetingSpell: SpellId | null
+  // Enter board-targeting mode for the named spell. Gates on player
+  // phase + spell affordability. Returns true if the mode was entered,
+  // false if refused — the UI can use this to keep the button pressed
+  // visual in sync.
+  beginBoardTargeting: (spellId: SpellId) => boolean
+  cancelBoardTargeting: () => void
   acquireRelic: (id: string) => { ok: boolean; events: GameEvent[] }
   skipReward: () => void
   // Map navigation. Validates against getReachableFrom; no-op on invalid
@@ -114,6 +131,7 @@ function initialState(seed: string): {
   pendingReward: PendingReward | null
   map: MapState
   runPhase: RunPhase
+  boardTargetingSpell: SpellId | null
 } {
   const streams = forkStreams(seed)
   // H1: map is rolled at boot; the fight roll is deferred to enterNode so
@@ -137,6 +155,7 @@ function initialState(seed: string): {
     pendingReward: null,
     map,
     runPhase: 'map',
+    boardTargetingSpell: null,
   }
 }
 
@@ -156,6 +175,27 @@ export const useGameStore = create<GameStore>()(
     castPurify: makeCastPurify(set, get),
     castFocus: makeCastFocus(set, get),
     castVolley: makeCastVolley(set, get),
+    castShatter: makeCastShatter(set, get),
+    beginBoardTargeting: (spellId) => {
+      // Gate: must be the player's turn AND the spell must be
+      // affordable. Per-spell extra gates (e.g. "no gems of any
+      // colour" for Shatter, which is impossible mid-fight but
+      // defensive) live in the cast action itself, so this can stay
+      // generic across future board-pick spells.
+      const s = get()
+      if (s.fight.phase !== 'player-acting') return false
+      const def = getSpell(spellId)
+      if (!canAffordSpell(s.fight.player.mana, def.cost)) return false
+      set((st) => {
+        st.boardTargetingSpell = spellId
+      })
+      return true
+    },
+    cancelBoardTargeting: () => {
+      set((s) => {
+        s.boardTargetingSpell = null
+      })
+    },
     castUltimate: makeCastUltimate(set, get),
     acquireRelic: makeAcquireRelic(set, get),
     skipReward: makeSkipReward(set, get),

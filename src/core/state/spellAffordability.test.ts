@@ -166,6 +166,24 @@ describe('cast gates: insufficient mana refuses the cast', () => {
       'volley',
     )
   })
+
+  it('castShatter fails with 3 yellow (needs 4)', () => {
+    useGameStore.setState((s) => {
+      s.fight.player.mana.yellow = 3
+    })
+    const res = useGameStore.getState().castShatter('red')
+    expect(res.ok).toBe(false)
+    expect(useGameStore.getState().fight.player.mana.yellow).toBe(3)
+  })
+
+  it('castShatter succeeds with exactly 4 yellow', () => {
+    useGameStore.setState((s) => {
+      s.fight.player.mana.yellow = 4
+    })
+    const res = useGameStore.getState().castShatter('red')
+    expect(res.ok).toBe(true)
+    expect(useGameStore.getState().fight.player.mana.yellow).toBe(0)
+  })
 })
 
 describe('wild substitution: yellow covers shortfall correctly', () => {

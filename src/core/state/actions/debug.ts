@@ -15,7 +15,7 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
       enemyRoll.fight.player.maxHp,
       current.fight.player.hp,
     )
-    enemyRoll.fight.player.mana = { ...current.fight.player.mana }
+    // Mana resets per fight — see nodes.ts for the rationale.
     const boardRoll = generateBoard(current.rng.board)
     runOnRoundStarted(
       { fightId: 0 },
@@ -37,6 +37,7 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
       s.rng.board = boardRoll.rng
       s.fightCounter += 1
       s.runPhase = 'fight'
+      s.boardTargetingSpell = null
     })
   }
 }
