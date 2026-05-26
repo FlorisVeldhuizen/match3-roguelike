@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase H4b complete.** Working on H2b (Brute column-smash + Defender petrify-row) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
+Status: **Phase H2b complete.** Working on H2b.5 (first player-side verb spell, micro-phase) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
@@ -256,7 +256,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-### Phase H2b — Brute column-smash + Defender petrify-row
+### Phase H2b — Brute column-smash + Defender petrify-row ✅ COMPLETE
 
 **Goal:** two verbs land on top of H2a. Brute's retrofit promised in the roadmap; Defender is the simplest new archetype because its verb only touches `detectMatches`.
 
@@ -608,7 +608,7 @@ Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) 
 | H4a | Spell roster expansion (5 new spells) | 5-7h ✅ |
 | H4b | Ally-target intents + role-mixed compositions | 3-4h ✅ |
 | H4c | Hero power | DROPPED — verbs moved to discoverable-spell pool |
-| H2b | Brute column-smash + Defender petrify-row | 5-6h |
+| H2b | Brute column-smash + Defender petrify-row | 5-6h ✅ |
 | H2b.5 | First player-side verb spell (micro-phase) | 1-2h |
 | H2c | Caster color-hex + Swarmer cluster-shove | 5-7h |
 | I | Shop + rest | 3-4h |

@@ -173,6 +173,41 @@ describe('generateMap', () => {
     expect(found).toBe(true)
   })
 
+  // H2b: Defender must appear in at least one node across a reasonable
+  // seed range. It debuts at col 1 (weight 1) and is a mid-tier
+  // threat in col 2 (weight 3), so it should be common across seeds.
+  it('defender archetype appears in at least one map within 100 seeds', () => {
+    let found = false
+    for (let seed = 1; seed <= 100 && !found; seed++) {
+      const map = build(seed)
+      if (map.nodes.some((n) => n.archetypes?.includes('defender'))) {
+        found = true
+      }
+    }
+    expect(found).toBe(true)
+  })
+
+  // H2b: defender + smolder is one of the new role-mixed compositions
+  // ("the wall + the burner"). It should appear at least once over
+  // a wider seed range — role-mixed comp picks are 40% of multi-enemy
+  // col-2 nodes, and this is one of two defender-bearing templates.
+  it('defender+smolder role-mixed composition appears in at least one map within 200 seeds', () => {
+    let found = false
+    for (let seed = 1; seed <= 200 && !found; seed++) {
+      const map = build(seed)
+      if (
+        map.nodes.some(
+          (n) =>
+            n.archetypes?.includes('defender') &&
+            n.archetypes?.includes('smolder'),
+        )
+      ) {
+        found = true
+      }
+    }
+    expect(found).toBe(true)
+  })
+
   // Multi-enemy group sizes per column band. Col 0-1 are single-enemy;
   // col 2 fights have 2-3 enemies (mixed); elite stays solo; boss solo.
   it('multi-enemy group sizes match the per-column band', () => {
