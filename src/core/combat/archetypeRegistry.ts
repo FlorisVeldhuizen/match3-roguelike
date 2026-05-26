@@ -24,6 +24,13 @@ export type ArchetypeDef = {
   colorHexDuration?: number
   hexWeakStacksPerCell?: number
   clusterShoveLength?: number
+  // Enrage: alternate pattern when HP drops below threshold (default 50%).
+  enragePattern?: IntentKind[]
+  enrageThreshold?: number
+  // Leech: color-drain intent lifetime (player phases).
+  colorDrainDuration?: number
+  // Shade: fraction of HP damage dealt that heals the attacker (0-1).
+  onHitSelfHeal?: number
 }
 
 const registry = new Map<EnemyArchetype, ArchetypeDef>()

@@ -81,6 +81,7 @@ export type DamageSource =
   | 'burn'
   | 'riposte'
   | 'thornmail'
+  | 'relic-effect'
 
 // H4a: 'regen' is the player-side counterpart to Burn — stacks decay
 // −1 per tick, and on the owner's turn-start tick `stacks` HP is healed
@@ -113,6 +114,10 @@ export type SpellId =
   | 'surge'
   | 'cinder-lash'
   | 'shatter'
+  | 'transmute'
+  | 'blessed-ground'
+  | 'frozen-wall'
+  | 'chain-lightning'
 export type UltimateId = 'riposte'
 export type PendingSpellId = SpellId | UltimateId
 
@@ -338,13 +343,29 @@ export type GameEvent =
   // internal hoveredCell transitions. BurningOverlay listens to react
   // its flames in sync with the gem hover beat.
   | { kind: 'board-hover'; cell: Pos | null }
-  // Emitted by BoardScene.performSwap once the AC has fully drained its
-  // event queue AND a short cushion has elapsed for trailing FX (damage
-  // popups drifting, kill pulses, cascade-complete chimes). Terminal-
-  // state modals (victory / reward / game-over) listen for this so they
-  // mount on a settled scene regardless of cascade length — long chains
-  // get the full ride, short kills get a tight reveal.
   | { kind: 'gameplay-settled' }
+  | { kind: 'enemy-enraged'; enemyId: string }
+  | { kind: 'color-drain-placed'; enemyId: string; color: GemColor }
+  | {
+      kind: 'color-drain-fired'
+      enemyId: string
+      color: GemColor
+      turnsLeft: number
+    }
+  | { kind: 'color-drain-ticked'; color: GemColor; remaining: number }
+  | {
+      kind: 'drain-triggered'
+      color: GemColor
+      healAmount: number
+      enemyId: string
+      cells: Pos[]
+    }
+  | {
+      kind: 'trick-swapped'
+      enemyId: string
+      telegraphed: IntentKind
+      actual: IntentKind
+    }
 
 export type CombatPhase =
   | 'player-acting'
@@ -363,6 +384,8 @@ export type IntentKind =
   | 'petrify-row'
   | 'color-hex'
   | 'cluster-shove'
+  | 'color-drain'
+  | 'trick'
 
 // Optional status rider carried on attack intents. Smolder uses this
 // to apply Burn on hit. Surfaced on the intent badge so the player
@@ -396,6 +419,8 @@ export type Intent =
   // their colour to their destination and gravity refills the source.
   // `sources` and `destinations` are aligned by index (sources[i] → destinations[i]).
   | { kind: 'cluster-shove'; sources: Pos[]; destinations: Pos[] }
+  | { kind: 'color-drain'; color: GemColor }
+  | { kind: 'trick'; resolved: Intent }
 
 export type EnemyArchetype =
   | 'brute'
@@ -406,6 +431,9 @@ export type EnemyArchetype =
   | 'caster'
   | 'swarmer'
   | 'tyrant'
+  | 'leech'
+  | 'shade'
+  | 'trickster'
 
 export type PhasePools = {
   red: number
@@ -501,6 +529,7 @@ export type Player = {
   //               on a match that would normally be level 0)
   skewerArmed?: boolean
   surgeArmed?: boolean
+  chainLightningArmed?: boolean
   // Reinforce sets this at EOP. Next beginPlayerPhase preserves the
   // remaining block (instead of zeroing it) and clears the flag — the
   // phase *after* that zeros normally per 01-design §Reinforce.
@@ -574,7 +603,10 @@ export type Enemy = {
   currentIntent: Intent
   nextIntentIndex: number
   statuses: StatusInstance[]
+  enraged?: boolean
 }
+
+export type DrainedColor = { color: GemColor; enemyId: string; turnsLeft: number }
 
 export type FightState = {
   phase: CombatPhase
@@ -593,6 +625,7 @@ export type FightState = {
   // turnsLeft reaches 0. Multiple casters can stack independent hexes,
   // but two entries for the same colour collapse to max(turnsLeft).
   hexedColors?: HexedColor[]
+  drainedColors?: DrainedColor[]
 }
 
 export type HexedColor = { color: GemColor; turnsLeft: number }
