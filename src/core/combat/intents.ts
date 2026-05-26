@@ -9,7 +9,6 @@ import type {
   PetrifiedRows,
   Pos,
 } from '../../types'
-import { applyFlagToCells } from '../board/flags'
 import { getArchetype } from './archetypeRegistry'
 import {
   rollAttackIntent,
@@ -97,17 +96,18 @@ export function applyIntentTelegraph(
   events: GameEvent[]
 } {
   if (intent.kind === 'column-smash') {
-    // Marker flag (not duration). Stores the source enemy's id so the
-    // orphan sweep at the top of executeEnemyTurn can clear flags whose
-    // owner died between telegraph and fire.
+    // Column-bound threat — no cell flag is written. The overlay tracks
+    // the threat by (enemyId, column) from the placed/resolved events,
+    // and the resolver smashes the whole column at fire time. `cells`
+    // still names every cell in the column for FX layers that want to
+    // hang animation anchors per-cell without re-deriving the column.
     const cells: Pos[] = []
     const h = board.length
     for (let y = 0; y < h; y++) {
       cells.push({ x: intent.column, y })
     }
-    const nextBoard = applyFlagToCells(board, cells, 'pendingSmash', enemyId)
     return {
-      board: nextBoard,
+      board,
       petrifiedRows,
       events: [
         {

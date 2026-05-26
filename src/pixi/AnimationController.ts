@@ -304,10 +304,12 @@ function cascadeAnchorFromUpcoming(
   return toScreen({ x: sumX / n, y: sumY / n })
 }
 
-// Per-match dopamine callout. Only line matches of size 4+ get a word —
-// shape-based (T/L) clears already telegraph themselves through the bigger
-// area clear and burst particles, so an extra word felt like noise.
+// Per-match dopamine callout. Line-4/5 get impact words; T/L get shape
+// letters so the player learns the mechanic exists (the bigger area clear
+// alone wasn't legible enough to teach the shape category).
 function matchCalloutText(size: number, shape: MatchShape): string | null {
+  if (shape === 'T') return 'T-BURST!'
+  if (shape === 'L') return 'L-FLARE!'
   if (shape !== 'line') return null
   if (size >= 5) return 'BOOM!'
   if (size === 4) return 'POW!'

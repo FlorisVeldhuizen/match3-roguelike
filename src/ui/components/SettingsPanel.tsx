@@ -94,6 +94,18 @@ export function SettingsPanel() {
     window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
   }
 
+  const forceMatchT = () => {
+    const swap = useGameStore.getState().debugForceMatchT()
+    if (!swap) return
+    window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
+  }
+
+  const forceMatchL = () => {
+    const swap = useGameStore.getState().debugForceMatchL()
+    if (!swap) return
+    window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
+  }
+
   const forceFight = (
     archetype: 'skirmisher' | 'brute' | 'smolder' | 'defender' | 'rallier',
   ) => {
@@ -165,13 +177,32 @@ export function SettingsPanel() {
           {import.meta.env.DEV ? (
             <section className="settings-section settings-section-dev">
               <div className="settings-title">Dev</div>
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={forceMatch5}
-              >
-                Force match-5
-              </button>
+              <div className="settings-row settings-row-chips">
+                <span className="settings-label">Force match</span>
+                <div className="settings-chips">
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={forceMatch5}
+                  >
+                    Line-5
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={forceMatchT}
+                  >
+                    T
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={forceMatchL}
+                  >
+                    L
+                  </button>
+                </div>
+              </div>
               <div className="settings-row settings-row-chips">
                 <span className="settings-label">Force fight</span>
                 <div className="settings-chips">

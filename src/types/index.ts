@@ -20,15 +20,6 @@ export const GEM_COLORS: readonly GemColor[] = [
 export type CellFlags = {
   burning?: number
   blessed?: true
-  // H2b: Brute's column-smash telegraphs by pre-flagging every cell in
-  // the threatened column with the source enemy's id. Trigger-based,
-  // NOT duration-based — the flag has no countdown; it's consumed when
-  // the source enemy fires its column-smash intent (cells cleared) OR
-  // when the player matches the gem (flag goes with the gem via gravity).
-  // Storing the enemy id lets us sweep orphan flags when the source
-  // enemy dies before firing. Gem-bound (travels with the gem under
-  // gravity), like burning/blessed.
-  pendingSmash?: string
 }
 
 // H2b: Defender's petrify-row is *position-bound*, not gem-bound — the

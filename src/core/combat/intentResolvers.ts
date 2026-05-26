@@ -284,10 +284,12 @@ export function resolveTileBurnIntent(
 }
 
 // ---------- Column smash (Brute, H2b) ----------
-// Clear cells in the threatened column that still carry pendingSmash
-// (counter-play: matching a flagged gem clears the flag with the gem).
-// No payout (no pool fills, no cascade multiplier). Inlined gravity +
-// refill keeps the board interactable when the player phase begins.
+// Smash the entire column at fire time. The threat is column-bound, not
+// gem-bound: matching gems in the column during the player phase doesn't
+// reduce the smash — new gems falling/spawning/swapping into the column
+// will be smashed too. No payout (no pool fills, no cascade multiplier).
+// Inlined gravity + refill keeps the board interactable when the player
+// phase begins.
 export function resolveColumnSmashIntent(
   intent: Extract<Intent, { kind: 'column-smash' }>,
   source: Enemy,
@@ -297,20 +299,11 @@ export function resolveColumnSmashIntent(
   const events: GameEvent[] = []
   const col = intent.column
   const cellsCleared: Pos[] = []
-  // Only clear cells whose pendingSmash was placed by THIS enemy. Two
-  // enemies could (in principle) both telegraph smashes on overlapping
-  // columns — this scopes the resolver so one Brute firing doesn't
-  // consume another Brute's pending flags. Most fights only have one
-  // smash source at a time; ownership scoping is a defensive
-  // correctness measure.
   const cleared: (Cell | null)[][] = board.map((row, y) =>
     row.map((cell, x) => {
       if (x !== col) return cell
-      if (cell.flags?.pendingSmash === source.id) {
-        cellsCleared.push({ x, y })
-        return null
-      }
-      return cell
+      cellsCleared.push({ x, y })
+      return null
     }),
   )
   events.push({

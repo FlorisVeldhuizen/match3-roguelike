@@ -188,10 +188,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         finalBoard = tickResult.board
         tailEvents.push(...tickResult.events)
         // H2b: petrify-row is duration-based (position-bound on
-        // BoardState) and ticks per phase like burning. pendingSmash
-        // is NOT ticked — it's a trigger-based marker consumed at fire
-        // time (or swept as an orphan inside executeEnemyTurn when its
-        // source enemy isn't around to fire it).
+        // BoardState) and ticks per phase like burning.
         const petrifyTick = tickPetrifiedRows(current.board.petrifiedRows)
         // petrifiedRows update is staged into `s.board.petrifiedRows` in
         // the `set` block below — accumulate locally for now. The

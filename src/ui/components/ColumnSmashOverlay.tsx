@@ -2,50 +2,48 @@ import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useFightReset } from '../hooks/useFightReset'
+import { BOARD_HEIGHT } from '../../types'
 import { CellAnchor } from './CellAnchor'
 
 // Threat visualization for Brute's column-smash telegraph. Event-driven
 // (not store-derived) so the overlay's visibility tracks the animator's
 // playback timeline rather than the synchronous store commit:
 //
-//   - column-smash-placed:    add cells to the overlay (telegraph arrives
-//                             into view in lockstep with any FX layer
-//                             the AC plays for it).
-//   - column-smash-resolved:  drop cells owned by the source enemy
-//                             EXACTLY when the smash visual plays —
-//                             the red threat wash transitions into the
-//                             gems-cleared burst with no "normal blink"
-//                             frame in between.
-//   - gems-cleared:           drop any tracked cells whose (x,y) was
-//                             cleared by the player (matching a flagged
-//                             gem clears the flag with the gem).
-//   - fight reset:            seed from store + reset local state.
+//   - column-smash-placed:    add (owner, column) — the threat now
+//                             covers the entire column until fire.
+//   - column-smash-resolved:  drop the owner's threat in lockstep with
+//                             the smash visual (resolved is queued
+//                             immediately before gems-cleared in the
+//                             animator).
+//   - enemy-killed:           drop the owner's threat — Brute died
+//                             between telegraph and fire.
+//   - fight reset:            seed from store (current enemies whose
+//                             intent is column-smash).
 //
-// The pendingSmash flag is gem-bound and stored on Cell.flags as the
-// source enemy id (string). We mirror the live flag state into a Map
-// keyed by `${x},${y}` so per-cell dedupe + removal is O(1).
+// Threats are column-bound, not gem-bound: matching gems inside the
+// column or swapping new ones in does not reduce the threat — the
+// entire column gets smashed at fire time.
 
-type Threat = { x: number; y: number; owner: string }
-const keyOf = (x: number, y: number) => `${x},${y}`
+const keyOf = (owner: string, column: number) => `${owner}|${column}`
 
 export function ColumnSmashOverlay() {
-  const [threats, setThreats] = useState<Map<string, Threat>>(new Map())
+  const [threats, setThreats] = useState<Map<string, { owner: string; column: number }>>(
+    new Map(),
+  )
 
   // Seed from the store on first mount and on every fight reset. Until
   // the player's first interaction there are no events to drive the
   // overlay, so without this seed a saved game with an active smash
   // telegraph would render blank.
   const seedFromStore = useCallback(() => {
-    const cells = useGameStore.getState().board.cells
-    const next = new Map<string, Threat>()
-    for (let y = 0; y < cells.length; y++) {
-      const row = cells[y]
-      if (!row) continue
-      for (let x = 0; x < row.length; x++) {
-        const owner = row[x]?.flags?.pendingSmash
-        if (owner !== undefined) {
-          next.set(keyOf(x, y), { x, y, owner })
-        }
+    const enemies = useGameStore.getState().fight.enemies
+    const next = new Map<string, { owner: string; column: number }>()
+    for (const e of enemies) {
+      if (e.hp > 0 && e.currentIntent.kind === 'column-smash') {
+        next.set(keyOf(e.id, e.currentIntent.column), {
+          owner: e.id,
+          column: e.currentIntent.column,
+        })
       }
     }
     setThreats(next)
@@ -65,41 +63,37 @@ export function ColumnSmashOverlay() {
   useEffect(() => {
     return subscribeGameEvents((event) => {
       if (event.kind === 'column-smash-placed') {
-        const ownerId = event.enemyId
         setThreats((prev) => {
+          const k = keyOf(event.enemyId, event.column)
+          if (prev.has(k)) return prev
           const next = new Map(prev)
-          for (const c of event.cells) {
-            next.set(keyOf(c.x, c.y), { x: c.x, y: c.y, owner: ownerId })
-          }
+          next.set(k, { owner: event.enemyId, column: event.column })
           return next
         })
       } else if (event.kind === 'column-smash-resolved') {
-        // Smash is firing NOW — drop the threat cells in lockstep with
-        // the gems-cleared burst (column-smash-resolved is queued
+        // Smash is firing NOW — drop the threat in lockstep with the
+        // gems-cleared burst (column-smash-resolved is queued
         // immediately before gems-cleared in the animator).
         const ownerId = event.enemyId
         setThreats((prev) => {
           let changed = false
           const next = new Map(prev)
-          for (const [, t] of prev) {
+          for (const [k, t] of prev) {
             if (t.owner === ownerId) {
-              next.delete(keyOf(t.x, t.y))
+              next.delete(k)
               changed = true
             }
           }
           return changed ? next : prev
         })
-      } else if (event.kind === 'gems-cleared') {
-        // Player matched a flagged gem (the flag goes with the gem
-        // under gravity). Drop only the cleared positions we were
-        // tracking — non-tracked cells in event.cells are normal
-        // match clears and don't affect us.
+      } else if (event.kind === 'enemy-killed') {
+        // Brute died between telegraph and fire — drop its threat.
+        const ownerId = event.enemyId
         setThreats((prev) => {
           let changed = false
           const next = new Map(prev)
-          for (const c of event.cells) {
-            const k = keyOf(c.x, c.y)
-            if (next.has(k)) {
+          for (const [k, t] of prev) {
+            if (t.owner === ownerId) {
               next.delete(k)
               changed = true
             }
@@ -110,26 +104,23 @@ export function ColumnSmashOverlay() {
     })
   }, [])
 
-  // Distinct columns with at least one active threat. Used to render
-  // one chevron per column rather than per cell.
-  const threatColumns = new Set<number>()
-  for (const t of threats.values()) threatColumns.add(t.x)
-
   return (
     <div className="column-smash-overlay" aria-hidden>
-      {Array.from(threats.values()).map(({ x, y }) => (
-        <CellAnchor
-          key={keyOf(x, y)}
-          x={x}
-          y={y}
-          className="column-smash-cell"
-        />
-      ))}
-      {Array.from(threatColumns).map((col) => (
+      {Array.from(threats.values()).flatMap(({ owner, column }) =>
+        Array.from({ length: BOARD_HEIGHT }, (_, y) => (
+          <CellAnchor
+            key={`${owner}|${column}|${y}`}
+            x={column}
+            y={y}
+            className="column-smash-cell"
+          />
+        )),
+      )}
+      {Array.from(threats.values()).map(({ owner, column }) => (
         <span
-          key={`smash-chevron-${col}`}
+          key={`smash-chevron-${owner}-${column}`}
           className="column-smash-chevron"
-          style={{ left: `${(col + 0.5) * 12.5}%` }}
+          style={{ left: `${(column + 0.5) * 12.5}%` }}
         >
           ▼
         </span>

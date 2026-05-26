@@ -19,8 +19,8 @@ const PLAYER_MAX_HP = 40
 // new-fight transition (enterNode, debugForceFight, restart's
 // initialState). All board-affecting effects reset here: cells get
 // the freshly-generated grid (which wipes gem-bound flags like
-// burning / pendingSmash); board-level state (selected, petrifiedRows,
-// and any future addition like a frozen-tiles map or a global board
+// burning); board-level state (selected, petrifiedRows, and any
+// future addition like a frozen-tiles map or a global board
 // modifier) is reset to its empty default. Adding a new board-level
 // effect means extending this helper, not chasing every reset site.
 export function freshBoardState(cells: Cell[][]): BoardState {

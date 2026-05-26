@@ -115,6 +115,14 @@ export type GameStore = {
   // BoardScene.performSwap. Bumps fightCounter so the BoardScene
   // rebuilds sprites against the new cells.
   debugForceMatch5: () => { from: Pos; to: Pos } | null
+  // Dev-only: same pattern as debugForceMatch5 but plants a T-shape
+  // prereq (interior intersection, blue 3-across at row 3 + 3-down at
+  // col 2). Triggers the 3x3 area clear and the T-BURST! callout.
+  debugForceMatchT: () => { from: Pos; to: Pos } | null
+  // Dev-only: L-shape prereq (corner intersection, blue 3-across at
+  // row 3 + 3-down at col 3 meeting at (3,3)). Triggers the +-shape
+  // clear and the L-FLARE! callout.
+  debugForceMatchL: () => { from: Pos; to: Pos } | null
   // Dev-only: force-start a fight against the given archetype, bypassing
   // map navigation. HP + mana carry from the current fight state (same
   // semantics as enterNode), but no map node is marked completed and
@@ -161,6 +169,21 @@ function initialState(seed: string): {
 
 function newSliceSeed(): string {
   return `slice-${Math.floor(Math.random() * 1e9).toString(36)}`
+}
+
+// Dev-only: paint a 3-color rotation that produces no 3-runs anywhere
+// (palette[(x+y) % 3]). Shared by debugForceMatch5 / debugForceMatchT /
+// debugForceMatchL so they can overlay the shape-specific prereq onto a
+// guaranteed match-free base.
+const SAFE_PALETTE: readonly ('red' | 'green' | 'yellow')[] = ['red', 'green', 'yellow']
+function paintSafeBoard(cells: Cell[][]): void {
+  for (let y = 0; y < cells.length; y++) {
+    const row = cells[y]
+    if (!row) continue
+    for (let x = 0; x < row.length; x++) {
+      row[x] = { gemColor: SAFE_PALETTE[(x + y) % 3] ?? 'red' }
+    }
+  }
 }
 
 const SLICE_SEED = newSliceSeed()
@@ -216,18 +239,10 @@ export const useGameStore = create<GameStore>()(
       // (3, 4) that will swap up into (3, 3) to complete the line. (3,
       // 3) is left at the palette default (red per (3+3)%3) so the
       // pre-swap board is match-free.
-      const palette: ('red' | 'green' | 'yellow')[] = ['red', 'green', 'yellow']
       set((s) => {
-        const cells = s.board.cells
-        for (let y = 0; y < cells.length; y++) {
-          const row = cells[y]
-          if (!row) continue
-          for (let x = 0; x < row.length; x++) {
-            row[x] = { gemColor: palette[(x + y) % 3] ?? 'red' }
-          }
-        }
-        const row3 = cells[3]
-        const row4 = cells[4]
+        paintSafeBoard(s.board.cells)
+        const row3 = s.board.cells[3]
+        const row4 = s.board.cells[4]
         if (!row3 || !row4) return
         for (const x of [1, 2, 4, 5]) {
           row3[x] = { gemColor: 'blue' }
@@ -239,6 +254,58 @@ export const useGameStore = create<GameStore>()(
         s.fightCounter += 1
       })
       return { from: { x: 3, y: 4 }, to: { x: 3, y: 3 } }
+    },
+    debugForceMatchT: () => {
+      // T-shape: horizontal blue run at row 3, cols 1-3, plus vertical
+      // blue run at col 2, rows 3-5. Intersection (3, 2) is interior to
+      // the horizontal run → classifies as T. Pre-place 4 of the 5
+      // match cells + a blue source at (2, 2); the swap drops the
+      // source into (3, 2) and completes both runs simultaneously.
+      const cur = get()
+      if (cur.fight.phase !== 'player-acting') return null
+      set((s) => {
+        const cells = s.board.cells
+        paintSafeBoard(cells)
+        const row2 = cells[2]
+        const row3 = cells[3]
+        const row4 = cells[4]
+        const row5 = cells[5]
+        if (!row2 || !row3 || !row4 || !row5) return
+        row3[1] = { gemColor: 'blue' }
+        row3[3] = { gemColor: 'blue' }
+        row4[2] = { gemColor: 'blue' }
+        row5[2] = { gemColor: 'blue' }
+        row2[2] = { gemColor: 'blue' }
+        s.board.selected = null
+        s.fightCounter += 1
+      })
+      return { from: { x: 2, y: 2 }, to: { x: 2, y: 3 } }
+    },
+    debugForceMatchL: () => {
+      // L-shape: horizontal blue run at row 3, cols 1-3, plus vertical
+      // blue run at col 3, rows 3-5. Intersection (3, 3) is the end of
+      // BOTH runs → classifies as L. Pre-place 4 of the 5 match cells
+      // + a blue source at (3, 2); the swap drops the source into
+      // (3, 3) and completes both runs simultaneously.
+      const cur = get()
+      if (cur.fight.phase !== 'player-acting') return null
+      set((s) => {
+        const cells = s.board.cells
+        paintSafeBoard(cells)
+        const row2 = cells[2]
+        const row3 = cells[3]
+        const row4 = cells[4]
+        const row5 = cells[5]
+        if (!row2 || !row3 || !row4 || !row5) return
+        row3[1] = { gemColor: 'blue' }
+        row3[2] = { gemColor: 'blue' }
+        row4[3] = { gemColor: 'blue' }
+        row5[3] = { gemColor: 'blue' }
+        row2[3] = { gemColor: 'blue' }
+        s.board.selected = null
+        s.fightCounter += 1
+      })
+      return { from: { x: 3, y: 2 }, to: { x: 3, y: 3 } }
     },
     debugForceFight: makeDebugForceFight(set, get),
   })),

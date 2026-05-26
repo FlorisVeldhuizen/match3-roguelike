@@ -144,7 +144,7 @@ describe('rollIntent — H2b board verbs', () => {
 // applyIntentTelegraph
 // ----------------------------------------------------------------------
 describe('applyIntentTelegraph — column-smash', () => {
-  it('flags every cell in the column with the source enemy id', () => {
+  it('emits column-smash-placed with the threatened column without touching the board', () => {
     const board = mkBoard8()
     const intent: Intent = { kind: 'column-smash', column: 3 }
     const { board: nextBoard, petrifiedRows, events } = applyIntentTelegraph(
@@ -154,13 +154,17 @@ describe('applyIntentTelegraph — column-smash', () => {
       'brute-1',
       'brute',
     )
-    for (let y = 0; y < 8; y++) {
-      expect(nextBoard[y]?.[3]?.flags?.pendingSmash).toBe('brute-1')
-    }
-    // Other columns untouched.
-    expect(nextBoard[0]?.[0]?.flags?.pendingSmash).toBeUndefined()
+    // No per-cell flag — threat is column-bound and tracked from the
+    // event by the overlay.
+    expect(nextBoard).toBe(board)
     expect(petrifiedRows).toEqual({})
-    expect(events.some((e) => e.kind === 'column-smash-placed')).toBe(true)
+    const placed = events.find((e) => e.kind === 'column-smash-placed')
+    expect(placed).toBeTruthy()
+    if (placed?.kind === 'column-smash-placed') {
+      expect(placed.enemyId).toBe('brute-1')
+      expect(placed.column).toBe(3)
+      expect(placed.cells.length).toBe(8)
+    }
   })
 })
 
@@ -186,84 +190,38 @@ describe('applyIntentTelegraph — petrify-row', () => {
 // resolveColumnSmashIntent
 // ----------------------------------------------------------------------
 describe('resolveColumnSmashIntent', () => {
-  it('clears every flagged cell in the column and refills from above', () => {
-    let board = mkBoard8()
-    // Telegraph the smash first.
-    const tele = applyIntentTelegraph(
-      board,
-      {},
-      { kind: 'column-smash', column: 2 },
-      'brute-1',
-      'brute',
-    )
-    board = tele.board
+  it('clears every cell in the column and refills from above', () => {
+    const board = mkBoard8()
     const intent: Intent = { kind: 'column-smash', column: 2 }
     const brute = makeBrute()
     const res = resolveColumnSmashIntent(intent, brute, board, { seed: 1 })
-    // No cell in column 2 should still carry pendingSmash — the cells
-    // got cleared, gravity dropped fresh gems in.
     for (let y = 0; y < 8; y++) {
-      expect(res.board[y]?.[2]?.flags?.pendingSmash).toBeUndefined()
       // Column refilled (all cells defined).
       expect(res.board[y]?.[2]).toBeDefined()
     }
-    expect(
-      res.events.some(
-        (e) => e.kind === 'column-smash-resolved' && e.column === 2,
-      ),
-    ).toBe(true)
+    const resolved = res.events.find((e) => e.kind === 'column-smash-resolved')
+    expect(resolved).toBeTruthy()
+    if (resolved?.kind === 'column-smash-resolved') {
+      expect(resolved.column).toBe(2)
+      expect(resolved.cells.length).toBe(8)
+    }
     // Gems-cleared drives the standard clear-burst animation.
     expect(res.events.some((e) => e.kind === 'gems-cleared')).toBe(true)
   })
 
-  it('only clears cells owned by THIS enemy (ownership-scoped)', () => {
+  it('does not touch cells outside the threatened column', () => {
     const board = mkBoard8()
-    // Brute-1 telegraphs column 2.
-    const t1 = applyIntentTelegraph(
-      board,
-      {},
-      { kind: 'column-smash', column: 2 },
-      'brute-1',
-      'brute',
-    )
-    // Brute-2 telegraphs column 5.
-    const t2 = applyIntentTelegraph(
-      t1.board,
-      {},
-      { kind: 'column-smash', column: 5 },
-      'brute-2',
-      'brute',
-    )
-    // Brute-1 fires its smash; brute-2's flags must remain intact.
     const res = resolveColumnSmashIntent(
       { kind: 'column-smash', column: 2 },
       makeBrute({ id: 'brute-1' }),
-      t2.board,
-      { seed: 1 },
-    )
-    for (let y = 0; y < 8; y++) {
-      // Brute-2's column 5 flags still present after Brute-1 fires.
-      expect(res.board[y]?.[5]?.flags?.pendingSmash).toBe('brute-2')
-    }
-  })
-
-  it('emits column-smash-resolved with empty cells when the column has no flags', () => {
-    // Player matched the entire flagged column before fire — resolver
-    // finds no cells with the matching flag.
-    const board = mkBoard8()
-    const res = resolveColumnSmashIntent(
-      { kind: 'column-smash', column: 3 },
-      makeBrute(),
       board,
       { seed: 1 },
     )
-    const resolved = res.events.find((e) => e.kind === 'column-smash-resolved')
-    expect(resolved).toBeTruthy()
-    if (resolved?.kind === 'column-smash-resolved') {
-      expect(resolved.cells).toEqual([])
+    // Cells outside column 2 stay byref-equal — only column 2 is
+    // rebuilt from null + refill.
+    for (let y = 0; y < 8; y++) {
+      expect(res.board[y]?.[5]).toBe(board[y]?.[5])
     }
-    // gems-cleared NOT emitted when there were no cells to clear.
-    expect(res.events.some((e) => e.kind === 'gems-cleared')).toBe(false)
   })
 })
 
@@ -293,54 +251,17 @@ describe('resolvePetrifyRowIntent', () => {
 })
 
 // ----------------------------------------------------------------------
-// executeEnemyTurn — orphan sweep
+// executeEnemyTurn — column-smash fires
 // ----------------------------------------------------------------------
-describe('executeEnemyTurn — pendingSmash orphan sweep', () => {
-  it('clears pendingSmash flags whose source enemy is dead', () => {
-    let board = mkBoard8()
-    // Telegraph a smash from brute-1.
-    const tele = applyIntentTelegraph(
-      board,
-      {},
-      { kind: 'column-smash', column: 4 },
-      'brute-1',
-      'brute',
-    )
-    board = tele.board
-    // Brute-1 is dead and has currentIntent that is NO LONGER column-smash
-    // (e.g. the player killed it; the orphan sweep should clean it up).
-    const player = makePlayer()
-    const deadBrute = makeBrute({
-      id: 'brute-1',
-      hp: 0,
-      currentIntent: { kind: 'attack', amount: 4 },
-    })
-    const res = executeEnemyTurn(player, [deadBrute], board, { seed: 1 })
-    // After the orphan sweep, no cell in column 4 should still carry the flag.
-    for (let y = 0; y < 8; y++) {
-      expect(res.board[y]?.[4]?.flags?.pendingSmash).toBeUndefined()
-    }
-  })
-
-  it('preserves pendingSmash flags whose owner is alive AND still telegraphing column-smash', () => {
-    let board = mkBoard8()
-    const tele = applyIntentTelegraph(
-      board,
-      {},
-      { kind: 'column-smash', column: 4 },
-      'brute-1',
-      'brute',
-    )
-    board = tele.board
-    // Brute-1 alive, still on column-smash intent → orphan sweep
-    // leaves the flags alone, then the resolver fires the smash.
+describe('executeEnemyTurn — column-smash', () => {
+  it('fires the smash when the source enemy is alive and on column-smash intent', () => {
+    const board = mkBoard8()
     const player = makePlayer()
     const brute = makeBrute({
       id: 'brute-1',
       currentIntent: { kind: 'column-smash', column: 4 },
     })
     const res = executeEnemyTurn(player, [brute], board, { seed: 1 })
-    // Smash fired — flags consumed. column-smash-resolved present.
     expect(
       res.events.some(
         (e) => e.kind === 'column-smash-resolved' && e.column === 4,
