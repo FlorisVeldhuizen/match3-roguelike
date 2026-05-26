@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   type Dispatch,
-  type ReactNode,
   type SetStateAction,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -18,8 +17,8 @@ import {
   statusKindFromDamageSource,
 } from '../../core/combat/statuses'
 import { getStatusDef } from '../../content/statuses'
+import { intentDisplay } from '../../content/intentDisplays'
 import { StatusBar } from './StatusBar'
-import { Keyword } from './Keyword'
 
 const HIT_FLASH_MS = 280
 // Must match (or slightly outlast) the longest .firing-* animation in
@@ -29,80 +28,10 @@ const INTENT_FIRE_MS = 460
 // enough to settle into the static .dead state before the next event.
 const KILL_PULSE_MS = 720
 
-function intentNumber(intent: Intent): number {
-  if (intent.kind === 'tile-burn') return intent.count
-  if (intent.kind === 'buff-ally') return intent.stacks
-  if (intent.kind === 'heal-ally' || intent.kind === 'shield-ally') return intent.amount
-  if (intent.kind === 'column-smash') return intent.column
-  if (intent.kind === 'petrify-row') return intent.row
-  return intent.amount
-}
-
-function intentIcon(intent: Intent): string {
-  if (intent.kind === 'attack') return '⚔'
-  if (intent.kind === 'block') return '🛡'
-  if (intent.kind === 'heal-ally') return '❤️'
-  if (intent.kind === 'buff-ally') return '🔱'
-  if (intent.kind === 'shield-ally') return '🛡'
-  if (intent.kind === 'column-smash') return '💥'
-  if (intent.kind === 'petrify-row') return '🪨'
-  return '🔥'
-}
-
-function intentLabel(intent: Intent): string {
-  if (intent.kind === 'attack') {
-    const base = `Attacks for ${intent.amount}`
-    const onHit = intent.onHit
-    if (!onHit) return base
-    const def = getStatusDef(onHit.status)
-    return `${base} (applies ${onHit.stacks} ${def.name} on hit)`
-  }
-  if (intent.kind === 'block') return `Blocks for ${intent.amount}`
-  if (intent.kind === 'heal-ally') return `Heals ally for ${intent.amount}`
-  if (intent.kind === 'buff-ally') return `Buffs ally with ${intent.stacks} Strength`
-  if (intent.kind === 'shield-ally') return `Shields ally for ${intent.amount}`
-  if (intent.kind === 'column-smash') return `Smashes column ${intent.column}`
-  if (intent.kind === 'petrify-row') return `Petrifies row ${intent.row}`
-  return `Sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire`
-}
-
-function intentDescription(intent: Intent): ReactNode {
-  if (intent.kind === 'attack') {
-    const onHit = intent.onHit
-    const base = `Will hit you for ${intent.amount} next turn.`
-    if (!onHit) return base
-    return (
-      <>
-        {base} If it lands, you also gain {onHit.stacks}{' '}
-        <Keyword id={onHit.status} />.
-      </>
-    )
-  }
-  if (intent.kind === 'block')
-    return (
-      <>
-        Armored for {intent.amount} — your attacks chip through this{' '}
-        <Keyword id="block">block</Keyword> first.
-      </>
-    )
-  if (intent.kind === 'heal-ally')
-    return `Restores ${intent.amount} HP to an ally next turn.`
-  if (intent.kind === 'buff-ally')
-    return `Grants ${intent.stacks} Strength to an ally — their attacks deal extra damage.`
-  if (intent.kind === 'shield-ally')
-    return `Adds ${intent.amount} block to an ally next turn.`
-  if (intent.kind === 'column-smash')
-    return `Next turn, this column is smashed — every gem in it that isn't matched first is cleared with no payout. Match the threatened gems to deny the smash.`
-  if (intent.kind === 'petrify-row')
-    return `Next turn, this row is petrified — matches anchored on these cells are blocked for the duration. Cascades still flow through.`
-  return (
-    <>
-      Next turn, sets {intent.count} tile{intent.count === 1 ? '' : 's'} on
-      fire. Match a burning tile and you take <Keyword id="burn" /> — bigger
-      matches mean longer, fiercer burns.
-    </>
-  )
-}
+// Intent badge / tooltip data now lives in src/content/intentDisplays.tsx
+// (icon, badge number, label, description as a single switch dispatched
+// from `intentDisplay(intent)`). Adding a new IntentKind means one new
+// case there, not four parallel branches here.
 
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
@@ -576,16 +505,21 @@ function IntentBadge({
     ? (enemies.find((e) => e.id === allyTargetId)?.name ?? '?')
     : null
 
+  // All per-kind icon/badge/label/tooltip data comes from one registry
+  // call. Adding a new IntentKind lands as a single case in
+  // src/content/intentDisplays.tsx — no parallel branches here.
+  const display = intentDisplay(intent)
+
   return (
     <>
       <div
         ref={anchorRef}
         // key on the wrapping element re-mounts on intent change so the
         // pop-in animation replays for the freshly telegraphed intent.
-        key={`${intent.kind}-${intentNumber(intent)}-${tick}`}
+        key={`${intent.kind}-${display.number}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         role="img"
-        aria-label={`${intentLabel(intent)}${allyTargetName ? ` → ${allyTargetName}` : ''}${lethal ? ' — lethal!' : ''}`}
+        aria-label={`${display.label}${allyTargetName ? ` → ${allyTargetName}` : ''}${lethal ? ' — lethal!' : ''}`}
         tabIndex={0}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -593,9 +527,9 @@ function IntentBadge({
         onBlur={() => setHovered(false)}
       >
         <span className="intent-icon" aria-hidden>
-          {intentIcon(intent)}
+          {display.icon}
         </span>
-        <span className="intent-amount">{intentNumber(intent)}</span>
+        <span className="intent-amount">{display.number}</span>
         {intent.kind === 'attack' && intent.onHit && (
           <span
             className={`intent-rider rider-${intent.onHit.status}`}
@@ -631,9 +565,9 @@ function IntentBadge({
               opacity: pos ? 1 : 0,
             }}
           >
-            <div className="intent-tooltip-title">{intentLabel(intent)}</div>
+            <div className="intent-tooltip-title">{display.label}</div>
             <div className="intent-tooltip-body">
-              {intentDescription(intent)}
+              {display.description}
             </div>
             {/* Damage-math preview (`X − Y block = Z to HP`) was removed
                 — it duplicated info already conveyed by the intent
