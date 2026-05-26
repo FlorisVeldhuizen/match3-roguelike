@@ -1,5 +1,5 @@
 import { Sprite, type Container, type Texture } from 'pixi.js'
-import type { GameEvent, GemColor, MatchShape, Pos } from '../types'
+import type { GameEvent, GemColor, MatchShape, Pos, StatusKind } from '../types'
 import { tweenSwap } from './animations/swap'
 import { tweenClear } from './animations/clear'
 import { tweenDrop } from './animations/drop'
@@ -149,6 +149,8 @@ const VISUAL = {
   burnEmber: 0xff8540,
   vulnerableOrange: 0xc47e3c,
   weakPale: 0xc9b896,
+  regenGreen: 0x6fb86d,
+  strengthGold: 0xd4a847,
 } as const
 
 // Multi-hue palette for flame trails — deep red base, ember bright,
@@ -183,31 +185,34 @@ const POOL_TRAIL_HEX: Record<GemColor, number> = {
   purple: 0xb074ff,
 }
 
-// Per-status palette + core for the "status proc" particle trail
-// (chip → target when a status effect deals damage). Burn uses the
-// flame palette; Vulnerable/Weak are placeholders for when they get
-// their own tick procs. Adding a new status DoT just means adding a
-// row here + the DamageSource → StatusKind mapping in
-// core/combat/statuses.ts.
+// Per-status palette + core for the "status apply" particle trail
+// (source → chip when a status lands). Indexed by StatusKind so every
+// status — including Regen / Strength which never proc damage — still
+// gets a coherent palette when the apply-trail spawns. Burn uses the
+// flame palette; the rest sit on single accent colors that match the
+// HUD chip's tint.
 type StatusTrailLook = { palette: readonly number[]; core: number }
-const STATUS_TRAIL: Record<'burn' | 'vulnerable' | 'weak', StatusTrailLook> = {
+const STATUS_TRAIL: Record<StatusKind, StatusTrailLook> = {
   burn: { palette: FLAME_PALETTE, core: FLAME_CORE_HEX },
   vulnerable: { palette: [VISUAL.vulnerableOrange], core: 0xffffff },
   weak: { palette: [VISUAL.weakPale], core: 0xffffff },
+  regen: { palette: [VISUAL.regenGreen], core: 0xffffff },
+  strength: { palette: [VISUAL.strengthGold], core: 0xffffff },
 }
 
+// The subset of StatusKind that actually procs damage on tick (drives
+// the chip-to-bar proc trail + the orange popup tint). Currently just
+// Burn. Adding a new DoT means: (a) extending this union, (b) adding a
+// DamageSource entry, (c) extending statusKindFromDamageSource.
+type ProcStatusKind = 'burn'
+
 // Per-status popup tint for "-N" damage callouts when the source is a
-// status proc (Burn tick etc.). Keeps the popup family aligned with the
-// trail palette so the visual story stays coherent — orange fire damage
-// stays orange from the chip trail all the way through to the popup.
-function procPopupTint(kind: 'burn' | 'vulnerable' | 'weak'): number {
+// status proc. Narrowed to ProcStatusKind so the compiler refuses
+// non-proc kinds at the call site.
+function procPopupTint(kind: ProcStatusKind): number {
   switch (kind) {
     case 'burn':
       return VISUAL.burnEmber
-    case 'vulnerable':
-      return VISUAL.vulnerableOrange
-    case 'weak':
-      return VISUAL.weakPale
   }
 }
 
@@ -1482,7 +1487,7 @@ export class AnimationController {
   // parent frame ([data-player-hud] / [data-enemy-id]).
   private spawnStatusProcTrail(
     target: 'player' | string,
-    kind: 'burn' | 'vulnerable' | 'weak',
+    kind: ProcStatusKind,
     amount: number,
     destination: 'hp' | 'block' = 'hp',
   ): void {
@@ -1517,7 +1522,9 @@ export class AnimationController {
         : null
     if (!lockedTarget) return
     const attractor: Attractor = () => lockedTarget
-    const look = STATUS_TRAIL[kind]
+    // STATUS_TRAIL is exhaustive over ProcStatusKind, so the lookup is
+    // guaranteed defined; non-null asserts past noUncheckedIndexedAccess.
+    const look = STATUS_TRAIL[kind]!
     const count = particleCountForImpact(amount)
     overlay.spawnTrail(from, attractor, look.palette, count, look.core)
   }
@@ -1697,7 +1704,9 @@ export class AnimationController {
     // Per-status palette + molten core, matching the proc trail's look.
     // Particle count scales with magnitude (apply uses `stacks` —
     // 1-stack hits look light, 3-stack matches feel heavier).
-    const look = STATUS_TRAIL[statusKind]
+    // STATUS_TRAIL is exhaustive over StatusKind; non-null asserts past
+    // noUncheckedIndexedAccess.
+    const look = STATUS_TRAIL[statusKind]!
     const count = particleCountForImpact(event.status.stacks)
     overlay.spawnTrail(from, attractor, look.palette, count, look.core)
   }

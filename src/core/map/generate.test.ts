@@ -138,12 +138,6 @@ describe('generateMap', () => {
   it('role-mixed compositions appear in generated maps (H4b)', () => {
     let roleMixedCount = 0
     let simpleStackCount = 0
-    let rallierSeenInCol2 = false
-    // Use a defined fixed seed too for the "at least one in fixed-seed" check.
-    const fixedMap = build(7) // seed chosen to hit a role-mixed node deterministically
-    for (const node of fixedMap.nodes) {
-      if (node.archetypes?.includes('rallier')) rallierSeenInCol2 = true
-    }
     // Over 1000 seeds, count appearances
     for (let seed = 1; seed <= SEED_COUNT; seed++) {
       const map = build(seed)

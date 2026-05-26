@@ -16,6 +16,8 @@ export type KeywordId =
   | 'burn'
   | 'vulnerable'
   | 'weak'
+  | 'regen'
+  | 'strength'
   | 'block'
   | 'riposte'
   | 'bulwark'
@@ -56,6 +58,20 @@ const defs: Record<KeywordId, KeywordDef> = {
     icon: getStatusDef('weak').icon,
     body: 'Attacks deal 50% less damage. Decays by 1 each turn.',
     variant: 'weak',
+  },
+  regen: {
+    id: 'regen',
+    name: getStatusDef('regen').name,
+    icon: getStatusDef('regen').icon,
+    body: 'Heals its current value at the start of each turn, then weakens by 1.',
+    variant: 'regen',
+  },
+  strength: {
+    id: 'strength',
+    name: getStatusDef('strength').name,
+    icon: getStatusDef('strength').icon,
+    body: 'Attacks deal extra damage equal to current stacks. Sticks until removed.',
+    variant: 'strength',
   },
   block: {
     id: 'block',

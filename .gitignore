@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Claude Code agent sandboxes — temporary git worktrees spawned by
+# isolated-mode subagents. Should never be tracked.
+.claude/worktrees/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -154,9 +154,14 @@ export function getStatusTemplate(kind: StatusKind): StatusInstance {
 // its chip-as-attacker pipeline (particle trail from chip → target,
 // per-status SFX, delayed HP drain). Adding a new DoT later (Poison,
 // Bleed, etc.) means adding both a DamageSource entry and a case here.
+// Narrow return type: only damage-procing statuses ever appear here.
+// Regen / Strength / Vulnerable / Weak don't tick damage, so they can't
+// be the source of a damage event. Callers (AnimationController, HUD)
+// receive a narrowed kind that's directly usable by procPopupTint and
+// spawnStatusProcTrail without further refinement.
 export function statusKindFromDamageSource(
   source: DamageSource,
-): StatusKind | null {
+): 'burn' | null {
   switch (source) {
     case 'burn':
       return 'burn'

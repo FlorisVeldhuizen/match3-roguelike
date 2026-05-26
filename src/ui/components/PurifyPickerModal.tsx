@@ -13,6 +13,10 @@ const STATUS_LABELS: Record<StatusKind, string> = {
   vulnerable: 'Vulnerable',
   weak: 'Weak',
   regen: 'Regenerate',
+  // Strength is enemy-side only today (Rallier's buff-ally intent); the
+  // player never carries it, so this label is defensive only — kept to
+  // keep the Record exhaustive over StatusKind.
+  strength: 'Strength',
 }
 
 // Regen is a beneficial status; players almost certainly don't want

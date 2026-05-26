@@ -33,6 +33,8 @@ function intentNumber(intent: Intent): number {
   if (intent.kind === 'tile-burn') return intent.count
   if (intent.kind === 'buff-ally') return intent.stacks
   if (intent.kind === 'heal-ally' || intent.kind === 'shield-ally') return intent.amount
+  if (intent.kind === 'column-smash') return intent.column
+  if (intent.kind === 'petrify-row') return intent.row
   return intent.amount
 }
 
@@ -42,6 +44,8 @@ function intentIcon(intent: Intent): string {
   if (intent.kind === 'heal-ally') return '❤️'
   if (intent.kind === 'buff-ally') return '🔱'
   if (intent.kind === 'shield-ally') return '🛡'
+  if (intent.kind === 'column-smash') return '💥'
+  if (intent.kind === 'petrify-row') return '🪨'
   return '🔥'
 }
 
@@ -57,6 +61,8 @@ function intentLabel(intent: Intent): string {
   if (intent.kind === 'heal-ally') return `Heals ally for ${intent.amount}`
   if (intent.kind === 'buff-ally') return `Buffs ally with ${intent.stacks} Strength`
   if (intent.kind === 'shield-ally') return `Shields ally for ${intent.amount}`
+  if (intent.kind === 'column-smash') return `Smashes column ${intent.column}`
+  if (intent.kind === 'petrify-row') return `Petrifies row ${intent.row}`
   return `Sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire`
 }
 
@@ -85,6 +91,10 @@ function intentDescription(intent: Intent): ReactNode {
     return `Grants ${intent.stacks} Strength to an ally — their attacks deal extra damage.`
   if (intent.kind === 'shield-ally')
     return `Adds ${intent.amount} block to an ally next turn.`
+  if (intent.kind === 'column-smash')
+    return `Next turn, this column is smashed — every gem in it that isn't matched first is cleared with no payout. Match the threatened gems to deny the smash.`
+  if (intent.kind === 'petrify-row')
+    return `Next turn, this row is petrified — matches anchored on these cells are blocked for the duration. Cascades still flow through.`
   return (
     <>
       Next turn, sets {intent.count} tile{intent.count === 1 ? '' : 's'} on
