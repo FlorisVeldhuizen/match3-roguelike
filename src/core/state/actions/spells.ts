@@ -27,8 +27,6 @@ import {
   resolveRegenerate,
   resolveShatter,
 } from '../../combat/spellResolvers'
-import { pickNextTarget } from '../../combat/aoe'
-import { runOnEnemyKilled } from '../../relics/engine'
 import type { StoreSet, StoreGet } from './types'
 
 export function makeCastSpell(set: StoreSet, get: StoreGet) {
@@ -240,25 +238,6 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
       current.fight.targetEnemyId,
     )
 
-    // Per-kill chain — emit enemy-killed + runOnEnemyKilled relic
-    // hooks + re-point the current target if it died. Mirrors the
-    // sequence in attemptSwap so onKill relics (e.g. Vampiric Sigil)
-    // still proc when shatter delivers the killing blow.
-    let nextTargetId = current.fight.targetEnemyId
-    const killEvents: GameEvent[] = []
-    for (const killedId of r.killedIds) {
-      killEvents.push({ kind: 'enemy-killed', enemyId: killedId })
-      const onKill = runOnEnemyKilled(
-        { enemyId: killedId },
-        r.player.relics,
-        snapshotOf(r.player, r.enemies, nextTargetId, 0),
-      )
-      killEvents.push(...onKill)
-      if (killedId === nextTargetId) {
-        nextTargetId = pickNextTarget(r.enemies, null)
-      }
-    }
-
     // Victory check — Shatter is the first immediate-damage spell that
     // can kill an enemy from a free action mid-phase, so the phase
     // transition can't wait for resolveEndOfPhase like a swap-driven
@@ -272,9 +251,10 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
     let nextLootRng = current.rng.loot
     const completedNodeIds = current.map.completedNodeIds.slice()
     let finalPlayer = r.player
+    const victoryEvents: GameEvent[] = []
     if (!anyEnemyAlive) {
       nextFightPhase = 'victory'
-      killEvents.push({ kind: 'phase-changed', phase: 'victory' })
+      victoryEvents.push({ kind: 'phase-changed', phase: 'victory' })
       const curNode = current.map.currentNodeId
       if (curNode != null && !completedNodeIds.includes(curNode)) {
         completedNodeIds.push(curNode)
@@ -288,7 +268,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
         const rolled = rollReward(finalPlayer.relics, 'common', nextLootRng, 0)
         nextPendingReward = rolled.reward
         nextLootRng = rolled.rng
-        killEvents.push({
+        victoryEvents.push({
           kind: 'reward-offered',
           offeredRelicIds: rolled.reward.offeredRelicIds,
           gold: rolled.reward.gold,
@@ -300,7 +280,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
     set((s) => {
       s.fight.player = finalPlayer
       s.fight.enemies = r.enemies
-      s.fight.targetEnemyId = nextTargetId
+      s.fight.targetEnemyId = r.targetEnemyId
       s.fight.phase = nextFightPhase
       s.board.cells = r.board
       s.rng.board = r.rng
@@ -314,7 +294,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
     })
     return {
       ok: true,
-      events: [event, ...hookEvents, ...r.events, ...killEvents],
+      events: [event, ...hookEvents, ...r.events, ...victoryEvents],
     }
   }
 }

@@ -48,7 +48,11 @@ export type Pos = { x: number; y: number }
 export const BOARD_WIDTH = 8
 export const BOARD_HEIGHT = 8
 
-export type MatchShape = 'line' | 'T' | 'L'
+// 'shatter' is the synthetic shape used by Shatter Color — it drives a
+// match-found event through the cascade processor without acting like
+// a T/L (which would fan red damage AOE) or a line-5 (which would
+// flag blessed cells). Single-target damage, no blessed pollution.
+export type MatchShape = 'line' | 'T' | 'L' | 'shatter'
 
 export type Match = {
   cells: Pos[]

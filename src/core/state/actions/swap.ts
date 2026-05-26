@@ -2,22 +2,17 @@ import { generateBoard, hasValidSwap } from '../../board/generation'
 import { resolveSwap, type SwapResolution } from '../../board/cascade'
 import { beginPlayerPhase, resolveEndOfPhase } from '../../combat/turn'
 import { executeEnemyTurn } from '../../combat/enemyTurn'
-import { applyMatchRedDamage, pickNextTarget } from '../../combat/aoe'
+import { pickNextTarget } from '../../combat/aoe'
 import { hasExtraTurnMatch } from '../../combat/pools'
-import { applyMultiplier } from '../../combat/math'
-import { getCascadeMultiplier } from '../../combat/multipliers'
+import { processCascadeEvents } from '../../combat/cascadeProcessor'
 import { rollReward } from '../../relics/reward'
 import {
-  runOnMatch,
-  runOnCascade,
-  runOnEnemyKilled,
   runOnBlockGained,
   runOnPhaseStart,
   runOnPhaseEnd,
   snapshotOf,
 } from '../../relics/engine'
 import {
-  MANA_CAPS,
   type CombatPhase,
   type GameEvent,
   type GemColor,
@@ -26,11 +21,6 @@ import {
   type Pos,
   type RunPhase,
 } from '../../../types'
-import {
-  applyStatusToList,
-  BURN_FROM_TILE_BONUS,
-  getStatusTemplate,
-} from '../../combat/statuses'
 import { tickFlagDuration, tickPetrifiedRows } from '../../board/flags'
 import type { StoreSet, StoreGet } from './types'
 
@@ -81,207 +71,24 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
       return { valid: false, events: swap.events }
     }
 
-    let enemies = current.fight.enemies
-    let targetEnemyId = current.fight.targetEnemyId
     let enemyRng = current.rng.enemy
 
-    // Walk the swap's cascade stream, inlining the relic engine's
-    // onMatch hook per match-found. Each match builds a per-match
-    // MatchPayload (single Match + cascade-level-scaled deltas) that
-    // relics can modify; the post-hook deltas drive immediate
-    // credit (mana/charge), per-match damage/heal commit (red/green),
-    // pool accumulation (blue), and the pool-gained events that the
-    // animator/SFX layer hangs off.
-    const damageHealStream: GameEvent[] = []
-    let cascadeLevel = 0
-    for (const ev of swap.events) {
-      damageHealStream.push(ev)
-      // Cascade cleared cells with the `burning` flag → apply Burn to
-      // the player. Each cleared burning cell contributes a Burn
-      // stack (02-scope §Smolder verb). Re-application accumulates
-      // via applyStatusToList — stacks doubles as turns-remaining in
-      // the StS model, so adding more makes the burn both heavier
-      // and longer.
-      if (ev.kind === 'tile-burn-triggered') {
-        // Apply Burn to the player. Magnitude = cells.length + content-
-        // side BURN_FROM_TILE_BONUS (currently 1). StS triangle math:
-        // total damage = stacks*(stacks+1)/2. 1 cell → Burn 2 → 3 dmg
-        // total; 4 cells → Burn 5 → 15 dmg. Bonus lives in content so
-        // tuning doesn't require touching this cascade walker.
-        const incoming = {
-          ...getStatusTemplate('burn'),
-          stacks: ev.cells.length + BURN_FROM_TILE_BONUS,
-        }
-        player = {
-          ...player,
-          statuses: applyStatusToList(player.statuses, incoming),
-        }
-        damageHealStream.push({
-          kind: 'status-applied',
-          target: 'player',
-          status: incoming,
-          source: { kind: 'board-cells', cells: ev.cells },
-        })
-        continue
-      }
-      if (ev.kind === 'cascade-start') {
-        cascadeLevel = ev.level
-        const cascadeEvents = runOnCascade(
-          { level: ev.level },
-          player.relics,
-          snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
-        )
-        damageHealStream.push(...cascadeEvents)
-        continue
-      }
-      if (ev.kind !== 'match-found') continue
-
-      // H4a Surge: a one-shot armed by casting Surge bumps THIS match's
-      // cascade level by +2 (affects relic onMatch hooks AND the raw
-      // multiplier). Consumed below after processing finishes.
-      const surgeConsumed = player.surgeArmed === true
-      const effectiveCascade = surgeConsumed ? cascadeLevel + 2 : cascadeLevel
-      // Per-match payload: raw amount = size × cascade × blessed,
-      // assigned to the match's color slot. Relics' onMatch hooks
-      // mutate these deltas in acquisition order. Blessed flag on the
-      // match doubles the multiplier before floor (so `floor(size ×
-      // cascade × 2)` — single helper call inherits the rounding rule).
-      const cascadeMult = getCascadeMultiplier(effectiveCascade)
-      const mult = ev.blessed ? cascadeMult * 2 : cascadeMult
-      const raw = applyMultiplier(ev.size, mult)
-      const initialDeltas = {
-        red: ev.color === 'red' ? raw : 0,
-        blue: ev.color === 'blue' ? raw : 0,
-        green: ev.color === 'green' ? raw : 0,
-        yellow: ev.color === 'yellow' ? raw : 0,
-        purple: ev.color === 'purple' ? raw : 0,
-      }
-      const matchResult = runOnMatch(
-        { match: { cells: ev.cells, color: ev.color, size: ev.size, shape: ev.shape }, deltas: initialDeltas, cascadeLevel: effectiveCascade },
-        player.relics,
-        snapshotOf(player, enemies, targetEnemyId, effectiveCascade),
-      )
-      damageHealStream.push(...matchResult.events)
-      const finalDeltas = matchResult.payload.deltas
-
-      // H3 multi-color mana: each colour delta accumulates BOTH the
-      // immediate-effect track (R/B/G into phasePools, P into
-      // skillCharge) AND into the colour mana pool (per MANA_CAPS).
-      // Yellow goes only into the colour mana pool (wild). Purple
-      // still goes only into skillCharge.
-      const m = player.mana
-      player = {
-        ...player,
-        skillCharge: player.skillCharge + finalDeltas.purple,
-        phasePools: {
-          red: player.phasePools.red + finalDeltas.red,
-          blue: player.phasePools.blue + finalDeltas.blue,
-          green: player.phasePools.green + finalDeltas.green,
-        },
-        mana: {
-          red: Math.min(MANA_CAPS.red, m.red + finalDeltas.red),
-          blue: Math.min(MANA_CAPS.blue, m.blue + finalDeltas.blue),
-          green: Math.min(MANA_CAPS.green, m.green + finalDeltas.green),
-          yellow: Math.min(MANA_CAPS.yellow, m.yellow + finalDeltas.yellow),
-        },
-      }
-
-      // AOE matches (T, L, line-5) fan red damage out to all living
-      // enemies; single line-3/4 stays single-target. Decision is per-
-      // match so a cascade can mix narrow + wide hits. Relic onMatch
-      // already ran on the pool above, so the same modified red delta
-      // gets fanned — relics like Sharp Edge stay "single-source", just
-      // spread wider, instead of multiplying with enemy count.
-      const isAoe = ev.shape !== 'line' || ev.size === 5
-
-      // Emit pool-gained per non-zero delta in the canonical
-      // red/blue/green/yellow/purple order so the animator/SFX layer
-      // sees a deterministic sequence (matches the old
-      // withPoolGainedEvents shape, just per-color instead of per-match).
-      for (const color of ['red', 'blue', 'green', 'yellow', 'purple'] as const) {
-        const amount = finalDeltas[color]
-        if (amount <= 0) continue
-        damageHealStream.push({ kind: 'pool-gained', color, amount })
-        if (color === 'red') {
-          // H4a: while Volley is pending, red matches stop dealing
-          // damage — the red goes only into phasePools.red, to be
-          // consumed at EOP by the queued spell. Skip the damage
-          // routing entirely; pool accumulation already happened
-          // above.
-          if (player.pendingSpells.includes('volley')) {
-            continue
-          }
-          // H4a Skewer: doubles the red damage on this match. The
-          // pool (mana + phasePools) credited above is NOT doubled —
-          // only the damage applied. Consumed below regardless of
-          // whether the doubled hit lands HP, so a kill from a
-          // doubled chunk still clears the flag.
-          const skewerConsumed = player.skewerArmed === true
-          const dmgAmount = skewerConsumed ? amount * 2 : amount
-          // Per-target damage routing lives in core/combat/aoe.ts so
-          // the loop structure + Vulnerable/Weak composition is unit-
-          // testable without standing up a full Zustand store. Caller
-          // (this block) owns the kill-hook + target re-point work.
-          const aoe = applyMatchRedDamage(
-            enemies,
-            targetEnemyId,
-            dmgAmount,
-            player.statuses,
-            isAoe,
-          )
-          enemies = aoe.enemies
-          damageHealStream.push(...aoe.events)
-          for (const killedId of aoe.killedIds) {
-            damageHealStream.push({ kind: 'enemy-killed', enemyId: killedId })
-            const killEvents = runOnEnemyKilled(
-              { enemyId: killedId },
-              player.relics,
-              snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
-            )
-            damageHealStream.push(...killEvents)
-            if (killedId === targetEnemyId) {
-              targetEnemyId = pickNextTarget(enemies, null)
-            }
-          }
-        } else if (color === 'green') {
-          const before = player.hp
-          const next = Math.min(player.maxHp, player.hp + amount)
-          const healed = next - before
-          if (healed <= 0) continue
-          player = { ...player, hp: next }
-          damageHealStream.push({ kind: 'healed', amount: healed })
-        }
-      }
-
-      // H4a Skewer / Surge: one-shot match modifiers consumed by this
-      // match. Clear both the per-player flag AND the corresponding
-      // entry in pendingSpells so the PendingStrip drops the pip and
-      // the same match can't double-trigger. Emit pending-effect-
-      // resolved so subscribers (relics, future battle log) can
-      // notice the consumption.
-      if (player.skewerArmed === true) {
-        player = {
-          ...player,
-          skewerArmed: false,
-          pendingSpells: player.pendingSpells.filter((id) => id !== 'skewer'),
-        }
-        damageHealStream.push({
-          kind: 'pending-effect-resolved',
-          spellId: 'skewer',
-        })
-      }
-      if (surgeConsumed) {
-        player = {
-          ...player,
-          surgeArmed: false,
-          pendingSpells: player.pendingSpells.filter((id) => id !== 'surge'),
-        }
-        damageHealStream.push({
-          kind: 'pending-effect-resolved',
-          spellId: 'surge',
-        })
-      }
-    }
+    // Walk the swap's cascade stream through the shared match-event
+    // processor: relic onMatch / onCascade / onEnemyKilled hooks, per-
+    // colour pool deltas, red damage routing (with Skewer/Volley
+    // interactions), green heal commit, kill chain + target re-point.
+    // Same machinery is now reused by castShatter so shatter fires
+    // the same hooks a regular match would.
+    const processed = processCascadeEvents(
+      swap.events,
+      player,
+      current.fight.enemies,
+      current.fight.targetEnemyId,
+    )
+    player = processed.player
+    let enemies = processed.enemies
+    let targetEnemyId = processed.targetEnemyId
+    const damageHealStream: GameEvent[] = [...processed.events]
 
     // Post-cascade playability check. If the settled board has no
     // legal swap (rare with 5 colors on 8×8, but possible), regenerate

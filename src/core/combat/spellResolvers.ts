@@ -1,20 +1,20 @@
-import { nextInt, type RngState } from '../rng/mulberry32'
+import { type RngState } from '../rng/mulberry32'
 import {
-  GEM_COLORS,
   MANA_CAPS,
   type Cell,
   type Enemy,
   type GameEvent,
   type GemColor,
   type ManaPools,
+  type Match,
   type Player,
   type Pos,
   type StatusInstance,
   type StatusKind,
 } from '../../types'
 import { applyStatusToList } from './statuses'
-import { applyGravity } from '../board/gravity'
-import { applyMatchRedDamage } from './aoe'
+import { runCascade } from '../board/cascade'
+import { processCascadeEvents } from './cascadeProcessor'
 
 // H4a immediate-effect spell resolvers. These run inline at cast time
 // (no pendingSpells push, no EOP step). Pure: no mutation, no store
@@ -194,20 +194,20 @@ export function resolvePurify(
 // cost is consumed by the caller; this is the colour-shift effect.
 export const FOCUS_TRANSFER = 3
 
-// H2b.5: Shatter Color — first player-side board verb. Clears every
-// gem of the target colour and applies the standard per-colour effect
-// scaled by cell count:
-//   - red    → single-target damage to the current target
-//   - blue   → phasePools.blue (resolves at EOP into block) + mana.blue
-//   - green  → immediate heal + mana.green
-//   - yellow → mana.yellow
-//   - purple → skillCharge
-// Runs gravity + refill inline (same shape as Brute's column-smash
-// resolver). MVP scope: DOES NOT route through the runOnMatch relic
-// hook chain — Sharp Edge / Iron Buckler / Cascade Crystal don't fire
-// here. Lifting that requires extracting the match-processing pipeline
-// out of attemptSwap, which is queued as a follow-up. The spell still
-// fires runOnSpellCast via the caller (castShatter in actions/spells).
+// H2b.5: Shatter Color — first player-side board verb. Generates a
+// synthetic match-found event from the cells of the target colour,
+// then routes it through the shared cascadeProcessor so the same
+// machinery used by a regular match handles pool deltas, relic
+// onMatch hooks (Sharp Edge / Iron Buckler / Cascade Crystal),
+// red-damage routing, green-heal commit, and kill chain. The result:
+// shatter benefits from every relic that listens to onMatch, the
+// same way a hand-played match does.
+//
+// The synthetic match uses shape='shatter' so the processor treats it
+// as single-target (not AOE like a line-5) AND doesn't drop blessed
+// flags on the cleared cells. blessed=true is passed through when ANY
+// of the cleared cells already carried the blessed flag — the 2×
+// payout still applies, just no new blessed cells get spawned.
 export function resolveShatter(
   player: Player,
   enemies: Enemy[],
@@ -218,17 +218,12 @@ export function resolveShatter(
 ): {
   player: Player
   enemies: Enemy[]
+  targetEnemyId: string | null
   board: Cell[][]
   rng: RngState
   events: GameEvent[]
-  // ids of enemies that died as a result of this shatter (red only;
-  // other colours can't kill). Caller (castShatter) runs the
-  // onEnemyKilled relic chain + re-points the current target.
-  killedIds: string[]
 } {
-  // Collect cells of the target colour. Empty result = no-op (the
-  // picker UI should disable in this case, but the resolver stays
-  // safe).
+  // Collect cells of the target colour.
   const cellsCleared: Pos[] = []
   for (let y = 0; y < board.length; y++) {
     const row = board[y]
@@ -240,110 +235,49 @@ export function resolveShatter(
     }
   }
   if (cellsCleared.length === 0) {
-    return { player, enemies, board, rng, events: [], killedIds: [] }
-  }
-  const count = cellsCleared.length
-  const events: GameEvent[] = []
-  const killedIds: string[] = []
-
-  // Per-colour effect. Mirrors the per-match commit logic in
-  // attemptSwap, just inlined for shatter's single-event payout.
-  let nextPlayer = player
-  let nextEnemies = enemies
-  if (color === 'red') {
-    const aoe = applyMatchRedDamage(
+    return {
+      player,
       enemies,
       targetEnemyId,
-      count,
-      player.statuses,
-      false, // single-target — shatter focuses the damage on the current target
-    )
-    nextEnemies = aoe.enemies
-    events.push(...aoe.events)
-    killedIds.push(...aoe.killedIds)
-  } else if (color === 'blue') {
-    nextPlayer = {
-      ...nextPlayer,
-      phasePools: { ...nextPlayer.phasePools, blue: nextPlayer.phasePools.blue + count },
-      mana: {
-        ...nextPlayer.mana,
-        blue: Math.min(MANA_CAPS.blue, nextPlayer.mana.blue + count),
-      },
-    }
-  } else if (color === 'green') {
-    const before = nextPlayer.hp
-    const next = Math.min(nextPlayer.maxHp, before + count)
-    const healed = next - before
-    nextPlayer = {
-      ...nextPlayer,
-      hp: next,
-      phasePools: { ...nextPlayer.phasePools, green: nextPlayer.phasePools.green + count },
-      mana: {
-        ...nextPlayer.mana,
-        green: Math.min(MANA_CAPS.green, nextPlayer.mana.green + count),
-      },
-    }
-    if (healed > 0) {
-      events.push({ kind: 'healed', amount: healed })
-    }
-  } else if (color === 'yellow') {
-    nextPlayer = {
-      ...nextPlayer,
-      mana: {
-        ...nextPlayer.mana,
-        yellow: Math.min(MANA_CAPS.yellow, nextPlayer.mana.yellow + count),
-      },
-    }
-  } else if (color === 'purple') {
-    nextPlayer = {
-      ...nextPlayer,
-      skillCharge: nextPlayer.skillCharge + count,
+      board,
+      rng,
+      events: [],
     }
   }
-  // Pool-gained drives the trail/particle FX layer and the SFX bed.
-  // Emit AFTER any per-colour event so animation ordering matches the
-  // normal cascade pipeline (damage/heal lands first, trail flies in).
-  events.push({ kind: 'pool-gained', color, amount: count })
 
-  // gems-cleared drives the clear-burst animation + clack SFX (same
-  // event the cascade pipeline + column-smash both use).
-  events.push({ kind: 'gems-cleared', cells: cellsCleared })
+  // Synthesize a Match for the cleared cells and feed it into the
+  // shared cascade walker. shape='shatter' opts out of T/L AOE
+  // routing AND the line-5 blessed-flag drop. The walker handles the
+  // initial clear + gravity + refill AND any follow-up matches the
+  // refilled board produces — gravity-induced cascade chains ripple
+  // through naturally, level by level.
+  const synthMatch: Match = {
+    cells: cellsCleared,
+    color,
+    size: cellsCleared.length,
+    shape: 'shatter',
+  }
+  const cascadeResult = runCascade(board, rng, [synthMatch])
 
-  // Null the cleared cells, run gravity, refill from above. Uses the
-  // spell's rng stream — shatter is player-initiated, so the spawn
-  // colours should be deterministic against the player-side rng
-  // rather than the enemy-side one. Caller passes `rng.board`.
-  const cleared: (Cell | null)[][] = board.map((row, y) =>
-    row.map((cell, x) =>
-      cell?.gemColor === color && cellsCleared.some((c) => c.x === x && c.y === y)
-        ? null
-        : cell,
-    ),
+  // The walker's event stream drives both the FX layer (gems-cleared,
+  // gems-fell, gems-spawned) AND the gameplay pipeline (cascade-start,
+  // match-found). Route through processCascadeEvents so relic onMatch
+  // / onCascade / onEnemyKilled hooks all fire, pool deltas commit,
+  // red damage routes, kills + target re-point happen.
+  const processed = processCascadeEvents(
+    cascadeResult.events,
+    player,
+    enemies,
+    targetEnemyId,
   )
-  const { board: fallen, movements } = applyGravity(cleared)
-  if (movements.length > 0) events.push({ kind: 'gems-fell', movements })
-  let nextRng = rng
-  const spawns: { at: Pos; color: GemColor }[] = []
-  const refilled: Cell[][] = fallen.map((row, y) =>
-    row.map((c, x): Cell => {
-      if (c) return c
-      const [idx, nr] = nextInt(nextRng, GEM_COLORS.length)
-      nextRng = nr
-      const fresh = GEM_COLORS[idx]
-      if (!fresh) throw new Error('shatter: refill color oob')
-      spawns.push({ at: { x, y }, color: fresh })
-      return { gemColor: fresh }
-    }),
-  )
-  if (spawns.length > 0) events.push({ kind: 'gems-spawned', spawns })
 
   return {
-    player: nextPlayer,
-    enemies: nextEnemies,
-    board: refilled,
-    rng: nextRng,
-    events,
-    killedIds,
+    player: processed.player,
+    enemies: processed.enemies,
+    targetEnemyId: processed.targetEnemyId,
+    board: cascadeResult.board,
+    rng: cascadeResult.rng,
+    events: processed.events,
   }
 }
 

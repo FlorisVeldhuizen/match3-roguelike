@@ -2,6 +2,7 @@ import {
   type Cell,
   type GameEvent,
   type GemColor,
+  type Match,
   type Pos,
   GEM_COLORS,
 } from '../../types'
@@ -134,7 +135,33 @@ export function resolveSwap(
     return { valid: false, board: startBoard, rng, events }
   }
 
-  let board = trial
+  const cascadeResult = runCascade(trial, rng, initialMatches)
+  events.push(...cascadeResult.events)
+  return {
+    valid: true,
+    board: cascadeResult.board,
+    rng: cascadeResult.rng,
+    events,
+  }
+}
+
+// Cascade walker: takes an initial match list + the post-clear board
+// state and walks the standard match → clear → gravity → refill →
+// detect loop until no more matches form. Emits the full event stream
+// (cascade-start, match-found, gems-cleared, tile-burn-triggered,
+// blessed-match-triggered, gems-fell, gems-spawned, tile-blessed-placed,
+// cascade-complete) that the cascade processor consumes downstream.
+//
+// Extracted from resolveSwap so other callers (castShatter) can feed
+// in synthetic initial matches and benefit from the same chain logic —
+// gravity-formed matches after a shatter now ripple through naturally.
+export function runCascade(
+  startBoard: Cell[][],
+  rng: RngState,
+  initialMatches: Match[],
+): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
+  const events: GameEvent[] = []
+  let board = startBoard
   let curRng = rng
   let level = 0
   let matches = initialMatches
@@ -161,6 +188,9 @@ export function resolveSwap(
     // gem has dropped into / been spawned into the position. Multiple
     // line-5s in the same step union their positions naturally via the
     // Set semantics (a position is either targeted or not, no stacking).
+    // shape='shatter' is intentionally excluded — synthetic shatter
+    // matches are size-N for the whole colour and would flag the entire
+    // refilled set as blessed otherwise.
     const blessTargets: Pos[] = []
     for (const m of matches) {
       if (m.shape === 'line' && m.size >= 5) {
@@ -260,5 +290,5 @@ export function resolveSwap(
   // equals the total chain depth: 1 = just the initial match, 2+ = chain.
   events.push({ kind: 'cascade-complete', levels: level })
 
-  return { valid: true, board, rng: curRng, events }
+  return { board, rng: curRng, events }
 }
