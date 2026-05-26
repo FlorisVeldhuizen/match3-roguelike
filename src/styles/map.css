@@ -14,7 +14,7 @@
      support `safe`. */
   justify-content: safe center;
   background:
-    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.08), transparent 60%),
+    radial-gradient(ellipse at top, rgba(154, 125, 82, 0.08), transparent 60%),
     linear-gradient(180deg, var(--ink-1), var(--ink-0));
   padding: 1.5rem 0.75rem 2rem;
   /* Vertical map can exceed the viewport on tall phones (5 floors ×
@@ -52,7 +52,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(200, 163, 90, 0.55),
+    rgba(154, 125, 82, 0.55),
     transparent
   );
 }
@@ -60,11 +60,11 @@
   color: var(--gold-1);
   font-size: 0.7rem;
   line-height: 1;
-  text-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+  text-shadow: 0 0 6px rgba(154, 125, 82, 0.5);
 }
 .map-wordmark {
   margin: 0;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   font-size: 1.7rem;
   letter-spacing: 0.22em;
@@ -81,7 +81,7 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 22px rgba(200, 163, 90, 0.35);
+  text-shadow: 0 0 22px rgba(154, 125, 82, 0.35);
   padding: 0 0.15em;
 }
 
@@ -107,7 +107,7 @@
     rgba(30, 24, 18, 0.85),
     rgba(21, 17, 11, 0.85)
   );
-  border: 1px solid rgba(200, 163, 90, 0.35);
+  border: 1px solid rgba(154, 125, 82, 0.35);
   border-radius: 999px;
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.4),
@@ -117,7 +117,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   letter-spacing: 0.08em;
   font-size: 0.82rem;
   color: var(--parchment);
@@ -144,7 +144,7 @@
   align-items: center;
   gap: 0.3rem;
   padding-left: 0.75rem;
-  border-left: 1px solid rgba(200, 163, 90, 0.25);
+  border-left: 1px solid rgba(154, 125, 82, 0.25);
 }
 .map-run-relic {
   display: inline-flex;
@@ -154,17 +154,17 @@
   height: 1.5rem;
   border-radius: 50%;
   background: rgba(11, 8, 5, 0.6);
-  border: 1px solid rgba(200, 163, 90, 0.35);
+  border: 1px solid rgba(154, 125, 82, 0.35);
   font-size: 0.9rem;
   line-height: 1;
   color: var(--gold-2);
 }
 .map-run-relic.rarity-uncommon {
-  border-color: rgba(122, 184, 255, 0.55);
+  border-color: rgba(80, 150, 220, 0.55);
   color: var(--arcane-2);
 }
 .map-run-relic.rarity-rare {
-  border-color: rgba(184, 157, 255, 0.6);
+  border-color: rgba(140, 116, 190, 0.6);
   color: var(--royal-2);
 }
 .map-run-relics-empty {
@@ -174,7 +174,7 @@
   color: var(--parchment-dim);
   opacity: 0.65;
   padding-left: 0.75rem;
-  border-left: 1px solid rgba(200, 163, 90, 0.25);
+  border-left: 1px solid rgba(154, 125, 82, 0.25);
 }
 
 .map-canvas-wrap {
@@ -222,7 +222,7 @@
    (bottom) to "Apex" (boss floor) so the vertical layout has a spine. */
 .map-floor-numeral {
   fill: var(--gold-3);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 13px;
   letter-spacing: 0.08em;
   opacity: 0.7;
@@ -247,7 +247,7 @@
 }
 .map-anchor-ring-outer {
   fill: none;
-  stroke: rgba(200, 163, 90, 0.4);
+  stroke: rgba(154, 125, 82, 0.4);
   stroke-width: 1.5;
   stroke-dasharray: 2 3;
   animation: map-anchor-spin 18s linear infinite;
@@ -258,15 +258,15 @@
   fill: rgba(21, 17, 11, 0.85);
   stroke: var(--gold-1);
   stroke-width: 1.5;
-  filter: drop-shadow(0 0 8px rgba(200, 163, 90, 0.55));
+  filter: drop-shadow(0 0 8px rgba(154, 125, 82, 0.55));
 }
 .map-anchor-star {
   fill: var(--gold-2);
-  filter: drop-shadow(0 0 3px rgba(240, 208, 137, 0.6));
+  filter: drop-shadow(0 0 3px rgba(201, 168, 108, 0.6));
 }
 .map-anchor-label {
   fill: var(--gold-2);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 10px;
   letter-spacing: 0.32em;
   text-transform: uppercase;
@@ -287,27 +287,27 @@
 .map-node-icon {
   fill: var(--parchment-dim);
   font-size: 22px;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   pointer-events: none;
   user-select: none;
 }
 
 .map-node-reachable .map-node-circle {
   stroke: var(--gold-1);
-  filter: drop-shadow(0 0 6px rgba(200, 163, 90, 0.5));
+  filter: drop-shadow(0 0 6px rgba(154, 125, 82, 0.5));
 }
 .map-node-reachable .map-node-icon {
   fill: var(--gold-2);
 }
 .map-node-reachable:hover .map-node-circle {
   fill: var(--stone-1);
-  filter: drop-shadow(0 0 10px rgba(200, 163, 90, 0.8));
+  filter: drop-shadow(0 0 10px rgba(154, 125, 82, 0.8));
 }
 
 .map-node-current .map-node-circle {
   fill: var(--gold-3);
   stroke: var(--gold-2);
-  filter: drop-shadow(0 0 10px rgba(200, 163, 90, 0.7));
+  filter: drop-shadow(0 0 10px rgba(154, 125, 82, 0.7));
 }
 .map-node-current .map-node-icon {
   fill: var(--ink-1);

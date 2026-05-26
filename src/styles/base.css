@@ -32,34 +32,34 @@
 }
 
 :root {
-  /* Fantasy palette: ink-stained midnight, parchment, tarnished gold, ember red,
-     arcane blue, mossy green, royal purple. Tuned to read as "tome on a stone
-     altar" rather than the previous neutral indigo. */
-  --ink-0: #0b0805;
-  --ink-1: #15110b;
-  --ink-2: #1e1812;
-  --stone-1: #2a2118;
-  --stone-2: #3a2e22;
-  --gold-1: #c8a35a;
-  --gold-2: #f0d089;
-  --gold-3: #8b6a2c;
-  --parchment: #ede0c4;
-  --parchment-dim: #c9b896;
+  /* Celtic palette: standing-stone slate, weathered bronze, woad blue,
+     forest green, heather purple. Tuned to read as "carved stone circle
+     in highland mist" — cooler and earthier than the previous gold-tome. */
+  --ink-0: #0a0d10;
+  --ink-1: #111820;
+  --ink-2: #1a222e;
+  --stone-1: #222e2c;
+  --stone-2: #33423e;
+  --gold-1: #9a7d52;
+  --gold-2: #c9a86c;
+  --gold-3: #6b5232;
+  --parchment: #ddd8cc;
+  --parchment-dim: #a8a294;
   --ember-1: #c4423c;
   --ember-2: #ee5e57;
   --ember-glow: rgba(238, 94, 87, 0.55);
-  --arcane-1: #5b8fd1;
-  --arcane-2: #9ec5ff;
-  --arcane-glow: rgba(122, 184, 255, 0.45);
-  --moss-1: #2ea65c;
-  --moss-2: #4dd581;
-  --moss-glow: rgba(77, 213, 129, 0.55);
-  --royal-1: #6c4ab8;
-  --royal-2: #b89dff;
+  --arcane-1: #3a6b9f;
+  --arcane-2: #7cb0e0;
+  --arcane-glow: rgba(80, 150, 220, 0.45);
+  --moss-1: #1d7a42;
+  --moss-2: #3db86a;
+  --moss-glow: rgba(61, 184, 106, 0.55);
+  --royal-1: #5a3d8a;
+  --royal-2: #a488d4;
 
-  /* Body text is sans for legibility; Cinzel stays opted-in per element for
-     the short uppercase display labels (HUD title, banner text, etc.).
-     Italic-Cormorant body copy was hard to parse — replaced wholesale. */
+  /* Body text is sans for legibility; MedievalSharp provides the Celtic
+     uncial display face for short uppercase labels (HUD title, banner text,
+     etc.). */
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
   color: var(--parchment);

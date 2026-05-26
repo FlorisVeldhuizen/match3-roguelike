@@ -5,9 +5,6 @@ export type GravityResult = {
   movements: { from: Pos; to: Pos }[]
 }
 
-// Drops surviving cells into holes (null entries). Preserves Cell identity
-// (gemColor + flags fall together). Returns the new grid plus per-cell movements.
-// Caller is responsible for spawning replacements into the remaining null cells.
 export function applyGravity(board: (Cell | null)[][]): GravityResult {
   const h = board.length
   if (h === 0) return { board: [], movements: [] }

@@ -28,17 +28,17 @@
   flex: 0 0 104px;
   position: relative;
   background:
-    linear-gradient(180deg, rgba(200, 163, 90, 0.05), transparent 60%),
+    linear-gradient(180deg, rgba(154, 125, 82, 0.05), transparent 60%),
     linear-gradient(180deg, var(--stone-2), var(--ink-2));
   color: var(--parchment);
   border: 1px solid var(--gold-3);
   border-radius: 0.5rem;
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.06),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 2px 6px rgba(0, 0, 0, 0.5);
   cursor: pointer;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -52,7 +52,7 @@
   filter: brightness(1.15);
   transform: translateY(-2px);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.18),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 6px 14px rgba(0, 0, 0, 0.55);
 }
@@ -71,26 +71,26 @@
 .spell-btn.ready {
   border-color: var(--gold-2);
   box-shadow:
-    inset 0 0 0 1px rgba(240, 208, 137, 0.18),
-    0 0 14px rgba(240, 208, 137, 0.22),
+    inset 0 0 0 1px rgba(201, 168, 108, 0.18),
+    0 0 14px rgba(201, 168, 108, 0.22),
     0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .spell-btn.ultimate {
   background:
-    linear-gradient(180deg, rgba(168, 130, 220, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(130, 100, 180, 0.12), transparent 60%),
     linear-gradient(180deg, var(--stone-2), var(--ink-2));
 }
 
 .spell-btn.ultimate.ready {
   border-color: var(--royal-2);
   box-shadow:
-    inset 0 0 0 1px rgba(184, 157, 255, 0.25),
-    0 0 18px rgba(184, 157, 255, 0.4),
+    inset 0 0 0 1px rgba(140, 116, 190, 0.25),
+    0 0 18px rgba(140, 116, 190, 0.4),
     0 2px 6px rgba(0, 0, 0, 0.5);
   background:
-    linear-gradient(180deg, rgba(184, 157, 255, 0.22), transparent 60%),
-    linear-gradient(180deg, #3a2b66, var(--ink-2));
+    linear-gradient(180deg, rgba(140, 116, 190, 0.22), transparent 60%),
+    linear-gradient(180deg, #2e2455, var(--ink-2));
 }
 
 /* Queued: spell is cast and locked in for the phase. Strong visual
@@ -102,9 +102,9 @@
   filter: grayscale(0.55) brightness(0.65);
   opacity: 0.65;
   cursor: default;
-  border-color: rgba(200, 163, 90, 0.55);
+  border-color: rgba(154, 125, 82, 0.55);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.22),
     inset 0 0 14px rgba(0, 0, 0, 0.55),
     0 2px 6px rgba(0, 0, 0, 0.5);
 }
@@ -119,7 +119,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--gold-1);
@@ -129,7 +129,7 @@
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 6px rgba(240, 208, 137, 0.4);
+    0 0 6px rgba(201, 168, 108, 0.4);
   filter: none;
   opacity: 1;
 }
@@ -201,7 +201,7 @@
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--stone-2);
   font-size: 0.72rem;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
   /* One-shot scale-in on mount — fires when a status first lands (chip
@@ -438,7 +438,7 @@
 
    The 1.6rem value comes from the chip's natural rendered height: the
    tallest inner child is .status-icon at font-size: 0.85rem, and
-   Cinzel's default line-height (~1.45) plus 0.2rem vertical padding +
+   MedievalSharp's default line-height (~1.45) plus 0.2rem vertical padding +
    2×1px border lands around 1.55rem. 1.6rem gives a small buffer so
    font-loading flicker or minor metric drift between browsers can't
    reintroduce the shift. */
@@ -473,7 +473,7 @@
 .player-statuses-floating .status-chip {
   background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
   box-shadow:
-    0 1px 0 rgba(200, 163, 90, 0.45),
+    0 1px 0 rgba(154, 125, 82, 0.45),
     0 3px 8px rgba(0, 0, 0, 0.55);
 }
 
@@ -507,26 +507,26 @@
 .spell-picker-card {
   padding: 1.5rem 1.75rem 1.25rem;
   background:
-    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.16), transparent 60%),
+    radial-gradient(ellipse at top, rgba(154, 125, 82, 0.16), transparent 60%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--gold-1);
   border-radius: 0.5rem;
   text-align: center;
   width: min(560px, 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.15),
     0 20px 60px rgba(0, 0, 0, 0.65),
-    0 0 60px rgba(200, 163, 90, 0.18);
+    0 0 60px rgba(154, 125, 82, 0.18);
 }
 
 .spell-picker-title {
   margin: 0 0 0.2rem;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 1.5rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--gold-2);
-  text-shadow: 0 0 14px rgba(200, 163, 90, 0.45);
+  text-shadow: 0 0 14px rgba(154, 125, 82, 0.45);
 }
 
 .spell-picker-sub {
@@ -564,7 +564,7 @@
 
 .spell-picker-option:hover {
   background: rgba(50, 38, 22, 0.85);
-  box-shadow: 0 0 18px rgba(200, 163, 90, 0.4);
+  box-shadow: 0 0 18px rgba(154, 125, 82, 0.4);
   transform: translateY(-2px);
 }
 
@@ -606,13 +606,13 @@
 
 .spell-picker-focus-slot:hover:not(.is-disabled) {
   background: rgba(50, 38, 22, 0.85);
-  box-shadow: 0 0 18px rgba(200, 163, 90, 0.4);
+  box-shadow: 0 0 18px rgba(154, 125, 82, 0.4);
   transform: translateY(-2px);
 }
 
 .spell-picker-focus-slot.selected {
   border-color: var(--gold-2);
-  box-shadow: 0 0 22px rgba(200, 163, 90, 0.6);
+  box-shadow: 0 0 22px rgba(154, 125, 82, 0.6);
   background: rgba(60, 46, 26, 0.9);
 }
 
@@ -742,14 +742,14 @@
 }
 
 .spell-picker-confirm {
-  background: linear-gradient(180deg, #5a4322, #3a2b16);
+  background: linear-gradient(180deg, #45382a, #2d2218);
   border-color: var(--gold-2);
   color: var(--gold-2);
 }
 
 .spell-picker-confirm:not(:disabled):hover {
-  background: linear-gradient(180deg, #6f5028, #4a371b);
-  box-shadow: 0 0 18px rgba(200, 163, 90, 0.4);
+  background: linear-gradient(180deg, #574530, #3a2e1e);
+  box-shadow: 0 0 18px rgba(154, 125, 82, 0.4);
 }
 
 .spell-picker-confirm:disabled {

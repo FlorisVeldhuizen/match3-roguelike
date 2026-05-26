@@ -17,11 +17,11 @@
   padding: 0.5rem 0.85rem 0.55rem;
   border-radius: 0.4rem;
   background:
-    linear-gradient(180deg, rgba(200, 163, 90, 0.06), transparent 40%),
+    linear-gradient(180deg, rgba(154, 125, 82, 0.06), transparent 40%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--stone-2);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.06),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.06),
     inset 0 0 18px rgba(0, 0, 0, 0.45),
     0 4px 14px rgba(0, 0, 0, 0.4);
   min-width: 150px;
@@ -55,7 +55,7 @@
   border-radius: 0.3rem;
   background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--stone-2);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -110,7 +110,7 @@
 .enemy-intent.intent-block {
   border-color: var(--arcane-1);
   color: var(--arcane-2);
-  box-shadow: 0 0 14px rgba(122, 184, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 14px rgba(80, 150, 220, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 /* Cluster-shove badge picks up the per-swarmer accent hue set inline
@@ -141,7 +141,7 @@
   border: 1px solid var(--gold-3);
   border-radius: 0.3rem;
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.1),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.1),
     0 6px 18px rgba(0, 0, 0, 0.55);
   color: var(--parchment);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -160,7 +160,7 @@
 }
 
 .intent-tooltip-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
@@ -217,17 +217,17 @@
 @keyframes enemy-firing-block {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
+    box-shadow: 0 0 0 0 rgba(80, 150, 220, 0);
     border-color: var(--stone-2);
   }
   35% {
     transform: scale(1.04);
-    box-shadow: 0 0 28px 4px rgba(122, 184, 255, 0.45);
-    border-color: #7ab8ff;
+    box-shadow: 0 0 28px 4px rgba(80, 150, 220, 0.45);
+    border-color: #5a9ad0;
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(122, 184, 255, 0);
+    box-shadow: 0 0 0 0 rgba(80, 150, 220, 0);
     border-color: var(--stone-2);
   }
 }
@@ -247,16 +247,16 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--arcane-2);
-  background: rgba(91, 143, 209, 0.18);
-  border: 1px solid rgba(91, 143, 209, 0.55);
+  background: rgba(58, 107, 159, 0.18);
+  border: 1px solid rgba(58, 107, 159, 0.55);
   border-radius: 0.25rem;
   padding: 0.15rem 0.5rem;
-  box-shadow: 0 0 10px rgba(91, 143, 209, 0.18);
+  box-shadow: 0 0 10px rgba(58, 107, 159, 0.18);
 }
 
 /* The row itself reserves vertical space via .enemy-effects-row min-height,
@@ -271,7 +271,7 @@
   box-shadow:
     inset 0 0 0 1px var(--gold-1),
     inset 0 0 18px rgba(0, 0, 0, 0.45),
-    0 0 22px rgba(200, 163, 90, 0.25),
+    0 0 22px rgba(154, 125, 82, 0.25),
     0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
@@ -284,9 +284,9 @@
   box-shadow:
     inset 0 0 0 1px var(--gold-1),
     inset 0 0 18px rgba(0, 0, 0, 0.45),
-    0 0 22px rgba(200, 163, 90, 0.25),
+    0 0 22px rgba(154, 125, 82, 0.25),
     0 4px 14px rgba(0, 0, 0, 0.4),
-    0 0 30px 3px rgba(200, 163, 90, 0.35);
+    0 0 30px 3px rgba(154, 125, 82, 0.35);
 }
 
 /* Click-to-target affordance. Non-target living enemies during the
@@ -309,11 +309,11 @@
      when the swarmer is the current attack target — otherwise this
      softer hover ring would overwrite the prominent target ring and
      the player could lose sight of which enemy they're aimed at. */
-  border-color: rgba(200, 163, 90, 0.55);
+  border-color: rgba(154, 125, 82, 0.55);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.3),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.3),
     inset 0 0 18px rgba(0, 0, 0, 0.45),
-    0 0 14px rgba(200, 163, 90, 0.18),
+    0 0 14px rgba(154, 125, 82, 0.18),
     0 4px 14px rgba(0, 0, 0, 0.4);
   outline: none;
 }
@@ -368,16 +368,16 @@
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  /* summoning-circle: ember core, ringed by gold and shadow */
+  /* summoning-circle: ember core, ringed by dark stone and shadow */
   background:
     radial-gradient(circle at 50% 50%, rgba(238, 94, 87, 0.25), transparent 55%),
-    radial-gradient(circle at 30% 30%, #5a3a4e, #2a1a30 70%);
+    radial-gradient(circle at 30% 30%, #3a4555, #1a2030 70%);
   display: grid;
   place-items: center;
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.4),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.4),
     inset 0 0 12px rgba(0, 0, 0, 0.6),
-    0 0 14px rgba(108, 74, 184, 0.25);
+    0 0 14px rgba(90, 61, 138, 0.25);
   position: relative;
 }
 
@@ -386,7 +386,7 @@
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 1px dashed rgba(200, 163, 90, 0.35);
+  border: 1px dashed rgba(154, 125, 82, 0.35);
   pointer-events: none;
   animation: sigil-spin 24s linear infinite;
 }
@@ -402,7 +402,7 @@
 }
 
 .enemy-name {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.88rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -422,9 +422,9 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   padding: 0.05em 0.4em;
-  background: linear-gradient(180deg, #b87a18 0%, #6a4509 100%);
-  color: #fff6d6;
-  border: 1px solid #4a2e05;
+  background: linear-gradient(180deg, #8a6830 0%, #5a4218 100%);
+  color: #efe8d0;
+  border: 1px solid #3d2a0e;
   border-radius: 2px;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -453,7 +453,7 @@
   position: relative;
   display: block;
   text-align: center;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -478,7 +478,7 @@
 .enemy-intent.intent-buff-ally {
   border-color: var(--gold-2, #c8a35a);
   color: var(--gold-3, #f0c870);
-  box-shadow: 0 0 14px rgba(200, 163, 90, 0.28), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 14px rgba(154, 125, 82, 0.28), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .intent-tooltip.intent-buff-ally .intent-tooltip-title {
   color: var(--gold-3, #f0c870);
@@ -488,7 +488,7 @@
 .enemy-intent.intent-shield-ally {
   border-color: var(--arcane-1);
   color: var(--arcane-2);
-  box-shadow: 0 0 14px rgba(122, 184, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 14px rgba(80, 150, 220, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .intent-tooltip.intent-shield-ally .intent-tooltip-title {
   color: var(--arcane-2);

@@ -26,28 +26,11 @@ import {
   rollTileBurnIntent,
 } from './intentRollers'
 
-// Roll an intent at a given pattern index. The kind is scripted per archetype
-// (deterministic by index); only the numeric value rolls from `rng.enemy`.
-// Pattern repeats from the start of every encounter — same intent at same
-// turn index regardless of when the player entered (design doc §3).
-//
-// Per-kind roll logic lives in `intentRollers.ts` — this function is a thin
-// dispatcher that looks up the archetype's pattern entry, fans out to the
-// right roller, and handles the ally-intent solo-fallback (drop to attack
-// when no siblings are alive).
-//
-// `livingAllies` is required for ally-target intent kinds. The roller picks
-// a target deterministically from rng and bakes `targetAllyId` into the
-// intent so it can be telegraphed before the intent fires. If no allies are
-// alive when an ally-target kind is rolled, the intent falls back to 'attack'
-// — this prevents a crash in a solo-enemy encounter or when all allies died
-// before this turn.
+// Ally-target intents fall back to 'attack' when no siblings are alive.
 export function rollIntent(
   archetype: EnemyArchetype,
   patternIndex: number,
   rng: RngState,
-  // Optional: pass the full enemy list so the roller can pick a target ally.
-  // Includes the rolling enemy itself; the roller excludes it by id.
   livingAllies?: Enemy[],
   rollerEnemyId?: string,
   siblingNextIntents: readonly Intent[] = [],

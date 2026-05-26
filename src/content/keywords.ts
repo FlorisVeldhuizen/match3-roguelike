@@ -57,7 +57,7 @@ const defs: Record<KeywordId, KeywordDef> = {
   },
   block: {
     id: 'block',
-    name: 'Block',
+    name: 'Armor',
     icon: '🛡',
     body: 'Absorbs incoming damage before it hits HP. Zeroes at the start of your next turn unless carried.',
     variant: 'block',
@@ -66,21 +66,21 @@ const defs: Record<KeywordId, KeywordDef> = {
     id: 'riposte',
     name: 'Riposte',
     icon: '⚔',
-    body: 'Parries the next enemy attack — you take 0, the attacker takes the full pre-block amount back. Expires unused at end of enemy turn.',
+    body: 'Parries the next enemy attack — you take 0, the attacker takes the full pre-armor amount back. Expires unused at end of enemy turn.',
     variant: 'riposte',
   },
   bulwark: {
     id: 'bulwark',
     name: 'Bulwark',
     icon: '🛡',
-    body: 'Pending: at end of phase, your blue pool becomes an attack at half its value. Block becomes 0.',
+    body: 'Pending: at end of phase, your blue pool becomes an attack at half its value. Armor becomes 0.',
     variant: 'block',
   },
   reinforce: {
     id: 'reinforce',
     name: 'Reinforce',
     icon: '🛡',
-    body: 'Pending: at end of phase, your blue pool doubles into block, and that block carries over the next phase.',
+    body: 'Pending: at end of phase, your blue pool doubles into armor, and that armor carries over the next phase.',
     variant: 'block',
   },
 }

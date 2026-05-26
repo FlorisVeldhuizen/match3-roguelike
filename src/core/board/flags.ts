@@ -8,11 +8,6 @@ import type {
 } from '../../types'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
-// Generic read/write/tick layer over `Cell.flags`. Phase F only uses the
-// `burning` flag (Smolder's tile-burn verb), but the helpers stay flag-
-// agnostic so Caster's hex, Defender's petrify, Swarmer's pending-shove,
-// and J1's cursed all plug in via the same calls.
-
 type FlagKey = keyof CellFlags
 
 export function getFlag<K extends FlagKey>(
@@ -26,7 +21,6 @@ export function hasFlag(cell: Cell | null | undefined, flag: FlagKey): boolean {
   return getFlag(cell, flag) !== undefined
 }
 
-// Pure setter. Returns a new Cell with the flag set; never mutates input.
 export function setFlag<K extends FlagKey>(
   cell: Cell,
   flag: K,
@@ -35,9 +29,7 @@ export function setFlag<K extends FlagKey>(
   return { ...cell, flags: { ...cell.flags, [flag]: value } }
 }
 
-// Pure clearer. Returns a new Cell with the flag removed. If no other
-// flags remain, the `flags` bag itself is dropped to keep the shape tidy
-// for equality checks in tests.
+// Drops the `flags` bag entirely when empty (cleaner equality checks).
 export function clearFlag<K extends FlagKey>(cell: Cell, flag: K): Cell {
   if (cell.flags === undefined) return cell
   if (cell.flags[flag] === undefined) return cell
@@ -50,7 +42,6 @@ export function clearFlag<K extends FlagKey>(cell: Cell, flag: K): Cell {
   return cellWithoutFlags
 }
 
-// Walks a board's cells; returns positions where the flag is set.
 export function findFlaggedCells(
   board: readonly Cell[][],
   flag: FlagKey,
@@ -66,10 +57,6 @@ export function findFlaggedCells(
   return out
 }
 
-// Decrement a numeric flag's remaining duration by 1 across the whole
-// board. Cells reaching 0 have the flag cleared. Returns an updated
-// board and a list of positions where the flag was present before this
-// tick (for UI animation / debug log purposes).
 export type TickFlagResult = {
   board: Cell[][]
   events: GameEvent[]
@@ -108,11 +95,6 @@ export function tickFlagDuration(
   return { board: anyChange ? out : (board as Cell[][]), events }
 }
 
-// H2b: tick the position-bound petrifiedRows map by one phase. Rows
-// that hit 0 are removed from the map. Emits per-row `petrify-row-
-// ticked` events (with the new `remaining` count) so the FX layer can
-// drive its weakening → released animation hand-off on the animator's
-// playback timeline rather than the synchronous store commit.
 export function tickPetrifiedRows(
   petrifiedRows: PetrifiedRows,
 ): {
@@ -133,11 +115,6 @@ export function tickPetrifiedRows(
   return { petrifiedRows: next, expired, events }
 }
 
-// H2c: tick the board-global hexedColors set by one phase. Entries
-// that hit 0 are removed; an `color-hex-ticked` event fires per entry
-// with the new `remaining` count (0 = just expired). Mirrors
-// tickPetrifiedRows for the same reason: FX layer rides the event
-// timeline rather than diffing snapshots.
 export function tickHexedColors(
   hexedColors: readonly HexedColor[],
 ): {
@@ -158,10 +135,6 @@ export function tickHexedColors(
   return { hexedColors: next, events }
 }
 
-// Pick N cells from `rng` that don't already carry `flag` (Smolder won't
-// re-burn cells that are already burning). Returns positions; caller
-// applies the flag. If fewer than N unflagged cells exist, returns what
-// it could find.
 export function pickRandomCellsWithoutFlag(
   board: readonly Cell[][],
   flag: FlagKey,
@@ -190,22 +163,12 @@ export function pickRandomCellsWithoutFlag(
   return { cells: picked, rng: curRng }
 }
 
-// Pick N cells in a CLUSTER without `flag` — seed at a random unflagged
-// cell, then greedily pull in unflagged 4-neighbours (up/down/left/right)
-// in random order until `count` cells are picked or no more reachable
-// cells exist. Reads as "fireball lands HERE" rather than the spritzed
-// look of N independent random picks. Falls back to filling from the
-// rest of the unflagged pool at random if the cluster can't grow large
-// enough (e.g. seed picked in an isolated pocket of flagged cells).
 export function pickClusterCellsWithoutFlag(
   board: readonly Cell[][],
   flag: FlagKey,
   count: number,
   rng: RngState,
 ): { cells: Pos[]; rng: RngState } {
-  // Build the unflagged candidate set up front (same scan as
-  // pickRandomCellsWithoutFlag) so we can fall back to random picks if
-  // the cluster growth gets stuck.
   const candidates: Pos[] = []
   for (let y = 0; y < board.length; y++) {
     const row = board[y]
@@ -219,13 +182,10 @@ export function pickClusterCellsWithoutFlag(
   }
   let curRng = rng
   const target = Math.min(count, candidates.length)
-  // Build a lookup for "is (x,y) unflagged candidate" so neighbour
-  // expansion can check membership in O(1).
   const candidateSet = new Set(candidates.map((p) => `${p.x},${p.y}`))
   const picked: Pos[] = []
   const pickedSet = new Set<string>()
   const frontier: Pos[] = []
-  // Seed: pick a random candidate.
   const [seedIdx, afterSeed] = nextInt(curRng, candidates.length)
   curRng = afterSeed
   const seed = candidates[seedIdx]
@@ -234,10 +194,6 @@ export function pickClusterCellsWithoutFlag(
   pickedSet.add(`${seed.x},${seed.y}`)
   pushNeighbours(seed, candidateSet, pickedSet, frontier)
 
-  // Cluster growth: repeatedly pick a random cell from the frontier
-  // (unflagged neighbours of already-picked cells). Random-from-frontier
-  // gives the cluster an irregular, organic shape rather than a tight
-  // BFS square — closer to how a real fireball would spread.
   while (picked.length < target && frontier.length > 0) {
     const [fIdx, afterPick] = nextInt(curRng, frontier.length)
     curRng = afterPick
@@ -254,11 +210,7 @@ export function pickClusterCellsWithoutFlag(
     pushNeighbours(next, candidateSet, pickedSet, frontier)
   }
 
-  // Fallback: cluster couldn't grow large enough (e.g. seed was
-  // surrounded by flagged cells). Fill the remaining slots with random
-  // unflagged cells from the rest of the board. Preserves the "we
-  // promised N tiles" contract while still favouring cluster shape
-  // when the board allows.
+  // Fallback: fill remaining slots randomly if cluster can't grow.
   if (picked.length < target) {
     const remaining = candidates.filter((p) => !pickedSet.has(`${p.x},${p.y}`))
     while (picked.length < target && remaining.length > 0) {
@@ -275,10 +227,6 @@ export function pickClusterCellsWithoutFlag(
   return { cells: picked, rng: curRng }
 }
 
-// Helper for pickClusterCellsWithoutFlag: push the 4-neighbours of
-// `p` onto `frontier` if they're unflagged and not already picked.
-// Duplicates within the frontier are allowed (cheap, harmless — the
-// picked-set check above filters them out at expansion time).
 function pushNeighbours(
   p: Pos,
   candidateSet: Set<string>,
@@ -301,7 +249,6 @@ function pushNeighbours(
   }
 }
 
-// Apply a flag to multiple cells at once. Pure; returns a new board.
 export function applyFlagToCells<K extends FlagKey>(
   board: readonly Cell[][],
   positions: readonly Pos[],

@@ -121,7 +121,12 @@ export function HoverTooltip({
         onMouseLeave={() => setAnchorHovered(false)}
         onFocus={() => setAnchorHovered(true)}
         onBlur={() => setAnchorHovered(false)}
-        onTouchStart={() => setAnchorHovered((v) => !v)}
+        onTouchStart={(e) => {
+          if (!anchorHovered) {
+            e.preventDefault()
+            setAnchorHovered(true)
+          }
+        }}
         aria-label={ariaLabel}
       >
         {children}

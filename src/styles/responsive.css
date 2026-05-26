@@ -69,7 +69,7 @@
   }
   .hp-bar {
     /* Mobile: shrink, but not past the point where "XXX / XXX" clips.
-       96px fits 3-digit HP both sides with our 0.78rem Cinzel + 0.08em
+       96px fits 3-digit HP both sides with our 0.78rem MedievalSharp + 0.08em
        letter-spacing. Without a floor, flex would squeeze "36/40" down
        to "36/4" with the last digit cut off the right edge. */
     min-width: 96px;

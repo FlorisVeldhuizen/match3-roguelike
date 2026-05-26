@@ -137,9 +137,9 @@ export function MapScreen() {
       <div className="map-screen-inner">
         <div className="map-brand">
           <span className="map-brand-rule" aria-hidden />
-          <span className="map-brand-glyph" aria-hidden>◆</span>
+          <span className="map-brand-glyph" aria-hidden>☘</span>
           <h1 className="map-wordmark">Renzadora</h1>
-          <span className="map-brand-glyph" aria-hidden>◆</span>
+          <span className="map-brand-glyph" aria-hidden>☘</span>
           <span className="map-brand-rule" aria-hidden />
         </div>
         <p className="map-sub">

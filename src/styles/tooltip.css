@@ -98,7 +98,7 @@ body:has(.game-over-overlay) .intent-tooltip {
   border-radius: 0.35rem;
   box-shadow:
     0 8px 22px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(200, 163, 90, 0.18);
+    inset 0 0 0 1px rgba(154, 125, 82, 0.18);
   color: var(--parchment);
   font-size: 0.78rem;
   line-height: 1.35;
@@ -111,7 +111,7 @@ body:has(.game-over-overlay) .intent-tooltip {
 }
 
 .hover-tooltip-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   font-size: 0.82rem;
   letter-spacing: 0.06em;
@@ -135,8 +135,8 @@ body:has(.game-over-overlay) .intent-tooltip {
   border-color: var(--royal-2);
   box-shadow:
     0 8px 22px rgba(0, 0, 0, 0.6),
-    0 0 18px rgba(184, 157, 255, 0.25),
-    inset 0 0 0 1px rgba(184, 157, 255, 0.25);
+    0 0 18px rgba(140, 116, 190, 0.25),
+    inset 0 0 0 1px rgba(140, 116, 190, 0.25);
 }
 
 .hover-tooltip.tooltip-ultimate .hover-tooltip-title {

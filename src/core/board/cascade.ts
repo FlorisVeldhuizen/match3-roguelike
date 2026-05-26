@@ -18,9 +18,7 @@ export type SwapResolution = {
   events: GameEvent[]
 }
 
-// Shallow clone per row; cells themselves are not cloned because the
-// pure flag helpers always return a new Cell when they mutate. Preserves
-// `flags` so the burning/petrified/etc. state carries through a swap.
+// Shallow clone — flag helpers always return new Cells, so row.slice() suffices.
 const cloneBoard = (board: Cell[][]): Cell[][] =>
   board.map((row) => row.slice())
 
@@ -37,11 +35,6 @@ const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
-// Compute the full set of cells to clear for a cascade step, including
-// special-clear extensions: T clears a 3×3 area around the intersection;
-// L clears a +-shape around the intersection. Line-5 used to extend to
-// the whole row/col but now flags the cleared cells as Blessed instead
-// (see resolveSwap and PLANNING/01-design.md §Blessed cells).
 function expandClears(
   board: Cell[][],
   matches: ReturnType<typeof detectMatches>,
@@ -54,9 +47,7 @@ function expandClears(
     for (const c of m.cells) out.add(keyOf(c))
 
     if (m.shape === 'T' || m.shape === 'L') {
-      // Intersection = the cell shared by H and V runs. Recover it as the
-      // cell that has at least one same-color neighbor in BOTH axes within
-      // the match-cell set.
+      // Intersection = cell with same-color neighbors in both axes.
       const set = new Set(m.cells.map(keyOf))
       const has = (p: Pos) => set.has(keyOf(p))
       let intersection: Pos | null = null
@@ -72,7 +63,6 @@ function expandClears(
       }
       if (intersection) {
         if (m.shape === 'T') {
-          // 3×3 area around intersection.
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
               const x = intersection.x + dx
@@ -83,7 +73,6 @@ function expandClears(
             }
           }
         } else {
-          // +-shape: intersection + 4 cardinal neighbors.
           const offsets = [
             { dx: 0, dy: 0 },
             { dx: 1, dy: 0 },
@@ -110,16 +99,9 @@ export function resolveSwap(
   rng: RngState,
   from: Pos,
   to: Pos,
-  // H2b: petrified rows are a SWAP gate. Gems on a locked row are
-  // stuck — neither the swap origin nor the swap target may sit on
-  // such a row. Matches still cascade THROUGH petrified rows when
-  // anchored elsewhere; only the swap itself is gated.
   petrifiedRows: Readonly<Record<number, number>> = {},
 ): SwapResolution {
   const events: GameEvent[] = [{ kind: 'swap', from, to }]
-  // Reject the swap up-front if either end is on a locked row. The
-  // revert event lets the UI play the same "snap back" animation as
-  // a no-match swap; gameplay-wise this is just another invalid swap.
   if (
     (petrifiedRows[from.y] ?? 0) > 0 ||
     (petrifiedRows[to.y] ?? 0) > 0
@@ -145,16 +127,6 @@ export function resolveSwap(
   }
 }
 
-// Cascade walker: takes an initial match list + the post-clear board
-// state and walks the standard match → clear → gravity → refill →
-// detect loop until no more matches form. Emits the full event stream
-// (cascade-start, match-found, gems-cleared, tile-burn-triggered,
-// blessed-match-triggered, gems-fell, gems-spawned, tile-blessed-placed,
-// cascade-complete) that the cascade processor consumes downstream.
-//
-// Extracted from resolveSwap so other callers (castShatter) can feed
-// in synthetic initial matches and benefit from the same chain logic —
-// gravity-formed matches after a shatter now ripple through naturally.
 export function runCascade(
   startBoard: Cell[][],
   rng: RngState,
@@ -168,9 +140,7 @@ export function runCascade(
   while (matches.length > 0) {
     events.push({ kind: 'cascade-start', level })
     for (const m of matches) {
-      // `blessed` is computed against the pre-clear board because the flag
-      // is wiped by the upcoming clear step. The store reads this flag to
-      // apply the 2× pool-delta multiplier on the per-match payload.
+      // Read blessed before clear wipes the flag (drives 2× multiplier).
       const hasBlessed = m.cells.some((c) => hasFlag(board[c.y]?.[c.x], 'blessed'))
       events.push({
         kind: 'match-found',
@@ -182,15 +152,8 @@ export function runCascade(
       })
     }
 
-    // Line-5 matches flag the cleared cells as Blessed. Collected here so
-    // we can re-apply the flag after gravity + refill — the cleared cells
-    // are null at the moment of clear, so the flag can only attach once a
-    // gem has dropped into / been spawned into the position. Multiple
-    // line-5s in the same step union their positions naturally via the
-    // Set semantics (a position is either targeted or not, no stacking).
-    // shape='shatter' is intentionally excluded — synthetic shatter
-    // matches are size-N for the whole colour and would flag the entire
-    // refilled set as blessed otherwise.
+    // Collect line-5 blessed targets now; flag applied after gravity+refill.
+    // Shatter matches excluded — they'd bless the entire refilled set.
     const blessTargets: Pos[] = []
     for (const m of matches) {
       if (m.shape === 'line' && m.size >= 5) {
@@ -200,14 +163,7 @@ export function runCascade(
 
     const clearSet = expandClears(board, matches)
     const clearedCells: Pos[] = []
-    // Burning cells cleared this step → each applies 1 stack of Burn to
-    // the player (02-scope §Smolder verb). Sum during the same walk to
-    // avoid a second pass.
     const burningCleared: Pos[] = []
-    // Blessed cells cleared this step → emit blessed-match-triggered for
-    // the FX/audio layer. The math-side 2× lives on match-found.blessed
-    // above; this event is purely a consumption notification (mirrors
-    // tile-burn-triggered's role).
     const blessedCleared: Pos[] = []
     const cleared: (Cell | null)[][] = board.map((row, y) =>
       row.map((c, x) => {
@@ -243,9 +199,6 @@ export function runCascade(
     if (movements.length > 0) events.push({ kind: 'gems-fell', movements })
 
     const spawns: { at: Pos; color: GemColor }[] = []
-    // Weighted picker handles the 10% gold / 90% mana split (see gemSpawn.ts).
-    // Same single-nextInt-per-gem cost as the pre-gold path; the weighting
-    // collapses to one draw via a bucketed range.
     const refilled: Cell[][] = fallen.map((row, y) =>
       row.map((c, x): Cell => {
         if (c) return c
@@ -257,13 +210,6 @@ export function runCascade(
     )
     if (spawns.length > 0) events.push({ kind: 'gems-spawned', spawns })
 
-    // Apply blessed flag to the line-5 target positions on the freshly
-    // refilled board. The match-found event for each line-5 carries the
-    // color, but for FX purposes a single tile-blessed-placed per cascade
-    // step is enough — group by color when there's exactly one line-5,
-    // fall back to the first match's color when multiple line-5s of
-    // different colors land together (rare; FX layer can still anchor on
-    // positions regardless of color).
     let blessedBoard = refilled
     if (blessTargets.length > 0) {
       blessedBoard = applyFlagToCells(refilled, blessTargets, 'blessed', true)
@@ -283,8 +229,7 @@ export function runCascade(
     matches = detectMatches(board)
   }
 
-  // `level` was post-incremented at the bottom of every iteration, so it
-  // equals the total chain depth: 1 = just the initial match, 2+ = chain.
+  // level = total chain depth (1 = initial match only, 2+ = chain).
   events.push({ kind: 'cascade-complete', levels: level })
 
   return { board, rng: curRng, events }

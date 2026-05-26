@@ -10,26 +10,10 @@ import { nextInt, type RngState } from '../rng/mulberry32'
 import { detectMatches } from './detectMatches'
 import { pickGemColorWeighted } from './gemSpawn'
 
-// Generates a playable starting board:
-//  1. fill with random gems, then walk row-major and replace any cell that
-//     would complete a pre-existing match with a non-completing color
-//  2. verify at least one valid swap exists; if not, fall through to
-//  3. force-place a guaranteed swappable [A,B,A,B] segment and re-clean
-//
-// Threads RngState through and returns the advanced state. Determinism: same
-// (seed, dims) → same board.
 export function generateBoard(
   rng: RngState,
   width: number = BOARD_WIDTH,
   height: number = BOARD_HEIGHT,
-  // H2b: optional petrify map. The post-cascade regen path in
-  // actions/swap.ts can call generateBoard while a Defender's
-  // petrify-row lockout is still active; without threading this in,
-  // the internal hasValidSwap check would happily accept a board
-  // whose only valid swaps sit on the locked row — which from the
-  // player's perspective is still a no-moves state. Defaults to
-  // empty so existing boot / new-fight callers (which have no
-  // petrify state) behave unchanged.
   petrifiedRows: Readonly<Record<number, number>> = {},
 ): { board: Cell[][]; rng: RngState } {
   let r = rng
@@ -65,9 +49,7 @@ function fillAndDematch(
       const current = board[y]?.[x]
       if (!current) throw new Error('fill: missing cell')
       if (!forbidden.has(current.gemColor)) continue
-      // Anti-match fallback walks the mana colours first (never gold),
-      // so de-matching can never spawn a forced gold cluster during
-      // initial board cleanup.
+      // Mana-only fallback prevents forced gold clusters during cleanup.
       const choice = MANA_GEM_COLORS.find((c) => !forbidden.has(c))
       if (!choice) throw new Error('fill: no safe color')
       current.gemColor = choice
@@ -84,8 +66,7 @@ function forbiddenColorsAt(
   const out = new Set<GemColor>()
   const at = (xx: number, yy: number): GemColor | null =>
     board[yy]?.[xx]?.gemColor ?? null
-  // Triplet patterns including (x,y); we only need patterns where the
-  // two non-(x,y) cells are already filled and equal.
+  // Ban any color that would complete a triplet with two filled neighbors.
   const ban = (a: GemColor | null, b: GemColor | null) => {
     if (a && a === b) out.add(a)
   }
@@ -98,10 +79,6 @@ function forbiddenColorsAt(
   return out
 }
 
-// H2b: optional petrifiedRows respected as a SWAP gate. A swap whose
-// origin or target sits on a locked row is invalid — the gem itself is
-// stuck. Matches can still flow THROUGH a petrified row when anchored
-// elsewhere; that case is unaffected by this function.
 export function hasValidSwap(
   board: Cell[][],
   petrifiedRows: Readonly<Record<number, number>> = {},
@@ -111,11 +88,9 @@ export function hasValidSwap(
   for (let y = 0; y < h; y++) {
     if ((petrifiedRows[y] ?? 0) > 0) continue // gems in this row are stuck
     for (let x = 0; x < w; x++) {
-      // Try swap right (same row, so already petrify-checked above).
       if (x + 1 < w) {
         if (swapMakesMatch(board, x, y, x + 1, y)) return true
       }
-      // Try swap down — target row must also be unpetrified.
       if (y + 1 < h && (petrifiedRows[y + 1] ?? 0) === 0) {
         if (swapMakesMatch(board, x, y, x, y + 1)) return true
       }
@@ -124,8 +99,6 @@ export function hasValidSwap(
   return false
 }
 
-// Returns every (from → to) pair that yields at least one match. Used by the
-// idle-hint nudge to cycle through random suggestions without repeats.
 export function findAllValidSwaps(
   board: Cell[][],
   petrifiedRows: Readonly<Record<number, number>> = {},
@@ -172,23 +145,15 @@ function swapMakesMatch(
   return hit
 }
 
-// Last-resort: force a row's first 4 cells to [A,B,A,B] with A,B chosen so
-// they don't form matches with cells above or to the right. Then re-clean
-// the rest of the board (preserving the forced segment).
+// Last-resort: force [A,B,A,B] into a row to guarantee a valid swap.
 function forcePlaceSwap(
   board: Cell[][],
   randIntBelow: (max: number) => number,
-  // H2b: skip petrified rows when picking the "force placement" row —
-  // and use the petrify-aware hasValidSwap check at the end, so the
-  // forced board is genuinely playable under the active lockout.
   petrifiedRows: Readonly<Record<number, number>> = {},
 ): Cell[][] {
   const h = board.length
   const w = board[0]?.length ?? 0
   if (w < 4 || h === 0) return board
-  // Try rows in randomized order until placement works. Skip rows that
-  // are currently under a petrify lockout — placing the forced segment
-  // there would just trip the lockout gate in hasValidSwap.
   const rowOrder = Array.from({ length: h }, (_, i) => i).filter(
     (y) => (petrifiedRows[y] ?? 0) === 0,
   )
@@ -201,8 +166,7 @@ function forcePlaceSwap(
     rowOrder[j] = a
   }
   for (const y of rowOrder) {
-    // Force-place pairs are drawn from MANA_GEM_COLORS only — a guaranteed
-    // playable segment should pay mana on the first swap, not gold.
+    // Mana-only: forced segment should pay mana, not gold.
     for (let ai = 0; ai < MANA_GEM_COLORS.length; ai++) {
       for (let bi = 0; bi < MANA_GEM_COLORS.length; bi++) {
         if (ai === bi) continue
@@ -210,7 +174,6 @@ function forcePlaceSwap(
         const colB = MANA_GEM_COLORS[bi]
         if (!colA || !colB) continue
         if (tryForceSegment(board, y, colA, colB)) {
-          // Re-clean rest of board (preserving forced segment).
           dematchExceptSegment(board, y)
           if (hasValidSwap(board, petrifiedRows)) return board
         }
@@ -261,8 +224,6 @@ function dematchExceptSegment(board: Cell[][], reservedRow: number): void {
       const forbidden = forbiddenColorsAt(board, x, y)
       const cur = board[y]?.[x]
       if (!cur || !forbidden.has(cur.gemColor)) continue
-      // Same rationale as fillAndDematch: anti-match fallback walks the
-      // mana colours first so re-cleaning can't manufacture gold runs.
       const choice = MANA_GEM_COLORS.find((c) => !forbidden.has(c))
       if (!choice) continue
       cur.gemColor = choice

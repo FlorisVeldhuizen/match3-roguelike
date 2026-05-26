@@ -15,16 +15,16 @@
 .reward-card {
   padding: 2rem 2.5rem;
   background:
-    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.18), transparent 60%),
+    radial-gradient(ellipse at top, rgba(154, 125, 82, 0.18), transparent 60%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--gold-1);
   border-radius: 0.5rem;
   text-align: center;
   width: min(880px, 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.15),
     0 24px 80px rgba(0, 0, 0, 0.7),
-    0 0 80px rgba(200, 163, 90, 0.22);
+    0 0 80px rgba(154, 125, 82, 0.22);
   position: relative;
 }
 
@@ -46,12 +46,12 @@
 
 .reward-title {
   margin: 0 0 0.25rem;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 2rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--gold-2);
-  text-shadow: 0 0 18px rgba(200, 163, 90, 0.55);
+  text-shadow: 0 0 18px rgba(154, 125, 82, 0.55);
 }
 
 .reward-sub {
@@ -89,7 +89,7 @@
 
 .reward-relic:hover {
   background: rgba(50, 38, 22, 0.85);
-  box-shadow: 0 0 22px rgba(200, 163, 90, 0.5);
+  box-shadow: 0 0 22px rgba(154, 125, 82, 0.5);
   transform: translateY(-2px);
 }
 
@@ -112,7 +112,7 @@
 }
 
 .reward-relic-name {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   font-size: 1rem;
   letter-spacing: 0.12em;
@@ -151,7 +151,7 @@
   border: 1px solid var(--gold-1);
   background: transparent;
   color: var(--parchment-dim);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   font-size: 0.75rem;
@@ -161,7 +161,7 @@
 }
 
 .reward-skip:hover {
-  background: rgba(200, 163, 90, 0.1);
+  background: rgba(154, 125, 82, 0.1);
   color: var(--parchment);
 }
 
@@ -178,7 +178,7 @@
 }
 
 .shop-section-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.78rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -191,9 +191,9 @@
   display: inline-block;
   margin-top: 0.4rem;
   padding: 0.15em 0.55em;
-  background: rgba(200, 163, 90, 0.1);
+  background: rgba(154, 125, 82, 0.1);
   color: var(--gold-2);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.78rem;
   letter-spacing: 0.06em;
   border: 1px solid var(--gold-1);
@@ -207,5 +207,5 @@
 }
 .reward-relic.sold-out .shop-price {
   color: var(--parchment-dim);
-  border-color: rgba(200, 163, 90, 0.3);
+  border-color: rgba(154, 125, 82, 0.3);
 }

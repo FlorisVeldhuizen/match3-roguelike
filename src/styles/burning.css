@@ -463,17 +463,17 @@
 @keyframes spell-cast-flash {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(240, 208, 137, 0);
+    box-shadow: 0 0 0 0 rgba(201, 168, 108, 0);
     filter: brightness(1);
   }
   30% {
     transform: scale(1.08);
-    box-shadow: 0 0 22px 4px rgba(240, 208, 137, 0.55);
+    box-shadow: 0 0 22px 4px rgba(201, 168, 108, 0.55);
     filter: brightness(1.45);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(240, 208, 137, 0);
+    box-shadow: 0 0 0 0 rgba(201, 168, 108, 0);
     filter: brightness(1);
   }
 }
@@ -481,17 +481,17 @@
 @keyframes ultimate-cast-flash {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+    box-shadow: 0 0 0 0 rgba(140, 116, 190, 0);
     filter: brightness(1);
   }
   30% {
     transform: scale(1.1);
-    box-shadow: 0 0 28px 6px rgba(184, 157, 255, 0.7);
+    box-shadow: 0 0 28px 6px rgba(140, 116, 190, 0.7);
     filter: brightness(1.5);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(184, 157, 255, 0);
+    box-shadow: 0 0 0 0 rgba(140, 116, 190, 0);
     filter: brightness(1);
   }
 }
@@ -510,7 +510,7 @@
 .intent-rider {
   margin-left: 0.35rem;
   padding-left: 0.35rem;
-  border-left: 1px solid rgba(200, 163, 90, 0.35);
+  border-left: 1px solid rgba(154, 125, 82, 0.35);
   font-size: 0.72em;
   line-height: 1;
   opacity: 0.95;
@@ -524,7 +524,7 @@
    family as the main intent amount; slightly smaller so the primary
    damage number still dominates. */
 .intent-rider-amount {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 1em;

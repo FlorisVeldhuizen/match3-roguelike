@@ -15,7 +15,7 @@
 .victory-card {
   padding: 2.25rem 2.75rem;
   background:
-    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.15), transparent 60%),
+    radial-gradient(ellipse at top, rgba(154, 125, 82, 0.15), transparent 60%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--gold-1);
   border-radius: 0.5rem;
@@ -25,16 +25,15 @@
   gap: 1rem;
   width: min(420px, 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.15),
     inset 0 0 40px rgba(0, 0, 0, 0.6),
     0 24px 80px rgba(0, 0, 0, 0.65),
-    0 0 60px rgba(200, 163, 90, 0.18);
+    0 0 60px rgba(154, 125, 82, 0.18);
   position: relative;
 }
 
 /* Mystic knot centerpiece — same ornament as the HUD's top medallion so
-   the run-end panels read as a family with the in-fight HUD. Attribution
-   in /CREDITS.md. */
+   the run-end panels read as a family with the in-fight HUD. */
 .victory-card::before {
   content: '';
   position: absolute;
@@ -50,14 +49,14 @@
 
 .victory-title {
   margin: 0;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 2.2rem;
   font-weight: 900;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--gold-2);
   text-shadow:
-    0 0 18px rgba(200, 163, 90, 0.55),
+    0 0 18px rgba(154, 125, 82, 0.55),
     0 2px 0 rgba(0, 0, 0, 0.6);
 }
 
@@ -74,7 +73,7 @@
   border: 1px solid var(--gold-1);
   background: transparent;
   color: var(--gold-2);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -85,8 +84,8 @@
 }
 
 .victory-restart:hover {
-  background: rgba(200, 163, 90, 0.15);
-  box-shadow: 0 0 18px rgba(200, 163, 90, 0.35);
+  background: rgba(154, 125, 82, 0.15);
+  box-shadow: 0 0 18px rgba(154, 125, 82, 0.35);
   color: var(--parchment);
 }
 
@@ -141,7 +140,7 @@
 
 .game-over-title {
   margin: 0;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 2.2rem;
   font-weight: 900;
   letter-spacing: 0.16em;
@@ -165,7 +164,7 @@
   border: 1px solid var(--ember-1);
   background: transparent;
   color: var(--ember-2);
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -233,7 +232,7 @@
   pointer-events: none;
   padding: clamp(0.6rem, 2vw, 1rem) clamp(1.1rem, 4.5vw, 2.8rem);
   border-radius: 0.4rem;
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: clamp(1.4rem, 6vw, 2.4rem);
   font-weight: 900;
   letter-spacing: clamp(0.1em, 0.6vw, 0.2em);
@@ -244,9 +243,9 @@
   color: var(--parchment);
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 22px rgba(0, 0, 0, 0.7);
   background: rgba(8, 6, 4, 0.6);
-  border: 1px solid rgba(200, 163, 90, 0.4);
+  border: 1px solid rgba(154, 125, 82, 0.4);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.12),
     0 8px 30px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
   overflow: hidden;
@@ -269,10 +268,10 @@
 }
 
 .phase-banner-player {
-  border-color: rgba(122, 184, 255, 0.6);
+  border-color: rgba(80, 150, 220, 0.6);
   box-shadow:
-    inset 0 0 0 1px rgba(122, 184, 255, 0.18),
-    0 0 44px rgba(122, 184, 255, 0.28),
+    inset 0 0 0 1px rgba(80, 150, 220, 0.18),
+    0 0 44px rgba(80, 150, 220, 0.28),
     0 10px 30px rgba(0, 0, 0, 0.55);
   color: var(--arcane-2);
 }
@@ -289,8 +288,8 @@
 .phase-banner-victory {
   border-color: var(--gold-1);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
-    0 0 50px rgba(200, 163, 90, 0.4),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.22),
+    0 0 50px rgba(154, 125, 82, 0.4),
     0 10px 30px rgba(0, 0, 0, 0.55);
   color: var(--gold-2);
 }
@@ -307,8 +306,8 @@
 .phase-banner-bonus {
   border-color: var(--gold-1);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.22),
-    0 0 50px rgba(200, 163, 90, 0.36),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.22),
+    0 0 50px rgba(154, 125, 82, 0.36),
     0 10px 30px rgba(0, 0, 0, 0.55);
   color: var(--gold-2);
   font-size: clamp(1.25rem, 5.4vw, 2.1rem);
@@ -318,10 +317,10 @@
    Arcane palette to differentiate from the gold (player reward) and red
    (player damaged) banners; reads as "the enemy is in a vulnerable state". */
 .phase-banner-staggered {
-  border-color: rgba(184, 157, 255, 0.7);
+  border-color: rgba(140, 116, 190, 0.7);
   box-shadow:
-    inset 0 0 0 1px rgba(184, 157, 255, 0.22),
-    0 0 50px rgba(108, 74, 184, 0.4),
+    inset 0 0 0 1px rgba(140, 116, 190, 0.22),
+    0 0 50px rgba(90, 61, 138, 0.4),
     0 10px 30px rgba(0, 0, 0, 0.55);
   color: var(--royal-2);
 }

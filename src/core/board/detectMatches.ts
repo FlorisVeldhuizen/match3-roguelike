@@ -73,7 +73,7 @@ function findRuns(board: Cell[][]): Run[] {
   return runs
 }
 
-// Union-find on runs that share cells of the same color.
+// Union-find: merge runs sharing cells of the same color.
 function groupRuns(runs: Run[]): Run[][] {
   const parent: number[] = runs.map((_, i) => i)
   const find = (i: number): number => {
@@ -136,8 +136,6 @@ function classify(group: Run[]): { shape: MatchShape; cells: Pos[] } {
     return { shape: 'line', cells }
   }
 
-  // Find any H/V intersection. Classify T vs L by whether the intersection
-  // is at the end of BOTH runs (L) or interior of at least one (T).
   const hs = group.filter((r) => r.orientation === 'h')
   const vs = group.filter((r) => r.orientation === 'v')
   let sawInterior = false
@@ -155,13 +153,6 @@ function classify(group: Run[]): { shape: MatchShape; cells: Pos[] } {
   return { shape: sawInterior ? 'T' : 'L', cells }
 }
 
-// detectMatches stays petrify-agnostic. Per the H2b design pass, the
-// "anchor check" the design doc refers to is the SWAP position, not
-// the match's cell set. Matches can flow THROUGH petrified rows — the
-// gems in those rows can be cleared by a vertical match anchored
-// above/below the lockout. The swap-position gate lives in
-// resolveSwap / hasValidSwap / findAllValidSwaps instead, where it
-// belongs (it's a swap-validity rule, not a match-detection rule).
 export function detectMatches(board: Cell[][]): Match[] {
   const runs = findRuns(board)
   const groups = groupRuns(runs)

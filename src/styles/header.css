@@ -10,36 +10,36 @@
   padding: 0.55rem 1.1rem;
   border-radius: 0.4rem;
   background:
-    linear-gradient(180deg, rgba(200, 163, 90, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(154, 125, 82, 0.08), transparent 60%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--gold-3);
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.15),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.15),
     inset 0 0 18px rgba(0, 0, 0, 0.5),
     0 6px 18px rgba(0, 0, 0, 0.4);
   font-size: 0.95rem;
 }
 
 .hud-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 900;
   letter-spacing: 0.18em;
   font-size: 1.05rem;
   text-transform: uppercase;
   color: var(--gold-2);
   text-shadow:
-    0 0 12px rgba(200, 163, 90, 0.35),
+    0 0 12px rgba(154, 125, 82, 0.35),
     0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .hud-title::before,
 .hud-title::after {
-  content: '✦';
+  content: '◉';
   display: inline-block;
   margin: 0 0.5rem;
   color: var(--gold-1);
   opacity: 0.7;
-  font-size: 0.85em;
+  font-size: 0.7em;
   transform: translateY(-1px);
 }
 
@@ -101,7 +101,7 @@
 .settings-button:hover,
 .settings-button[aria-expanded='true'] {
   border-color: var(--gold-2);
-  background: rgba(200, 163, 90, 0.12);
+  background: rgba(154, 125, 82, 0.12);
 }
 
 .settings-popover {
@@ -116,7 +116,7 @@
   border: 1px solid var(--gold-3);
   border-radius: 0.4rem;
   box-shadow:
-    inset 0 0 0 1px rgba(200, 163, 90, 0.12),
+    inset 0 0 0 1px rgba(154, 125, 82, 0.12),
     0 10px 28px rgba(0, 0, 0, 0.55);
   display: grid;
   gap: 0.45rem;
@@ -130,11 +130,11 @@
 .settings-section + .settings-section {
   margin-top: 0.35rem;
   padding-top: 0.45rem;
-  border-top: 1px solid rgba(200, 163, 90, 0.14);
+  border-top: 1px solid rgba(154, 125, 82, 0.14);
 }
 
 .settings-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -196,7 +196,7 @@
   border-radius: 50%;
   background: var(--gold-1);
   border: 1px solid var(--ink-1);
-  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+  box-shadow: 0 0 6px rgba(154, 125, 82, 0.5);
 }
 .settings-row-slider input[type='range']::-moz-range-thumb {
   width: 12px;
@@ -204,7 +204,7 @@
   border-radius: 50%;
   background: var(--gold-1);
   border: 1px solid var(--ink-1);
-  box-shadow: 0 0 6px rgba(200, 163, 90, 0.5);
+  box-shadow: 0 0 6px rgba(154, 125, 82, 0.5);
 }
 
 .settings-row-slider input[type='range']:disabled {
@@ -227,7 +227,7 @@
 
 .settings-btn {
   background: rgba(51, 65, 85, 0.4);
-  border: 1px solid rgba(200, 163, 90, 0.35);
+  border: 1px solid rgba(154, 125, 82, 0.35);
   color: var(--parchment);
   border-radius: 0.3rem;
   padding: 0.3rem 0.55rem;
@@ -267,7 +267,7 @@
 
 .settings-chip {
   background: rgba(51, 65, 85, 0.4);
-  border: 1px solid rgba(200, 163, 90, 0.3);
+  border: 1px solid rgba(154, 125, 82, 0.3);
   color: var(--parchment);
   border-radius: 0.25rem;
   padding: 0.18rem 0.4rem;
@@ -283,12 +283,12 @@
 }
 
 .settings-chip.is-active {
-  background: rgba(250, 204, 21, 0.16);
+  background: rgba(180, 155, 82, 0.16);
   border-color: var(--gold-1);
   color: var(--gold-2);
 }
 
 .settings-section-dev .settings-title {
-  color: #fbbf24;
+  color: #b89d5e;
 }
 

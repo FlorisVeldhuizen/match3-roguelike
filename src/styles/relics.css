@@ -28,7 +28,7 @@
 
 .relic-slot:hover,
 .relic-slot:focus-visible {
-  box-shadow: 0 0 12px rgba(200, 163, 90, 0.5);
+  box-shadow: 0 0 12px rgba(154, 125, 82, 0.5);
   transform: translateY(-1px);
   z-index: 31;
 }
@@ -41,7 +41,7 @@
 }
 
 .relic-slot.pulse {
-  box-shadow: 0 0 18px rgba(200, 163, 90, 0.95);
+  box-shadow: 0 0 18px rgba(154, 125, 82, 0.95);
   transform: translateY(-1px) scale(1.08);
 }
 
@@ -58,7 +58,7 @@
   max-width: 280px;
   padding: 0.7rem 0.85rem;
   background:
-    radial-gradient(ellipse at top, rgba(200, 163, 90, 0.16), transparent 70%),
+    radial-gradient(ellipse at top, rgba(154, 125, 82, 0.16), transparent 70%),
     linear-gradient(180deg, var(--ink-2), var(--ink-1));
   border: 1px solid var(--gold-1);
   border-radius: 0.35rem;
@@ -81,7 +81,7 @@
 }
 
 .relic-tooltip-name {
-  font-family: 'Cinzel', serif;
+  font-family: 'MedievalSharp', cursive;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
