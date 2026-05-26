@@ -97,17 +97,15 @@ export function applyIntentTelegraph(
   events: GameEvent[]
 } {
   if (intent.kind === 'column-smash') {
-    const def = getArchetype(archetype)
-    // Default 1 phase (telegraph-this-turn, fire-next-turn). Per-archetype
-    // overrides via columnSmashDuration if a future archetype wants a
-    // slower or faster cycle.
-    const duration = def.columnSmashDuration ?? 1
+    // Marker flag (not duration). Stores the source enemy's id so the
+    // orphan sweep at the top of executeEnemyTurn can clear flags whose
+    // owner died between telegraph and fire.
     const cells: Pos[] = []
     const h = board.length
     for (let y = 0; y < h; y++) {
       cells.push({ x: intent.column, y })
     }
-    const nextBoard = applyFlagToCells(board, cells, 'pendingSmash', duration)
+    const nextBoard = applyFlagToCells(board, cells, 'pendingSmash', enemyId)
     return {
       board: nextBoard,
       petrifiedRows,
@@ -117,7 +115,6 @@ export function applyIntentTelegraph(
           enemyId,
           column: intent.column,
           cells,
-          duration,
         },
       ],
     }

@@ -265,6 +265,14 @@ export function installSfxBindings(): void {
       case 'board-shuffled':
         playShuffleSfx()
         return
+      case 'column-smash-resolved':
+        // Brute's column-smash impact. Placeholder: reuse the attack
+        // synth with a heavy amount so the cue reads as "heavy hit"
+        // rather than "small attack". A dedicated boulder-style smash
+        // synth (low-end thump + brief shatter crackle) would fit the
+        // verb better, queued for a future audio pass.
+        if (event.cells.length > 0) playAttackSfx(8)
+        return
       case 'tile-burn-placed': {
         // Smolder lights cells. Particles fly enemy → cells and the
         // flame appears at arrival, so the ignite cue lands then too.

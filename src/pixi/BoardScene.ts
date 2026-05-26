@@ -1363,7 +1363,10 @@ export class BoardScene {
       // touch the live store arrays. Cells (the inner objects) aren't
       // mutated by the scan, only row slots.
       const cloned = cells.map((row) => row.slice())
-      swaps = findAllValidSwaps(cloned)
+      // H2b: respect Defender's petrify-row lockout — the nudge
+      // shouldn't suggest a swap whose only matches sit on a locked row.
+      const petrifiedRows = useGameStore.getState().board.petrifiedRows
+      swaps = findAllValidSwaps(cloned, petrifiedRows)
       this.nudgeSwapCache = swaps
       this.nudgeSwapCacheCells = cells
     }

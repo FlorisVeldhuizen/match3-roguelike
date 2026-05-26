@@ -439,12 +439,12 @@
 }
 
 /* Pool is still up for grabs (Bulwark etc. can siphon before commit).
-   Phase end → class drops, badge settles to .active. */
+   Phase end → class drops, badge settles to .active. Uses filter (not
+   background) so the SVG shield stays visible — matches .active. */
 .block-badge.pending {
-  background: rgba(58, 90, 138, 0.5);
-  border-color: var(--arcane-2);
   opacity: 1;
-  box-shadow: 0 0 0 1px rgba(164, 202, 254, 0.55) inset, 0 0 14px rgba(122, 184, 255, 0.25);
+  filter: grayscale(0) brightness(1.05)
+    drop-shadow(0 0 6px rgba(122, 184, 255, 0.5));
 }
 
 /* Red gem trail just arrived on the targeted enemy: brief outline pulse. */

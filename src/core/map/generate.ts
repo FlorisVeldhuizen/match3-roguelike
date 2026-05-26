@@ -47,29 +47,37 @@ const COLUMN_COUNT = 5
 type ArchetypeWeight = { archetype: EnemyArchetype; weight: number }
 
 const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
-  // col 0: easy start — Skirmisher heavy, the others present but rare
+  // col 0: easy start — Skirmisher heavy, the others present but rare.
+  // Defender is absent here (its slow-grind identity wants meaningful HP
+  // pressure, which the early curve doesn't have yet).
   [
     { archetype: 'skirmisher', weight: 6 },
     { archetype: 'brute', weight: 2 },
     { archetype: 'smolder', weight: 1 },
   ],
-  // col 1: balanced — Skirmisher still common
+  // col 1: balanced — Skirmisher still common; Defender debuts at low
+  // weight so the player meets the petrify lockout before the elite
+  // column lands a heavier Defender variant.
   [
     { archetype: 'skirmisher', weight: 4 },
     { archetype: 'brute', weight: 3 },
     { archetype: 'smolder', weight: 2 },
+    { archetype: 'defender', weight: 1 },
   ],
   // col 2 (incl. elite): heavier hitters dominate; Skirmisher becomes
-  // filler in multi-enemy groups rather than a centerpiece
+  // filler in multi-enemy groups rather than a centerpiece. Defender
+  // pulls full weight as a mid-tier threat alongside Brute / Smolder.
   [
     { archetype: 'brute', weight: 4 },
     { archetype: 'smolder', weight: 3 },
+    { archetype: 'defender', weight: 3 },
     { archetype: 'skirmisher', weight: 2 },
   ],
   // col 3: only rest/shop here today; left for symmetry / future tiers
   [
     { archetype: 'brute', weight: 4 },
     { archetype: 'smolder', weight: 3 },
+    { archetype: 'defender', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
   ],
   // col 4: boss column; not used by the weight roller
@@ -88,6 +96,16 @@ const ROLE_MIXED_COMPOSITIONS: EnemyArchetype[][] = [
   // 3-enemy with a Rallier in the mix
   ['brute', 'skirmisher', 'rallier'],
   ['smolder', 'skirmisher', 'rallier'],
+  // H2b: Defender + Smolder — "wall + burner". Defender's petrify
+  // locks rows the player wants to clear burning gems on, so the
+  // player has to choose: clear the burn (eat the lockout next turn)
+  // or grind the Defender down (eat more burn). Explicitly called out
+  // in 01-design as the canonical role-mixed example.
+  ['defender', 'smolder'],
+  // Defender + Rallier — buff-target alongside a wall. The Rallier's
+  // Strength stacks make the Defender's small attack genuinely
+  // dangerous, while the petrify slows the player down.
+  ['defender', 'rallier'],
 ]
 
 // Probability (out of 10) that a mid-column multi-enemy fight node draws

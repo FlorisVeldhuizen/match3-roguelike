@@ -4,14 +4,16 @@ import {
 } from '../core/combat/archetypeRegistry'
 import { STATUS_TEMPLATES } from './statuses'
 
-// Brute: high HP, big attack every 2-3 turns, blocks once per cycle.
-// Pattern from 01-design §3 (⚔, ⚔, 🛡, ⚔, …). HP/damage from 02-scope
-// early-tier band (HP 10-20, damage 3-5).
+// Brute: high HP, big attack, periodic column-smash board verb.
+// H2b pattern adds column-smash to the original Brute cycle so the
+// Brute "shares the board" the way the design doc requires. Single
+// telegraph → fire cycle: smash announces this phase, fires next.
+// columnSmashDuration defaults to 1 (standard single-phase warning).
 const brute: ArchetypeDef = {
   id: 'brute',
   name: 'Brute',
   maxHp: 20,
-  pattern: ['attack', 'attack', 'block', 'attack'],
+  pattern: ['attack', 'column-smash', 'attack', 'block', 'attack'],
   attackRange: { min: 3, max: 5 },
   blockRange: { min: 3, max: 5 },
 }
@@ -70,8 +72,32 @@ const rallier: ArchetypeDef = {
   buffAllyStacks: 2,
 }
 
+// Defender: H2b wall-archetype. High HP, persistent block accumulation,
+// no attack rider — the actual threat is the petrify-row board verb,
+// fired twice per pattern cycle. Player has to grind through the
+// accumulating block while routing matches around locked rows.
+// Pattern alternates block → petrify → small attack → petrify so the
+// player gets a brief "breather" before the next lockout, but the
+// block keeps stacking and the lockouts come fast.
+// Stats: HP 22 (heavier than Brute's 20 — Defender is meant to feel
+// like a wall to grind down), attack 2-3 (minimal direct damage —
+// the petrify is the threat), block 3-5.
+// petrifyDuration 2 = locked phase + the next phase, decremented at
+// phase start. Per design doc: long enough to force routing, short
+// enough not to grind the fight to a halt.
+const defender: ArchetypeDef = {
+  id: 'defender',
+  name: 'Defender',
+  maxHp: 22,
+  pattern: ['block', 'petrify-row', 'attack', 'petrify-row'],
+  attackRange: { min: 2, max: 3 },
+  blockRange: { min: 3, max: 5 },
+  petrifyDuration: 2,
+}
+
 // Side-effect registration: bootstrap imports this file once from main.tsx.
 registerArchetype(brute)
 registerArchetype(smolder)
 registerArchetype(skirmisher)
 registerArchetype(rallier)
+registerArchetype(defender)

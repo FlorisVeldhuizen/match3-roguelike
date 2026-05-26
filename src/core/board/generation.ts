@@ -84,18 +84,24 @@ function forbiddenColorsAt(
   return out
 }
 
-export function hasValidSwap(board: Cell[][]): boolean {
+// H2b: optional petrifiedRows respected when checking whether the
+// player still has a valid move. A swap whose only matches sit on
+// locked rows shouldn't keep the board from auto-regen-ing.
+export function hasValidSwap(
+  board: Cell[][],
+  petrifiedRows: Readonly<Record<number, number>> = {},
+): boolean {
   const h = board.length
   const w = board[0]?.length ?? 0
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       // Try swap right.
       if (x + 1 < w) {
-        if (swapMakesMatch(board, x, y, x + 1, y)) return true
+        if (swapMakesMatch(board, x, y, x + 1, y, petrifiedRows)) return true
       }
       // Try swap down.
       if (y + 1 < h) {
-        if (swapMakesMatch(board, x, y, x, y + 1)) return true
+        if (swapMakesMatch(board, x, y, x, y + 1, petrifiedRows)) return true
       }
     }
   }
@@ -106,16 +112,17 @@ export function hasValidSwap(board: Cell[][]): boolean {
 // idle-hint nudge to cycle through random suggestions without repeats.
 export function findAllValidSwaps(
   board: Cell[][],
+  petrifiedRows: Readonly<Record<number, number>> = {},
 ): Array<{ from: Pos; to: Pos }> {
   const out: Array<{ from: Pos; to: Pos }> = []
   const h = board.length
   const w = board[0]?.length ?? 0
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      if (x + 1 < w && swapMakesMatch(board, x, y, x + 1, y)) {
+      if (x + 1 < w && swapMakesMatch(board, x, y, x + 1, y, petrifiedRows)) {
         out.push({ from: { x, y }, to: { x: x + 1, y } })
       }
-      if (y + 1 < h && swapMakesMatch(board, x, y, x, y + 1)) {
+      if (y + 1 < h && swapMakesMatch(board, x, y, x, y + 1, petrifiedRows)) {
         out.push({ from: { x, y }, to: { x, y: y + 1 } })
       }
     }
@@ -129,6 +136,7 @@ function swapMakesMatch(
   ay: number,
   bx: number,
   by: number,
+  petrifiedRows: Readonly<Record<number, number>> = {},
 ): boolean {
   const rowA = board[ay]
   const rowB = board[by]
@@ -138,7 +146,7 @@ function swapMakesMatch(
   if (!ca || !cb) return false
   rowA[ax] = cb
   rowB[bx] = ca
-  const hit = detectMatches(board).length > 0
+  const hit = detectMatches(board, petrifiedRows).length > 0
   rowA[ax] = ca
   rowB[bx] = cb
   return hit

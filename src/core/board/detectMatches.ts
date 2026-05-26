@@ -155,7 +155,17 @@ function classify(group: Run[]): { shape: MatchShape; cells: Pos[] } {
   return { shape: sawInterior ? 'T' : 'L', cells }
 }
 
-export function detectMatches(board: Cell[][]): Match[] {
+// H2b: Defender's petrify-row locks out matches on the affected row.
+// `petrifiedRows` is an optional map of row-index → turns remaining;
+// any group whose cell set touches a petrified row is dropped from the
+// returned matches. Gems still cascade THROUGH petrified rows (gravity
+// is unaffected) — only the anchor check changes. Default empty so
+// existing callers that don't track petrify (board generation,
+// pre-H2b tests) work unchanged.
+export function detectMatches(
+  board: Cell[][],
+  petrifiedRows: Readonly<Record<number, number>> = {},
+): Match[] {
   const runs = findRuns(board)
   const groups = groupRuns(runs)
   const matches: Match[] = []
@@ -163,6 +173,10 @@ export function detectMatches(board: Cell[][]): Match[] {
     const first = group[0]
     if (!first) continue
     const { shape, cells } = classify(group)
+    // Drop the whole match if any cell sits on a row with an active
+    // petrify lockout. Per design (01-design §Enemies-share-board),
+    // matches are excluded entirely — not just the petrified anchors.
+    if (cells.some((c) => (petrifiedRows[c.y] ?? 0) > 0)) continue
     matches.push({ cells, color: first.color, size: cells.length, shape })
   }
   return matches

@@ -9,6 +9,7 @@ import type {
 } from '../../types'
 import { applyIntentTelegraph, rollIntent } from './intents'
 import { applyDamage } from './damage'
+import { clearFlag } from '../board/flags'
 import { tickStatuses } from './statuses'
 import {
   resolveAttackIntent,
@@ -66,6 +67,27 @@ export function executeEnemyTurn(
   let nextBoard: Cell[][] = board
   let nextPetrifiedRows: PetrifiedRows = petrifiedRows
   let nextRng = rng
+
+  // H2b: orphan-flag sweep. pendingSmash is a marker (not duration-
+  // ticked); if its source enemy died between telegraph and this fire
+  // moment, or its current intent isn't a column-smash anymore, the
+  // flag would otherwise persist as a phantom threat. Sweep before
+  // resolution so the smash visualization disappears the same frame
+  // its source goes away.
+  const activeSmashSources = new Set(
+    enemies
+      .filter((e) => e.hp > 0 && e.currentIntent.kind === 'column-smash')
+      .map((e) => e.id),
+  )
+  nextBoard = nextBoard.map((row) =>
+    row.map((cell) => {
+      const owner = cell.flags?.pendingSmash
+      if (owner !== undefined && !activeSmashSources.has(owner)) {
+        return clearFlag(cell, 'pendingSmash')
+      }
+      return cell
+    }),
+  )
 
   for (const enemy of enemies) {
     if (enemy.hp <= 0) continue

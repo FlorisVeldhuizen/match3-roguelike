@@ -296,10 +296,16 @@ export function resolveColumnSmashIntent(
   const events: GameEvent[] = []
   const col = intent.column
   const cellsCleared: Pos[] = []
+  // Only clear cells whose pendingSmash was placed by THIS enemy. Two
+  // enemies could (in principle) both telegraph smashes on overlapping
+  // columns — this scopes the resolver so one Brute firing doesn't
+  // consume another Brute's pending flags. Most fights only have one
+  // smash source at a time; ownership scoping is a defensive
+  // correctness measure.
   const cleared: (Cell | null)[][] = board.map((row, y) =>
     row.map((cell, x) => {
       if (x !== col) return cell
-      if (cell.flags?.pendingSmash && cell.flags.pendingSmash > 0) {
+      if (cell.flags?.pendingSmash === source.id) {
         cellsCleared.push({ x, y })
         return null
       }
@@ -313,6 +319,12 @@ export function resolveColumnSmashIntent(
     cells: cellsCleared,
   })
   if (cellsCleared.length === 0) return { board, rng, events }
+
+  // Drive the standard clear animation + clack SFX through the same
+  // gems-cleared event the cascade pipeline uses for match clears. The
+  // dedicated column-smash-resolved event is still above for FX layers
+  // that want to add a heavier "smash" cue on top.
+  events.push({ kind: 'gems-cleared', cells: cellsCleared })
 
   const { board: fallen, movements } = applyGravity(cleared)
   if (movements.length > 0) events.push({ kind: 'gems-fell', movements })
