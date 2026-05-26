@@ -13,6 +13,8 @@ import { BurningOverlay } from './components/BurningOverlay'
 import { BlessedOverlay } from './components/BlessedOverlay'
 import { ColumnSmashOverlay } from './components/ColumnSmashOverlay'
 import { PetrifyOverlay } from './components/PetrifyOverlay'
+import { ColorHexOverlay } from './components/ColorHexOverlay'
+import { ClusterShoveOverlay } from './components/ClusterShoveOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
 import { MapScreen } from './components/MapScreen'
@@ -90,6 +92,8 @@ export function App() {
               <BlessedOverlay />
               <ColumnSmashOverlay />
               <PetrifyOverlay />
+              <ColorHexOverlay />
+              <ClusterShoveOverlay />
             </div>
           </section>
         </div>

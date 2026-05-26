@@ -33,6 +33,16 @@ export type ArchetypeDef = {
   // *active* effect (no fire-time payload). 2-3 is a meaningful lockout
   // without grinding the fight to a halt.
   petrifyDuration?: number
+  // H2c: Caster's color-hex active lifetime. turnsLeft assigned at fire
+  // time; decremented once per enemy phase. 2 is the design default —
+  // matches petrifyDuration's "active across 2 player phases" cadence.
+  colorHexDuration?: number
+  // H2c: Caster's per-cell Weak stacks applied when a hexed-colour match
+  // resolves. Default 1 (per-cell). Tuning lever — bump to 2 for a
+  // harsher caster variant later.
+  hexWeakStacksPerCell?: number
+  // H2c: Swarmer's cluster-shove source-run length. Default 2.
+  clusterShoveLength?: number
 }
 
 // Registry pattern (per 03-architecture §11): core can't import from content,

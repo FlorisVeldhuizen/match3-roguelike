@@ -258,8 +258,8 @@ describe('Burn at turn start', () => {
   it('emits damage-dealt before status-ticked/expired on enemy burn proc', () => {
     const enemy = makeEnemy({
       hp: 10,
-      // Burn 2 → ticks (dmg 2), then stacks decays to 1 (status-ticked).
-      // Burn 1 would expire (status-expired) — choose 2 so we test both
+      // 2 Burn → ticks (dmg 2), then stacks decays to 1 (status-ticked).
+      // 1 Burn would expire (status-expired) — choose 2 so we test both
       // the dealt-then-ticked ordering case.
       statuses: [{ kind: 'burn', stacks: 2 }],
       currentIntent: { kind: 'attack', amount: 4 },

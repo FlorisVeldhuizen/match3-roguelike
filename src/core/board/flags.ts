@@ -1,4 +1,11 @@
-import type { Cell, CellFlags, GameEvent, PetrifiedRows, Pos } from '../../types'
+import type {
+  Cell,
+  CellFlags,
+  GameEvent,
+  HexedColor,
+  PetrifiedRows,
+  Pos,
+} from '../../types'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
 // Generic read/write/tick layer over `Cell.flags`. Phase F only uses the
@@ -124,6 +131,31 @@ export function tickPetrifiedRows(
     events.push({ kind: 'petrify-row-ticked', row, remaining: Math.max(0, remaining) })
   }
   return { petrifiedRows: next, expired, events }
+}
+
+// H2c: tick the board-global hexedColors set by one phase. Entries
+// that hit 0 are removed; an `color-hex-ticked` event fires per entry
+// with the new `remaining` count (0 = just expired). Mirrors
+// tickPetrifiedRows for the same reason: FX layer rides the event
+// timeline rather than diffing snapshots.
+export function tickHexedColors(
+  hexedColors: readonly HexedColor[],
+): {
+  hexedColors: HexedColor[]
+  events: GameEvent[]
+} {
+  const next: HexedColor[] = []
+  const events: GameEvent[] = []
+  for (const h of hexedColors) {
+    const remaining = h.turnsLeft - 1
+    if (remaining > 0) next.push({ color: h.color, turnsLeft: remaining })
+    events.push({
+      kind: 'color-hex-ticked',
+      color: h.color,
+      remaining: Math.max(0, remaining),
+    })
+  }
+  return { hexedColors: next, events }
 }
 
 // Pick N cells from `rng` that don't already carry `flag` (Smolder won't

@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import {
   getPendingMeta,
-  listSpells,
+  listSpellsForTray,
   listUltimates,
 } from '../../core/combat/spellRegistry'
+import {
+  isUnlockAllSpells,
+  subscribeUnlockAllSpells,
+} from '../../debug/devControls'
 import { canAffordSpell } from '../../core/combat/mana'
 import { emitGameEvent } from '../../core/events/emitter'
 import { MANA_CAPS, type ManaCost, type SpellId, type StatusKind } from '../../types'
@@ -102,6 +106,12 @@ export function SpellTray() {
   const boardTargetingSpell = useGameStore((s) => s.boardTargetingSpell)
   const beginBoardTargeting = useGameStore((s) => s.beginBoardTargeting)
   const cancelBoardTargeting = useGameStore((s) => s.cancelBoardTargeting)
+  // Dev: respect the "Unlock all spells" toggle so the tray narrows to
+  // the starter kit by default and expands when a designer flips the
+  // dev override in Settings. Subscribed (not just read) so the tray
+  // refreshes mid-fight when the toggle changes.
+  const [unlockAll, setUnlockAll] = useState(isUnlockAllSpells)
+  useEffect(() => subscribeUnlockAllSpells(setUnlockAll), [])
   const onPlayerPhase = phase === 'player-acting'
   // 01-design §Spell-timing: "cast window = player phase + board
   // settled + can pay cost". Without this gate, the spell-tray button
@@ -129,7 +139,7 @@ export function SpellTray() {
 
   return (
     <div className="spell-tray" aria-label="Spells">
-      {listSpells().map((def) => {
+      {listSpellsForTray(unlockAll).map((def) => {
         const queued = pending.includes(def.id)
         const canPay = canAffordSpell(mana, def.cost)
         // H4a per-spell extra gates beyond mana/queued:

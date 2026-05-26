@@ -71,7 +71,7 @@ This was the user's specific question and deserves its own section.
 **Solo-fight texture wins:**
 - **Spells get used regularly.** Today Bulwark is "save it for a big blue phase"; with AP, casting it mid-phase to convert this phase's blue into damage is a real option.
 - **4-match planning matters.** Today 4-match just gives a bonus phase. With AP, banking the +1 AP for a setup-then-payoff swing across two phases is a real plan.
-- **Status effects breathe.** Burn ticks once per player phase. With phases now denser, statuses last for more in-fight decisions per stack. Burn 3 hits across ~9 swaps instead of ~3 — bigger window for the player to feel the pressure.
+- **Status effects breathe.** Burn ticks once per player phase. With phases now denser, statuses last for more in-fight decisions per stack. 3 Burn hits across ~9 swaps instead of ~3 — bigger window for the player to feel the pressure.
 
 **Solo-fight texture risks:**
 - **Cascade-bomb solo fights** could one-shot bosses. A 3-AP phase with a cascade-Crystal + Sharp-Edge + Cascade-Crystal-Crystal setup might delete the boss in one phase. Cap solves this only if the cap is tuned right.
@@ -188,9 +188,9 @@ Cons: significant board-rendering work (new sprites + match-rule interactions), 
 ### Status effects (Burn, Vulnerable, Weak)
 
 **Tick frequency unchanged: once per owner's phase.** Phase = 1 stacks-unit, as today. *But* phases are now 3× denser, so:
-- Burn 3 affects ~9 swaps of player decisions across its 3 phases. Status weight effectively up.
+- 3 Burn affects ~9 swaps of player decisions across its 3 phases. Status weight effectively up.
 - Same goes for Vulnerable / Weak — their multiplier-active windows now span more swaps each.
-- **Tuning consequence:** starting stacks may need to drop. Burn 3 today → maybe Burn 2 with AP. Vulnerable 2 → Vulnerable 1 with longer effect per stack.
+- **Tuning consequence:** starting stacks may need to drop. 3 Burn today → maybe 2 Burn with AP. 2 Vulnerable → 1 Vulnerable with longer effect per stack.
 
 ### Resolute passive (+2 block / phase, +1 per consecutive blue-less phase, cap +5)
 
@@ -273,7 +273,7 @@ The remaining critique (enemies feel weak) we directly address by re-tuning enem
 ### Still open
 
 1. **Persistent power gems (Bejeweled-style)** — adopt the creative path for match-tier rewards (Spark Gem, Star Gem, Hypercube), or stay on the conservative path? Conservative is the recommendation for the slice; persistent gems logged as a Phase L depth pass.
-2. **Status starting-stack tuning.** Burn 3 today may want to become Burn 2 with AP. Vulnerable/Weak similar. Resolve during content rebalance, not now.
+2. **Status starting-stack tuning.** 3 Burn today may want to become 2 Burn with AP. Vulnerable/Weak similar. Resolve during content rebalance, not now.
 3. **Spell costs** (proposed: Bulwark 4, Reinforce 5, Riposte 10). First-pass numbers — playtest will dial in.
 4. **Resolute cap** (current +5; proposed +3). Same — tune in playtest.
 5. **Tile-burn cell tuning** (`BURN_FROM_TILE_BONUS`, `tileBurnDuration`). Adjust if Smolder's verb proves disproportionately scary under AP. Playtest, not now.
@@ -380,7 +380,7 @@ This combination is more cohesive than any of the three alone. Worth considering
 
 ### Open questions that *don't* block deciding (defer to implementation / playtest)
 
-- Status starting stacks (Burn 3→2, etc.)
+- Status starting stacks (3 Burn→2, etc.)
 - Spell cost numbers
 - Resolute cap
 - Tile-burn tuning

@@ -13,6 +13,7 @@ import type { Pos } from '../types'
 const STORAGE_KEYS = {
   timeScale: 'dev-tools:time-scale',
   stepMode: 'dev-tools:step-mode',
+  unlockAllSpells: 'dev-tools:unlock-all-spells',
 } as const
 
 function readStored<T>(key: string, parse: (raw: string) => T | null): T | null {
@@ -118,6 +119,37 @@ export function advanceStep(): void {
   const resolve = pendingStepResolve
   pendingStepResolve = null
   resolve()
+}
+
+// ─── Unlock all spells ───────────────────────────────────────────────
+//
+// When off (default), the spell tray shows only the class-baseline
+// starter kit (`SpellDef.starter === true`). The rest are treated as
+// "discoverable" until the reward/shop system can grant them. When on,
+// the filter is bypassed so all registered spells appear — useful for
+// regression testing and one-off experimentation. Persisted so the
+// choice survives a refresh.
+
+let unlockAllSpells =
+  readStored(STORAGE_KEYS.unlockAllSpells, (raw) => raw === 'true') ?? false
+const unlockAllSpellsListeners = new Set<(on: boolean) => void>()
+
+export function isUnlockAllSpells(): boolean {
+  return unlockAllSpells
+}
+
+export function setUnlockAllSpells(on: boolean): void {
+  if (on === unlockAllSpells) return
+  unlockAllSpells = on
+  writeStored(STORAGE_KEYS.unlockAllSpells, on ? 'true' : 'false')
+  for (const cb of unlockAllSpellsListeners) cb(on)
+}
+
+export function subscribeUnlockAllSpells(
+  cb: (on: boolean) => void,
+): () => void {
+  unlockAllSpellsListeners.add(cb)
+  return () => unlockAllSpellsListeners.delete(cb)
 }
 
 // ─── Debug swap bus ──────────────────────────────────────────────────

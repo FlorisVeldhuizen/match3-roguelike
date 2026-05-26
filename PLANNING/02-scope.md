@@ -93,7 +93,7 @@ Remaining ~10 relics designed during execution alongside playtest feedback.
 | **Vulnerable** | Debuff | Owner takes +50% damage from attacks while `stacks > 0`; each tick `stacks -= 1` | **`stacks = max(current, incoming.stacks)`** (refresh; multiplier stays binary on/off) |
 | **Weak** | Debuff | Owner deals -50% damage with attacks while `stacks > 0`; each tick `stacks -= 1` | **`stacks = max(current, incoming.stacks)`** (refresh; binary multiplier) |
 
-All three share the same shape: `{ stacks: int }`. **One number per status (StS pattern)** — `stacks` is both the magnitude and the turns-remaining; each tick decays it by 1. Burn 3 → ticks 3, 2, 1 → expires (6 damage over 3 turns). Vulnerable 2 → multiplier active for 2 turns, then expires.
+All three share the same shape: `{ stacks: int }`. **One number per status (StS pattern)** — `stacks` is both the magnitude and the turns-remaining; each tick decays it by 1. 3 Burn → ticks 3, 2, 1 → expires (6 damage over 3 turns). 2 Vulnerable → multiplier active for 2 turns, then expires.
 
 Stored as an array on player/enemy entities. Single render path for status icons + tooltip showing the current `stacks`.
 
@@ -101,7 +101,7 @@ Stored as an array on player/enemy entities. Single render path for status icons
 - On **player**: status ticks fire **once at phase start**, not per-swap. Burn deals current stacks, then all statuses decrement stacks by 1. Extra-turn cycles inside the same phase do **not** retick. Player phase = 1 stacks unit.
 - On **enemy**: status ticks fire **once at the start of that enemy's turn** (each enemy ticks on its own turn-start). Enemy turn = 1 stacks unit.
 
-This makes "Burn 3" / "Vulnerable 2" read consistently as "this many of the owner's turns" and prevents extra-turn chains from accidentally chewing through statuses faster than the enemy can act.
+This makes "3 Burn" / "2 Vulnerable" read consistently as "this many of the owner's turns" and prevents extra-turn chains from accidentally chewing through statuses faster than the enemy can act.
 
 ### Special tiles: simple (locked)
 - **3-match**: base payout.

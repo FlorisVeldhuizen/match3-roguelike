@@ -4,6 +4,8 @@ import type {
   CombatPhase,
   Enemy,
   GameEvent,
+  HexedColor,
+  Intent,
   PetrifiedRows,
   Player,
 } from '../../types'
@@ -14,21 +16,32 @@ import {
   resolveAttackIntent,
   resolveBlockIntent,
   resolveBuffAllyIntent,
+  resolveClusterShoveIntent,
+  resolveColorHexIntent,
   resolveColumnSmashIntent,
   resolveHealAllyIntent,
   resolvePetrifyRowIntent,
   resolveShieldAllyIntent,
   resolveTileBurnIntent,
 } from './intentResolvers'
+import { detectMatches } from '../board/detectMatches'
+import { runCascade } from '../board/cascade'
+import { processCascadeEvents } from './cascadeProcessor'
 
 export type EnemyTurnResult = {
   player: Player
   enemies: Enemy[]
   board: Cell[][]
   petrifiedRows: PetrifiedRows
+  hexedColors: HexedColor[]
   rng: RngState
   phase: CombatPhase
   events: GameEvent[]
+  // Re-pointed target. Enemy-caused board changes (cluster-shove) can
+  // create matches that kill the current target; processCascadeEvents
+  // re-points to the leftmost living enemy. Caller (swap.ts) reads
+  // this back into fight.targetEnemyId.
+  targetEnemyId: string | null
 }
 
 // Execute one enemy turn for every living enemy: tick statuses, resolve
@@ -59,13 +72,38 @@ export function executeEnemyTurn(
   board: Cell[][],
   rng: RngState,
   petrifiedRows: PetrifiedRows = {},
+  hexedColors: HexedColor[] = [],
+  // Player's current target. Needed so post-action cascades (e.g. a
+  // cluster-shove that lined up a 3-match) can route damage through
+  // processCascadeEvents and re-point the target if it dies.
+  targetEnemyId: string | null = null,
 ): EnemyTurnResult {
   const events: GameEvent[] = []
+  // Telegraph events for the *next* player turn (enemy-block-gained
+  // when the upcoming intent is block, intent-telegraphed, and any
+  // applyIntentTelegraph placed events) are deferred to a side buffer
+  // and flushed once after the per-enemy loop. Without this they fire
+  // interleaved with each enemy's action, so the player watches intents
+  // tick in one by one across the enemy turn; flushing them together
+  // means all new intents (and their threat overlays) pop in
+  // simultaneously at the start of the next player turn. Board mutations
+  // from applyIntentTelegraph still happen IN the loop (the side buffer
+  // only defers the *events*) so subsequent enemies see the latest
+  // board.
+  const telegraphEvents: GameEvent[] = []
+  // Track sibling intents rolled THIS turn so each roller can avoid
+  // overlapping claims with earlier-rolled siblings (cross-archetype
+  // — Brute vs Defender vs Swarmer vs Caster all share this view).
+  // Push after each successful roll; rollIntent reads it on the next
+  // enemy's call.
+  const siblingNextIntents: Intent[] = []
   let nextPlayer: Player = player
   let nextEnemies: Enemy[] = enemies
   let nextBoard: Cell[][] = board
   let nextPetrifiedRows: PetrifiedRows = petrifiedRows
+  let nextHexedColors: HexedColor[] = hexedColors
   let nextRng = rng
+  let nextTargetEnemyId: string | null = targetEnemyId
 
   for (const enemy of enemies) {
     if (enemy.hp <= 0) continue
@@ -146,6 +184,15 @@ export function executeEnemyTurn(
       const r = resolvePetrifyRowIntent(intent, updatedEnemy, nextPetrifiedRows)
       nextPetrifiedRows = r.petrifiedRows
       events.push(...r.events)
+    } else if (intent.kind === 'color-hex') {
+      const r = resolveColorHexIntent(intent, updatedEnemy, nextHexedColors)
+      nextHexedColors = r.hexedColors
+      events.push(...r.events)
+    } else if (intent.kind === 'cluster-shove') {
+      const r = resolveClusterShoveIntent(updatedEnemy, nextBoard, nextRng)
+      nextBoard = r.board
+      nextRng = r.rng
+      events.push(...r.events)
     } else if (intent.kind === 'block') {
       const r = resolveBlockIntent(updatedEnemy)
       events.push(...r.events)
@@ -163,6 +210,12 @@ export function executeEnemyTurn(
       events.push(...r.events)
     }
 
+    // Fire enemy-acted AFTER this enemy's action events. The intent
+    // badge fades on this event (one badge at a time, in lockstep with
+    // the action playing out) rather than all badges hiding at the
+    // start of the enemy phase.
+    events.push({ kind: 'enemy-acted', enemyId: updatedEnemy.id })
+
     // Telegraph next intent for the *next* player phase. If it's a block
     // intent, apply the block now so it's already in place when the player
     // attacks during their next phase. Skip if this enemy just died.
@@ -177,12 +230,15 @@ export function executeEnemyTurn(
         nextRng,
         nextEnemies,
         updatedEnemy.id,
+        siblingNextIntents,
       )
+      // Record so the NEXT sibling to roll sees this enemy's claim.
+      siblingNextIntents.push(rolled.intent)
       nextRng = rolled.rng
       let updatedBlock = updatedEnemy.block
       if (rolled.intent.kind === 'block') {
         updatedBlock = updatedBlock + rolled.intent.amount
-        events.push({
+        telegraphEvents.push({
           kind: 'enemy-block-gained',
           enemyId: updatedEnemy.id,
           amount: rolled.intent.amount,
@@ -194,7 +250,7 @@ export function executeEnemyTurn(
         currentIntent: rolled.intent,
         nextIntentIndex: nextIndex,
       }
-      events.push({
+      telegraphEvents.push({
         kind: 'intent-telegraphed',
         enemyId: updatedEnemy.id,
         intent: rolled.intent,
@@ -203,6 +259,9 @@ export function executeEnemyTurn(
       // telegraph flag immediately so the player can see (and counter)
       // the threat during their next phase. column-smash flags cells
       // in the column; petrify-row writes to BoardState.petrifiedRows.
+      // Board mutations land in nextBoard now (subsequent enemies need
+      // them); the *events* describing the telegraph are deferred to
+      // telegraphEvents so they fan out in one frame at turn end.
       const tele = applyIntentTelegraph(
         nextBoard,
         nextPetrifiedRows,
@@ -212,7 +271,7 @@ export function executeEnemyTurn(
       )
       nextBoard = tele.board
       nextPetrifiedRows = tele.petrifiedRows
-      events.push(...tele.events)
+      telegraphEvents.push(...tele.events)
     }
 
     nextEnemies = nextEnemies.map((e) =>
@@ -227,6 +286,55 @@ export function executeEnemyTurn(
       pendingSpells: nextPlayer.pendingSpells.filter((id) => id !== 'riposte'),
     }
     events.push({ kind: 'pending-effect-resolved', spellId: 'riposte' })
+  }
+
+  // Post-action cascade: enemy actions can rearrange the board (cluster-
+  // shove writes new cells; column-smash clears + refills). The H2c
+  // design ("existing gravity + match-detection picks up any resulting
+  // match naturally") relies on a cascade pass here; without it, a
+  // shove that lines up a 3-run leaves matching gems sitting on the
+  // board until the next swap. Run match detection on the current
+  // nextBoard; if any matches exist, cascade them and route the result
+  // through processCascadeEvents so the player gets pool/damage credit
+  // (Swarmer's verb can "be useful, can ruin a set-up" per design —
+  // useful means: player benefits when a match lands).
+  //
+  // The cascade events go BEFORE the telegraph flush so the visual
+  // ordering is: enemy actions → resolution cascade → new intents pop
+  // in. That mirrors the swap-side pipeline (swap → cascade → enemy
+  // turn).
+  const postActionMatches = detectMatches(nextBoard)
+  if (postActionMatches.length > 0) {
+    const cascade = runCascade(nextBoard, nextRng, postActionMatches)
+    nextBoard = cascade.board
+    nextRng = cascade.rng
+    const processed = processCascadeEvents(
+      cascade.events,
+      nextPlayer,
+      nextEnemies,
+      nextTargetEnemyId,
+      nextHexedColors,
+    )
+    nextPlayer = processed.player
+    nextEnemies = processed.enemies
+    nextTargetEnemyId = processed.targetEnemyId
+    events.push(...processed.events)
+  }
+
+  // Flush the deferred telegraph events. Order: enemy-action events
+  // (above) → post-action cascade (above) → telegraph batch (all
+  // enemies' new intents pop in at once) → phase-changed. Filter out
+  // telegraphs from enemies that died after their telegraph was
+  // buffered — Riposte / Thornmail / a post-action cascade kill can
+  // end an enemy AFTER its own turn ended; the buffered
+  // intent-telegraphed would otherwise show "next intent" briefly on
+  // a corpse.
+  const livingEnemyIds = new Set(
+    nextEnemies.filter((e) => e.hp > 0).map((e) => e.id),
+  )
+  for (const ev of telegraphEvents) {
+    if ('enemyId' in ev && !livingEnemyIds.has(ev.enemyId)) continue
+    events.push(ev)
   }
 
   // Phase precedence: game-over (player died) > victory (all enemies
@@ -251,8 +359,10 @@ export function executeEnemyTurn(
     enemies: nextEnemies,
     board: nextBoard,
     petrifiedRows: nextPetrifiedRows,
+    hexedColors: nextHexedColors,
     rng: nextRng,
     phase,
     events,
+    targetEnemyId: nextTargetEnemyId,
   }
 }

@@ -2,6 +2,7 @@ import {
   MANA_CAPS,
   type Enemy,
   type GameEvent,
+  type HexedColor,
   type Player,
 } from '../../types'
 import { applyMultiplier } from './math'
@@ -37,6 +38,11 @@ export function processCascadeEvents(
   initialPlayer: Player,
   initialEnemies: Enemy[],
   initialTargetEnemyId: string | null,
+  // H2c: read-only set of currently-hexed colours. When a match-found
+  // event lands on a hexed colour, Weak is applied to the player with
+  // stacks = match.cells.length. The set itself doesn't tick here —
+  // tickHexedColors runs at the enemy-phase boundary in actions/swap.ts.
+  hexedColors: readonly HexedColor[] = [],
 ): {
   player: Player
   enemies: Enemy[]
@@ -56,7 +62,7 @@ export function processCascadeEvents(
 
     // Burning cells cleared this cascade step apply Burn to the player.
     // Magnitude = cells.length + content-side bonus. StS triangle math
-    // → 1 cell = Burn 2 → 3 dmg total; 4 cells = Burn 5 → 15 dmg.
+    // → 1 cell = 2 Burn → 3 dmg total; 4 cells = 5 Burn → 15 dmg.
     if (ev.kind === 'tile-burn-triggered') {
       const incoming = {
         ...getStatusTemplate('burn'),
@@ -138,6 +144,34 @@ export function processCascadeEvents(
         green: Math.min(MANA_CAPS.green, m.green + finalDeltas.green),
         yellow: Math.min(MANA_CAPS.yellow, m.yellow + finalDeltas.yellow),
       },
+    }
+
+    // H2c: hex side-effect. If this match's colour is currently hexed,
+    // apply Weak with stacks=cells.length. Weak stacks additively
+    // (per the H2c rule — see applyStatusToList), so chaining matches
+    // of the hexed colour piles up duration. Fires BEFORE the red-damage
+    // step below so the new Weak dampens this match's outgoing damage —
+    // same-cascade composability matches the way Skewer/Surge consume
+    // on this match.
+    if (hexedColors.some((h) => h.color === ev.color)) {
+      const stacks = ev.cells.length
+      const incoming = { kind: 'weak' as const, stacks }
+      player = {
+        ...player,
+        statuses: applyStatusToList(player.statuses, incoming),
+      }
+      stream.push({
+        kind: 'hex-triggered',
+        color: ev.color,
+        stacks,
+        cells: ev.cells,
+      })
+      stream.push({
+        kind: 'status-applied',
+        target: 'player',
+        status: incoming,
+        source: { kind: 'board-cells', cells: ev.cells },
+      })
     }
 
     // AOE matches (T, L, line-5) fan red damage to all living enemies;

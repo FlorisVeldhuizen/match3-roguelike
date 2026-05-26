@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   ManaCost,
   PendingSpellId,
@@ -25,7 +26,11 @@ export type SpellDef = {
   // required"; for typical spells, yellow is consumed as a wild substitute
   // when other colours are short.
   cost: ManaCost
-  description: string
+  // Tooltip body. ReactNode (not string) so spell defs can embed inline
+  // <Keyword> chips for Burn / Vulnerable / Block / etc — same pattern
+  // intentDisplays.tsx uses for enemy intents. Plain strings still work
+  // (assignable to ReactNode) for spells with no status references.
+  description: ReactNode
   // H4a: 'pending' = effect resolves later (EOP, or on a trigger); the
   // spell enters `player.pendingSpells` on cast. 'immediate' = effect
   // applies inline at cast time and the spell never enters pendingSpells.
@@ -39,7 +44,13 @@ export type SpellDef = {
   // Short description shown in the pending-strip tooltip. Distinct from
   // `description` because once a spell is queued, the player only needs
   // to be reminded of *what's about to happen*, not how to cast it.
-  pendingDescription: string
+  // ReactNode for the same reason as `description`.
+  pendingDescription: ReactNode
+  // Class-baseline kit. True for spells the player owns at run start;
+  // omitted spells are part of the discoverable pool (reward/shop drops,
+  // not yet wired up). The dev "Unlock all spells" toggle bypasses this
+  // filter so the full kit is reachable in dev builds.
+  starter?: boolean
 }
 
 export type UltimateDef = {
@@ -47,9 +58,9 @@ export type UltimateDef = {
   name: string
   icon: string
   chargeCost: number
-  description: string
+  description: ReactNode
   pendingLabel: string
-  pendingDescription: string
+  pendingDescription: ReactNode
 }
 
 const spellRegistry = new Map<SpellId, SpellDef>()
@@ -79,6 +90,16 @@ export function listSpells(): SpellDef[] {
   return [...spellRegistry.values()]
 }
 
+// Tray-facing spell list. Returns only the class-baseline starter kit
+// unless the caller explicitly opts into the full set (dev override).
+// Future shop/reward system will replace this with per-run owned-spell
+// state on the player; until then the starter flag IS the source of
+// truth for what the player begins with.
+export function listSpellsForTray(unlockAll: boolean): SpellDef[] {
+  if (unlockAll) return listSpells()
+  return [...spellRegistry.values()].filter((s) => s.starter === true)
+}
+
 export function listUltimates(): UltimateDef[] {
   return [...ultimateRegistry.values()]
 }
@@ -93,7 +114,7 @@ export type PendingMeta = {
   name: string
   icon: string
   pendingLabel: string
-  pendingDescription: string
+  pendingDescription: ReactNode
 }
 
 export function getPendingMeta(id: PendingSpellId): PendingMeta {

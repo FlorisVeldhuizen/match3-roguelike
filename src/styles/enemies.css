@@ -113,6 +113,19 @@
   box-shadow: 0 0 14px rgba(122, 184, 255, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* Cluster-shove badge picks up the per-swarmer accent hue set inline
+   as `--shove-hue` (from the enemy's row position; same value is also
+   set on the board source/destination markers and the bezier line).
+   Player can match badge colour to overlay colour at a glance, which
+   is what lets a 3-swarmer board stay readable. */
+.enemy-intent.intent-cluster-shove {
+  border-color: hsl(var(--shove-hue, 170) 80% 60% / 0.85);
+  color: hsl(var(--shove-hue, 170) 70% 82%);
+  box-shadow:
+    0 0 14px hsl(var(--shove-hue, 170) 80% 55% / 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
 .enemy-intent .intent-icon {
   font-size: 0.95rem;
 }
@@ -262,6 +275,20 @@
     0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
+/* Shove-cell hover on the currently-targeted enemy: keep the full
+   target ring (still the most prominent state) and *add* a wider
+   outer halo so the player gets a confirmation that yes, this is
+   the swarmer responsible for the shove they're inspecting. Layered
+   additively rather than replacing the target ring. */
+.enemy-frame.targeted.shove-cell-hovered {
+  box-shadow:
+    inset 0 0 0 1px var(--gold-1),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(200, 163, 90, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.4),
+    0 0 30px 3px rgba(200, 163, 90, 0.35);
+}
+
 /* Click-to-target affordance. Non-target living enemies during the
    player's turn get a pointer cursor and a soft hover ring so the
    "you can switch target" surface is discoverable without making the
@@ -270,7 +297,18 @@
   cursor: pointer;
 }
 .enemy-frame.selectable:hover,
-.enemy-frame.selectable:focus-visible {
+.enemy-frame.selectable:focus-visible,
+.enemy-frame.shove-cell-hovered:not(.targeted) {
+  /* `.shove-cell-hovered` is set by EnemyFrame when the cursor is over
+     any of this swarmer's shove source/destination cells — reciprocal
+     to the overlay's hover-boost on the markers, so the player can
+     instantly trace "whose shove is this." Uses the same gold tint
+     as the direct hover state so the visual reads as one consistent
+     "I'm inspecting this enemy" cue rather than a new vocabulary.
+     `:not(.targeted)` defers to the stronger `.targeted` styling
+     when the swarmer is the current attack target — otherwise this
+     softer hover ring would overwrite the prominent target ring and
+     the player could lose sight of which enemy they're aimed at. */
   border-color: rgba(200, 163, 90, 0.55);
   box-shadow:
     inset 0 0 0 1px rgba(200, 163, 90, 0.3),

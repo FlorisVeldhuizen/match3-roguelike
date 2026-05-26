@@ -6,6 +6,7 @@
 import { subscribeGameEvents } from '../core/events/emitter'
 import { scheduleAtTrailArrival } from '../timing'
 import { statusKindFromDamageSource } from '../core/combat/statuses'
+import type { StatusKind } from '../types'
 import { playDropSfx } from './synths/drop'
 import { playClackSfx } from './synths/match'
 import { playCascadeChimeSfx, playCascadeCelebrationSfx } from './synths/cascade'
@@ -31,6 +32,31 @@ import {
   playExtraTurnSfx,
   playTurnStartSfx,
 } from './synths/turn'
+import {
+  playHexApplySfx,
+  playHexExpireSfx,
+  playHexTriggerSfx,
+} from './synths/hex'
+import { playShoveSfx } from './synths/shove'
+import { playSmashSfx } from './synths/smash'
+
+// Per-status arrival cue. Keyed by StatusKind so adding a new status's
+// apply sound is a one-line registration. The status-applied case below
+// schedules the registered callback at the right beat based on whether
+// a particle trail is flying.
+//
+// STANDIN entries below reuse the closest-semantic existing synths so
+// every applied status has audible feedback while real per-status
+// timbres are designed. Replace each with a dedicated `play<X>ApplySfx`
+// when the flavor work lands — burn is the reference (bonfire / furnace
+// / fizzle multi-synth set in `src/audio/synths/burn.ts`).
+const STATUS_APPLY_SFX: Partial<Record<StatusKind, () => void>> = {
+  burn: playBurnApplySfx,
+  weak: playStaggeredSfx, // STANDIN — staggered/weakened semantic overlap
+  vulnerable: playShieldCrackSfx, // STANDIN — armor-crack = exposed
+  strength: playShieldThumpSfx, // STANDIN — assertive thump
+  regen: playHealSfx, // STANDIN — heal-adjacent (Cleanse cast already has its own SFX)
+}
 
 // Idempotent — calling install() twice is safe.
 let installed = false
@@ -198,14 +224,6 @@ export function installSfxBindings(): void {
         lastPlayerUnblocked = event.amount
         if (event.amount > 0) {
           playAttackSfx(event.amount)
-          // Smolder-style attack riders: the burn whoosh used to play
-          // ~1s after the impact (TRAIL_ARRIVAL_MS + STATUS_APPLY_AFTER_HIT_MS
-          // on the following status-applied event), making the fire feel
-          // like a separate beat. Layer it onto the attack itself so the
-          // hit reads as fiery. The deferred apply on status-applied is
-          // suppressed below for source.kind==='enemy' to avoid a double-
-          // whoosh; the chip's mount sound is now embedded in the impact.
-          if (event.onHitRider === 'burn') playBurnApplySfx()
         }
         return
       }
@@ -266,22 +284,51 @@ export function installSfxBindings(): void {
         playShuffleSfx()
         return
       case 'column-smash-resolved':
-        // Brute's column-smash impact. Placeholder: reuse the attack
-        // synth with a heavy amount so the cue reads as "heavy hit"
-        // rather than "small attack". A dedicated boulder-style smash
-        // synth (low-end thump + brief shatter crackle) would fit the
-        // verb better, queued for a future audio pass.
-        if (event.cells.length > 0) playAttackSfx(8)
+        // Brute's column-smash impact — dedicated low-thud + rubble
+        // crackle synth. Pairs with the magnitude-1.1 screen-shake
+        // emitted alongside this event by AnimationController. No
+        // delay: the smash IS the moment of impact, no chip-arrival
+        // hand-off to align with.
+        if (event.cells.length > 0) playSmashSfx()
         return
       case 'petrify-fired':
-        // Defender's lockout lands. Placeholder: shield-thump scaled
-        // up reads as "heavy stone slam" — defensive thud character
-        // matches the petrify identity (frozen, immovable). Defender
-        // fires petrify twice per pattern cycle, so this is a fairly
-        // frequent cue — kept brief (the synth is a single thump,
-        // not a sustained rumble) to avoid cluttering the audio bed.
-        // Future audio pass should swap in a dedicated stone-slam.
-        playShieldThumpSfx(6)
+        // Defender's lockout lands. Stone particles fly enemy → row
+        // cells (AnimationController) and the grey wash appears at
+        // arrival (PetrifyOverlay), so the slam cue is scheduled to
+        // the same TRAIL_ARRIVAL_MS beat — sound, visual and chip
+        // all hit together. shield-thump scaled up still works as
+        // a placeholder (heavy thud character); swap for a dedicated
+        // stone-slam synth in a future audio pass.
+        scheduleAtTrailArrival(() => playShieldThumpSfx(6))
+        return
+      case 'color-hex-fired':
+        // Caster's hex lands. Same trail-arrival hand-off as petrify:
+        // arcane particles fly enemy → gems and the ring overlay
+        // appears at TRAIL_ARRIVAL_MS — the apply cue lands then so
+        // sound + visual + chip all sync.
+        scheduleAtTrailArrival(() => playHexApplySfx())
+        return
+      case 'hex-triggered':
+        // Player matched a hexed-colour gem; Weak just applied.
+        // Brief zap scaled by stacks (= cells.length of the match)
+        // so a 5-line through hexed reds is audibly heavier than a
+        // 3-match. Fires inline at event time — same beat as the
+        // pool-gained chime; no trail-arrival delay (the curse is
+        // already on the board, this is the player tripping it).
+        playHexTriggerSfx(event.stacks)
+        return
+      case 'color-hex-ticked':
+        // Release cue when the hex's last turn ticks down. Mirrors
+        // petrify-row-ticked's release-only gate: silent on
+        // remaining > 0, brief upward shimmer on remaining === 0.
+        if (event.remaining === 0) playHexExpireSfx()
+        return
+      case 'cluster-shove-resolved':
+        // Swarmer's gems land. Whoosh + thud synth scaled by surviving
+        // move count so multi-swarmer clusters sound heavier than a
+        // single shove. No trail-arrival delay — the shove is the
+        // particles-and-gems landing, not a chip-application beat.
+        if (event.moves.length > 0) playShoveSfx(event.moves.length)
         return
       case 'petrify-row-ticked':
         // Release cue when a row's lockout expires (remaining hit 0).
@@ -316,28 +363,25 @@ export function installSfxBindings(): void {
           playBurnFizzleSfx(event.expired.length)
         }
         return
-      case 'status-applied':
-        // Burn arrival cue — short flame whoosh. Delayed via the same
-        // trail-arrival schedule so the sound lands with the particle
-        // hand-off and the status chip, not at swap commit.
-        // (Vulnerable/Weak applications are silent for now; can get
-        // their own timbres later.)
-        //
-        // Enemy-attack riders (Smolder onHit) are intentionally NOT
-        // played here — the apply whoosh has already been folded into
-        // the damage-taken handler above (onHitRider branch) so the
-        // attack sounds fiery on impact rather than 1s later. Playing
-        // it here too would double-whoosh.
-        if (event.status.kind === 'burn') {
-          if (event.source?.kind === 'enemy') {
-            return
-          } else if (event.source?.kind === 'board-cells') {
-            scheduleAtTrailArrival(playBurnApplySfx)
-          } else {
-            playBurnApplySfx()
-          }
+      case 'status-applied': {
+        // Universal arrival cue dispatch. Look up the per-status sound
+        // and fire it at the visual impact moment — when the chip's
+        // particle trail lands. AC suppresses the trail for enemy-source
+        // applies (the attack's own carrier visuals cover that beat), so
+        // we play immediately — same tick as the damage-taken event that
+        // just fired, which lands the sound on the impact. For every
+        // other source (board-cells / player-cast / undefined) the trail
+        // is in flight, so we ride the same TRAIL_ARRIVAL_MS schedule
+        // and the sound lands with the particles on the chip.
+        const sfx = STATUS_APPLY_SFX[event.status.kind]
+        if (!sfx) return
+        if (event.source && event.source.kind !== 'enemy') {
+          scheduleAtTrailArrival(sfx)
+        } else {
+          sfx()
         }
         return
+      }
       case 'extra-turn-granted':
         // Plays alongside the "+1 TURN" callout. Brighter than turn-start
         // because it's a reward; sparkle layer reinforces "this was a treat".

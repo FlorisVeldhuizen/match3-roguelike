@@ -4,6 +4,7 @@ import {
   type SpellDef,
   type UltimateDef,
 } from '../core/combat/spellRegistry'
+import { Keyword } from '../ui/components/Keyword'
 
 // Knight kit (H4a redesign). Costs from 02-scope §Difficulty curve.
 // Effects from 01-design §Abilities. Numeric resolution:
@@ -20,11 +21,20 @@ const bulwark: SpellDef = {
   icon: '🗡',
   cost: { blue: 3 },
   resolution: 'pending',
-  description:
-    "When your turn ends, your armor strikes the enemy for half its value. You'll have no armor this turn.",
+  description: (
+    <>
+      When your turn ends, your <Keyword id="block">armor</Keyword> strikes the
+      enemy for half its value. You'll have no armor this turn.
+    </>
+  ),
   pendingLabel: 'queued',
-  pendingDescription:
-    "When your turn ends, your armor strikes the enemy for half its value, then drops to zero.",
+  pendingDescription: (
+    <>
+      When your turn ends, your <Keyword id="block">armor</Keyword> strikes the
+      enemy for half its value, then drops to zero.
+    </>
+  ),
+  starter: true,
 }
 
 const reinforce: SpellDef = {
@@ -33,11 +43,20 @@ const reinforce: SpellDef = {
   icon: '🛡',
   cost: { blue: 4 },
   resolution: 'pending',
-  description:
-    "Doubles your armor when your turn ends and carries it over into next turn instead of letting it evaporate.",
+  description: (
+    <>
+      Doubles your <Keyword id="block">armor</Keyword> when your turn ends and
+      carries it over into next turn instead of letting it evaporate.
+    </>
+  ),
   pendingLabel: 'queued',
-  pendingDescription:
-    'When your turn ends, your armor is doubled and survives into next turn.',
+  pendingDescription: (
+    <>
+      When your turn ends, your <Keyword id="block">armor</Keyword> is doubled
+      and survives into next turn.
+    </>
+  ),
+  starter: true,
 }
 
 // H4a player-distributed AOE. At cast time, the player picks three
@@ -76,7 +95,7 @@ const focus: SpellDef = {
 
 // --- H4a redesign — replacing Bash / Steel Heart / Cleanse ---
 
-// Ignite: weaponize the burn track. Apply Burn 3 to the current target.
+// Ignite: weaponize the burn track. Apply 3 Burn to the current target.
 // Threads with Smolder and future burn-relics. Auto-targets the
 // selected enemy (consistent with red-match damage routing).
 const ignite: SpellDef = {
@@ -85,13 +104,17 @@ const ignite: SpellDef = {
   icon: '🔥',
   cost: { red: 3 },
   resolution: 'immediate',
-  description:
-    'Set your target on fire. They take 3, then 2, then 1 damage at the start of their next three turns.',
+  description: (
+    <>
+      Apply 3 <Keyword id="burn" /> to your target.
+    </>
+  ),
   pendingLabel: '',
   pendingDescription: '',
+  starter: true,
 }
 
-// Regenerate: player-side mirror of Burn. Apply Regen 3 to self →
+// Regenerate: player-side mirror of Burn. Apply 3 Regen to self →
 // heals 3, 2, 1 at the start of your next three turns (6 HP total,
 // front-loaded). Spreading the heal creates a tempo-investment decision
 // vs. an instant green-match heal.
@@ -101,8 +124,11 @@ const regenerate: SpellDef = {
   icon: '🌿',
   cost: { green: 3 },
   resolution: 'immediate',
-  description:
-    'Recover 3, then 2, then 1 HP at the start of your next three turns. Stacks if cast again.',
+  description: (
+    <>
+      Apply 3 <Keyword id="regen" /> to yourself. Stacks if cast again.
+    </>
+  ),
   pendingLabel: '',
   pendingDescription: '',
 }
@@ -116,8 +142,12 @@ const purify: SpellDef = {
   icon: '✨',
   cost: { green: 2 },
   resolution: 'immediate',
-  description:
-    'Strip a curse off you entirely. If you cleared a burn, recover 3 HP.',
+  description: (
+    <>
+      Strip a curse off you entirely. If you cleared a <Keyword id="burn" />,
+      recover 3 HP.
+    </>
+  ),
   pendingLabel: '',
   pendingDescription: '',
 }
@@ -139,7 +169,7 @@ const skewer: SpellDef = {
   pendingDescription: 'Your next red match deals double damage.',
 }
 
-// Brittle: status-setup play. Apply Vulnerable 2 to the current target.
+// Brittle: status-setup play. Apply 2 Vulnerable to the current target.
 // Pairs with big red matches the same turn — Vulnerable composes
 // through the existing damage pipeline. Auto-targets selected enemy.
 const brittle: SpellDef = {
@@ -148,8 +178,11 @@ const brittle: SpellDef = {
   icon: '🩸',
   cost: { blue: 3 },
   resolution: 'immediate',
-  description:
-    "Crack the target's defenses. They take 50% more damage from your next two turns.",
+  description: (
+    <>
+      Apply 2 <Keyword id="vulnerable" /> to your target.
+    </>
+  ),
   pendingLabel: '',
   pendingDescription: '',
 }
@@ -171,7 +204,7 @@ const surge: SpellDef = {
     'Your next match counts as cascade level +2 (triggers cascade relics).',
 }
 
-// Cinder Lash: hybrid offence + sustain. Apply Burn 2 to target +
+// Cinder Lash: hybrid offence + sustain. Apply 2 Burn to target +
 // heal 2 self. First multi-cost spell — costs 2 red AND 1 green.
 const cinderLash: SpellDef = {
   id: 'cinder-lash',
@@ -179,8 +212,11 @@ const cinderLash: SpellDef = {
   icon: '🧪',
   cost: { red: 2, green: 1 },
   resolution: 'immediate',
-  description:
-    'Lash the target with embers — they burn for 2, then 1, and you recover 2 HP.',
+  description: (
+    <>
+      Apply 2 <Keyword id="burn" /> to your target and recover 2 HP.
+    </>
+  ),
   pendingLabel: '',
   pendingDescription: '',
 }
@@ -190,10 +226,10 @@ const cinderLash: SpellDef = {
 // chosen colour and applies the standard per-colour effect (red →
 // damage, blue → block pool, green → heal, yellow → mana, purple →
 // skill charge), scaled by cell count. Heavy yellow cost forces the
-// player to bank wild mana before cashing in. MVP scope: bypasses the
-// relic onMatch hooks — a future refactor will route through the
-// shared match-processing pipeline so Sharp Edge / Iron Buckler /
-// Cascade Crystal fire here too.
+// player to bank wild mana before cashing in. Routes through the
+// shared cascade walker, so relic onMatch / onCascade hooks (Sharp
+// Edge, Iron Buckler, Cascade Crystal, …) fire on the cleared cells
+// and any gravity-induced follow-up matches chain naturally.
 const shatter: SpellDef = {
   id: 'shatter',
   name: 'Shatter',

@@ -4,6 +4,7 @@ import type {
   Enemy,
   GameEvent,
   GemColor,
+  HexedColor,
   Intent,
   PetrifiedRows,
   Player,
@@ -13,7 +14,11 @@ import { GEM_COLORS } from '../../types'
 import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage } from './statuses'
 import { getArchetype } from './archetypeRegistry'
-import { applyFlagToCells, pickClusterCellsWithoutFlag } from '../board/flags'
+import {
+  applyFlagToCells,
+  getFlag,
+  pickClusterCellsWithoutFlag,
+} from '../board/flags'
 import { applyGravity } from '../board/gravity'
 import {
   interceptFatalDamage,
@@ -369,6 +374,129 @@ export function resolvePetrifyRowIntent(
       },
     ],
   }
+}
+
+// ---------- Color hex (Caster, H2c) ----------
+// Fire-time pushes the hexed colour into FightState.hexedColors. If the
+// same colour was already hexed (e.g. two Casters double-hexed red),
+// the entry refreshes to max(turnsLeft, duration) — same semantics as
+// petrifyDuration's max() rule. Tick happens at the start of each
+// enemy phase via tickHexedColors (called from actions/swap.ts).
+export function resolveColorHexIntent(
+  intent: Extract<Intent, { kind: 'color-hex' }>,
+  source: Enemy,
+  hexedColors: readonly HexedColor[],
+): { hexedColors: HexedColor[]; events: GameEvent[] } {
+  const def = getArchetype(source.archetype)
+  const duration = def.colorHexDuration ?? 2
+  const next: HexedColor[] = hexedColors.slice()
+  const existing = next.findIndex((h) => h.color === intent.color)
+  if (existing >= 0) {
+    const cur = next[existing]!
+    next[existing] = {
+      color: intent.color,
+      turnsLeft: Math.max(cur.turnsLeft, duration),
+    }
+  } else {
+    next.push({ color: intent.color, turnsLeft: duration })
+  }
+  return {
+    hexedColors: next,
+    events: [
+      {
+        kind: 'color-hex-fired',
+        enemyId: source.id,
+        color: intent.color,
+        turnsLeft: duration,
+      },
+    ],
+  }
+}
+
+// ---------- Cluster shove (Swarmer, H2c) ----------
+// Scans the board for cells carrying THIS enemy's `pendingShove` flags
+// (the flag is scoped by `sourceEnemyId` so a fight with multiple
+// swarmers resolves one swarmer's shoves per turn, not all of them in
+// the first swarmer's resolver call). Each surviving flagged cell
+// writes its colour to its destination position, then the source cell
+// is cleared and gravity refills the gap. Cells the player matched
+// pre-fire are absent from the scan (flag cleared by cascade-out) →
+// they don't shove. May resolve to a 0-move no-op if the player
+// cleared every source.
+export function resolveClusterShoveIntent(
+  source: Enemy,
+  board: Cell[][],
+  rng: RngState,
+): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
+  const events: GameEvent[] = []
+  type Move = { src: Pos; dst: Pos; color: GemColor }
+  const moves: Move[] = []
+  for (let y = 0; y < board.length; y++) {
+    const row = board[y]
+    if (!row) continue
+    for (let x = 0; x < row.length; x++) {
+      const cell = row[x]
+      const flag = getFlag(cell, 'pendingShove')
+      if (!flag || !cell) continue
+      if (flag.sourceEnemyId !== source.id) continue
+      moves.push({ src: { x, y }, dst: flag.dst, color: cell.gemColor })
+    }
+  }
+
+  if (moves.length === 0) {
+    events.push({
+      kind: 'cluster-shove-resolved',
+      enemyId: source.id,
+      moves: [],
+    })
+    return { board, rng, events }
+  }
+
+  // Build the cleared/written board on a (Cell | null)[][] intermediate
+  // so applyGravity can drop cells into the source gaps. Destination
+  // writes use a fresh cell — any prior flags at the destination are
+  // destroyed (acceptable: shove is disruptive by design).
+  const cleared: (Cell | null)[][] = board.map((row) => row.slice())
+  for (const m of moves) {
+    const row = cleared[m.src.y]
+    if (row) row[m.src.x] = null
+  }
+  for (const m of moves) {
+    const row = cleared[m.dst.y]
+    if (row) row[m.dst.x] = { gemColor: m.color }
+  }
+
+  events.push({
+    kind: 'cluster-shove-resolved',
+    enemyId: source.id,
+    moves: moves.map((m) => ({
+      source: m.src,
+      destination: m.dst,
+      color: m.color,
+    })),
+  })
+  // Drive the same clear FX the cascade walker uses for match clears.
+  events.push({ kind: 'gems-cleared', cells: moves.map((m) => m.src) })
+
+  const { board: fallen, movements } = applyGravity(cleared)
+  if (movements.length > 0) events.push({ kind: 'gems-fell', movements })
+
+  let nextRng = rng
+  const spawns: { at: Pos; color: GemColor }[] = []
+  const refilled: Cell[][] = fallen.map((row, y) =>
+    row.map((c, x): Cell => {
+      if (c) return c
+      const [idx, nr] = nextInt(nextRng, GEM_COLORS.length)
+      nextRng = nr
+      const color = GEM_COLORS[idx]
+      if (!color) throw new Error('cluster-shove: refill color oob')
+      spawns.push({ at: { x, y }, color })
+      return { gemColor: color }
+    }),
+  )
+  if (spawns.length > 0) events.push({ kind: 'gems-spawned', spawns })
+
+  return { board: refilled, rng: nextRng, events }
 }
 
 // ---------- Ally intents (Rallier, H4b) ----------

@@ -187,6 +187,50 @@ describe('generateMap', () => {
     expect(found).toBe(true)
   })
 
+  // H2c: Caster + Swarmer must appear in at least one map across a
+  // reasonable seed range. Both debut at col 1 and pull full mid-tier
+  // weight at col 2, so 100 seeds is comfortable cover.
+  it('caster archetype appears in at least one map within 100 seeds', () => {
+    let found = false
+    for (let seed = 1; seed <= 100 && !found; seed++) {
+      const map = build(seed)
+      if (map.nodes.some((n) => n.archetypes?.includes('caster'))) {
+        found = true
+      }
+    }
+    expect(found).toBe(true)
+  })
+
+  it('swarmer archetype appears in at least one map within 100 seeds', () => {
+    let found = false
+    for (let seed = 1; seed <= 100 && !found; seed++) {
+      const map = build(seed)
+      if (map.nodes.some((n) => n.archetypes?.includes('swarmer'))) {
+        found = true
+      }
+    }
+    expect(found).toBe(true)
+  })
+
+  // H2c: swarmer cluster composition (multi-swarmer group) should land
+  // at least once over a wider seed range — it's in the role-mixed
+  // pool but competes with several other compositions.
+  it('multi-swarmer cluster composition appears in at least one map within 200 seeds', () => {
+    let found = false
+    for (let seed = 1; seed <= 200 && !found; seed++) {
+      const map = build(seed)
+      if (
+        map.nodes.some(
+          (n) =>
+            (n.archetypes?.filter((a) => a === 'swarmer').length ?? 0) >= 2,
+        )
+      ) {
+        found = true
+      }
+    }
+    expect(found).toBe(true)
+  })
+
   // H2b: defender + smolder is one of the new role-mixed compositions
   // ("the wall + the burner"). It should appear at least once over
   // a wider seed range — role-mixed comp picks are 40% of multi-enemy

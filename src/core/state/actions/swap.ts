@@ -16,12 +16,17 @@ import {
   type CombatPhase,
   type GameEvent,
   type GemColor,
+  type HexedColor,
   type PendingReward,
   type PetrifiedRows,
   type Pos,
   type RunPhase,
 } from '../../../types'
-import { tickFlagDuration, tickPetrifiedRows } from '../../board/flags'
+import {
+  tickFlagDuration,
+  tickHexedColors,
+  tickPetrifiedRows,
+} from '../../board/flags'
 import type { StoreSet, StoreGet } from './types'
 
 export function makeSelectCell(set: StoreSet, _get: StoreGet) {
@@ -84,6 +89,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
       player,
       current.fight.enemies,
       current.fight.targetEnemyId,
+      current.fight.hexedColors ?? [],
     )
     player = processed.player
     let enemies = processed.enemies
@@ -128,6 +134,8 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
     // branch below; defaults to current state so non-enemy paths
     // (extra-turn cascades, victory) leave petrified rows untouched.
     let tickedPetrifiedRows: PetrifiedRows = current.board.petrifiedRows
+    // H2c: same staging pattern for Caster's hexedColors set.
+    let tickedHexedColors: HexedColor[] = current.fight.hexedColors ?? []
 
     // 4+ matches grant an extra turn — UNLESS the swap also killed the
     // last enemy, in which case we want to fall through to
@@ -196,6 +204,13 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         // expired transitions on the animator's timeline.
         tickedPetrifiedRows = petrifyTick.petrifiedRows
         tailEvents.push(...petrifyTick.events)
+        // H2c: hexedColors tick on the same phase boundary — once per
+        // enemy phase, regardless of how many casters are alive. Decrement
+        // happens BEFORE executeEnemyTurn so any new hex placed by a
+        // Caster this turn keeps its full specced duration.
+        const hexTick = tickHexedColors(current.fight.hexedColors ?? [])
+        tickedHexedColors = hexTick.hexedColors
+        tailEvents.push(...hexTick.events)
 
         const enemyResult = executeEnemyTurn(
           player,
@@ -203,13 +218,17 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
           finalBoard,
           enemyRng,
           tickedPetrifiedRows,
+          tickedHexedColors,
+          targetEnemyId,
         )
         player = enemyResult.player
         enemies = enemyResult.enemies
         finalBoard = enemyResult.board
         tickedPetrifiedRows = enemyResult.petrifiedRows
+        tickedHexedColors = enemyResult.hexedColors
         enemyRng = enemyResult.rng
         phase = enemyResult.phase
+        targetEnemyId = enemyResult.targetEnemyId
         tailEvents.push(...enemyResult.events)
 
         // Target may have died during the enemy turn (Thornmail reflect,
@@ -288,6 +307,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
       s.fight.player = player
       s.fight.enemies = enemies
       s.fight.targetEnemyId = targetEnemyId
+      s.fight.hexedColors = tickedHexedColors
       s.pendingReward = pendingReward
       s.runPhase = nextRunPhase
       s.map.completedNodeIds = completedNodeIds

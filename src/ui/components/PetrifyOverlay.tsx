@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { TRAIL_ARRIVAL_MS } from '../../timing'
 import { useFightReset } from '../hooks/useFightReset'
 import { CellAnchor } from './CellAnchor'
 
@@ -90,19 +91,29 @@ export function PetrifyOverlay() {
         })
       } else if (event.kind === 'petrify-fired') {
         // Telegraph → resolved: move the row out of pending and into
-        // active. Both updates apply in the same render so the visual
-        // transitions cleanly from amber warning to grey lockout.
-        setPending((prev) => {
-          if (!prev.has(event.row)) return prev
-          const next = new Set(prev)
-          next.delete(event.row)
-          return next
-        })
-        setActive((prev) => {
-          const next = new Map(prev)
-          next.set(event.row, { row: event.row, remaining: event.duration })
-          return next
-        })
+        // active. Delayed by TRAIL_ARRIVAL_MS to align with the stone
+        // particle trail spawned by AnimationController for this same
+        // event — the wash should LAND when the particles hit, not the
+        // instant the event fires. fightCounter guard prevents a stale
+        // timeout from leaking a lockout into a fresh fight if the
+        // defender died within the trail window.
+        const row = event.row
+        const duration = event.duration
+        const scheduledFight = useGameStore.getState().fightCounter
+        window.setTimeout(() => {
+          if (useGameStore.getState().fightCounter !== scheduledFight) return
+          setPending((prev) => {
+            if (!prev.has(row)) return prev
+            const next = new Set(prev)
+            next.delete(row)
+            return next
+          })
+          setActive((prev) => {
+            const next = new Map(prev)
+            next.set(row, { row, remaining: duration })
+            return next
+          })
+        }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'petrify-row-ticked') {
         if (event.remaining > 0) {
           setActive((prev) => {

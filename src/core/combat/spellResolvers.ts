@@ -5,6 +5,7 @@ import {
   type Enemy,
   type GameEvent,
   type GemColor,
+  type HexedColor,
   type ManaPools,
   type Match,
   type Player,
@@ -215,6 +216,7 @@ export function resolveShatter(
   rng: RngState,
   color: GemColor,
   targetEnemyId: string | null,
+  hexedColors: readonly HexedColor[] = [],
 ): {
   player: Player
   enemies: Enemy[]
@@ -269,6 +271,7 @@ export function resolveShatter(
     player,
     enemies,
     targetEnemyId,
+    hexedColors,
   )
 
   return {

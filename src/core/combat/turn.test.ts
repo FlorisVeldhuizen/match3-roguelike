@@ -164,7 +164,7 @@ describe('beginPlayerPhase', () => {
   it('emits damage-taken before status-ticked/expired on burn proc', () => {
     const p = makePlayer({
       hp: 40,
-      // Burn 2 → tick deals 2, stacks decays to 1 (still active).
+      // 2 Burn → tick deals 2, stacks decays to 1 (still active).
       statuses: [{ kind: 'burn', stacks: 2 }],
     })
     const result = beginPlayerPhase(p)
@@ -180,7 +180,7 @@ describe('beginPlayerPhase', () => {
   it('emits damage-taken before status-expired on burn final tick', () => {
     const p = makePlayer({
       hp: 40,
-      // Burn 1 → tick deals 1, stacks decays to 0 → expires.
+      // 1 Burn → tick deals 1, stacks decays to 0 → expires.
       statuses: [{ kind: 'burn', stacks: 1 }],
     })
     const result = beginPlayerPhase(p)
@@ -200,7 +200,7 @@ describe('beginPlayerPhase', () => {
     const p = makePlayer({
       hp: 40,
       block: 5,
-      // Burn 3 → 3 dmg, all absorbed by 5 block (2 block survives).
+      // 3 Burn → 3 dmg, all absorbed by 5 block (2 block survives).
       statuses: [{ kind: 'burn', stacks: 3 }],
       carryBlockNextPhase: true,
     })
@@ -219,7 +219,7 @@ describe('beginPlayerPhase', () => {
     const p = makePlayer({
       hp: 40,
       block: 2,
-      // Burn 5 → 2 absorbed, 3 to HP; block breaks.
+      // 5 Burn → 2 absorbed, 3 to HP; block breaks.
       statuses: [{ kind: 'burn', stacks: 5 }],
       carryBlockNextPhase: true,
     })

@@ -22,6 +22,21 @@ import {
 
 const PULSE_MS = 380
 
+// Per-status RGB triplets for the screen-edge vignette that fires on
+// status-applied events targeting the player. Burn matches the existing
+// vignette-burn hue so the apply + later tick reads as the same fire.
+// Vulnerable sits a notch deeper amber to stay distinct from burn;
+// Weak goes sickly yellow-green; buff hues exist for completeness but
+// only ever fire if a non-player source ever applies them.
+const STATUS_VIGNETTE_RGB: Record<StatusKind, string> = {
+  burn: '255, 133, 64',
+  vulnerable: '208, 130, 60',
+  weak: '170, 184, 107',
+  regen: '120, 200, 140',
+  strength: '255, 200, 100',
+}
+const STATUS_VIGNETTE_MS = 540
+
 // Animation-timed mirror of the player's HUD state. Subscribes to the
 // game-event stream once and routes each event to the right local
 // channel — displayed values tick with the particle trail arrivals,
@@ -47,7 +62,6 @@ export type HudEventChannel = {
   hpHit: boolean
   hpBurnHit: boolean
   blockPulse: boolean
-  hudBurnImpact: boolean
 }
 
 export function useHudEventChannel(): HudEventChannel {
@@ -109,11 +123,6 @@ export function useHudEventChannel(): HudEventChannel {
   // ember pulse (`.burn-hit`) instead of the red `.hit` flash. Driven by
   // damage-taken events with source='burn' (proc path).
   const [hpBurnHit, setHpBurnHit] = useState(false)
-  // "This attack carried fire" halo on the HUD frame — fires once at
-  // the impact moment of an enemy attack whose onHitRider is burn. Sits
-  // alongside the regular shake/vignette/red flash (the attack itself
-  // is still a normal hit) and lingers a beat as the chip drops in.
-  const [hudBurnImpact, setHudBurnImpact] = useState(false)
 
   // Displayed values mirror the canonical store but tick to animation time
   // (gem trail arrival), not store-commit time.
@@ -227,17 +236,19 @@ export function useHudEventChannel(): HudEventChannel {
               setHpHit(true)
               window.setTimeout(() => setHpHit(false), 420)
               triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
-              document.body.classList.add('vignette-damage')
-              window.setTimeout(
-                () => document.body.classList.remove('vignette-damage'),
-                500,
-              )
-              // Enemy attack with a status rider: pulse the "carrier"
-              // halo on the HUD frame so the eye registers "this hit
-              // brought something extra" before the chip arrives.
-              if (event.onHitRider != null) {
-                setHudBurnImpact(true)
-                window.setTimeout(() => setHudBurnImpact(false), 640)
+              // Suppress the red screen-edge vignette when the hit
+              // carries a status rider — the per-status orange (or
+              // future hue) vignette fires from the follow-up
+              // status-applied event and owns the screen tint for
+              // those hits. Without this gate, both `vignette-damage`
+              // and `vignette-status-apply` would target body::before
+              // in the same beat and clash on the CSS cascade.
+              if (event.onHitRider == null) {
+                document.body.classList.add('vignette-damage')
+                window.setTimeout(
+                  () => document.body.classList.remove('vignette-damage'),
+                  500,
+                )
               }
             }
           }
@@ -290,14 +301,41 @@ export function useHudEventChannel(): HudEventChannel {
         // TRAIL_ARRIVAL_MS to sync with the particle trail, but that
         // delay let a follow-up status-ticked (next-phase begin within
         // the same synchronous event burst) race the apply at +700ms.
-        // The intermediate value (e.g. "Burn 5") was visible for ~5ms
+        // The intermediate value (e.g. "5 Burn") was visible for ~5ms
         // before being overwritten by the tick's `remaining` (e.g.
-        // "Burn 4"), so the player saw chip 3 → 4 with a `−5` popup
+        // "4 Burn"), so the player saw chip 3 → 4 with a `−5` popup
         // and no visible "+2 applied" beat. Now the chip reflects the
         // new value at event time; the trail particles spawned by
         // AC.spawnStatusTrail are decorative confirmation flying
         // toward an already-updated chip.
         setDisplayedStatuses((prev) => applyStatusToList(prev, event.status))
+        // Per-status screen-edge tint. Fires on every player-targeted
+        // status apply EXCEPT self-cast (player initiated, no need to
+        // signal "something happened to me"). The schedule mirrors the
+        // audio path in bindings.ts: enemy-source applies have no trail
+        // (AC suppresses), so the vignette fires at event time and
+        // syncs with the damage impact; every other source has a trail
+        // in flight, so the vignette rides TRAIL_ARRIVAL_MS and lands
+        // with the particles on the chip.
+        const applySource = event.source
+        if (applySource?.kind !== 'player') {
+          const fire = () => {
+            document.body.style.setProperty(
+              '--vignette-rgb',
+              STATUS_VIGNETTE_RGB[event.status.kind],
+            )
+            document.body.classList.add('vignette-status-apply')
+            window.setTimeout(
+              () => document.body.classList.remove('vignette-status-apply'),
+              STATUS_VIGNETTE_MS,
+            )
+          }
+          if (applySource && applySource.kind !== 'enemy') {
+            window.setTimeout(fire, TRAIL_ARRIVAL_MS)
+          } else {
+            fire()
+          }
+        }
       } else if (event.kind === 'status-ticked' && event.target === 'player') {
         // StS pattern: stacks is the chip number AND the turns counter,
         // and the tick decrements it. Delay the chip update by
@@ -406,6 +444,5 @@ export function useHudEventChannel(): HudEventChannel {
     hpHit,
     hpBurnHit,
     blockPulse,
-    hudBurnImpact,
   }
 }

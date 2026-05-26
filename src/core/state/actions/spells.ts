@@ -190,9 +190,11 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
   // roll — shatter is a player action, so its determinism rides the
   // board rng stream rather than rng.enemy.
   //
-  // MVP scope: does NOT route through runOnMatch, so Sharp Edge /
-  // Iron Buckler / Cascade Crystal don't fire on the cleared cells.
-  // runOnSpellCast DOES fire (handled here, like every other spell).
+  // Routes through the shared cascade walker inside resolveShatter,
+  // so relic onMatch / onCascade hooks (Sharp Edge / Iron Buckler /
+  // Cascade Crystal …) fire on the cleared cells and any gravity-
+  // induced cascade follow-ups. runOnSpellCast fires here as it does
+  // for every other spell.
   return (color: GemColor): { ok: boolean; events: GameEvent[] } => {
     const current = get()
     if (current.fight.phase !== 'player-acting') {
@@ -236,6 +238,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
       current.rng.board,
       color,
       current.fight.targetEnemyId,
+      current.fight.hexedColors ?? [],
     )
 
     // Victory check — Shatter is the first immediate-damage spell that

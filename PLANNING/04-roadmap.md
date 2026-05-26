@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase H2b complete.** Working on H2b.5 (first player-side verb spell, micro-phase) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
+Status: **Phase H2c complete.** Working on I (Shop + rest, gold economy) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
@@ -282,7 +282,9 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-### Phase H2b.5 — First player-side verb spell (micro-phase)
+### Phase H2b.5 — First player-side verb spell (micro-phase) ✅ COMPLETE
+
+**Status:** shipped 2026-05-26. Shatter Color picked from the parked verb pool; spell live at 4 yellow (immediate, picker on a board cell to choose colour). Routes through the shared cascade walker so relic onMatch / onCascade hooks (Sharp Edge, Iron Buckler, Cascade Crystal) fire on the cleared cells and gravity-induced cascades chain naturally. 276 tests passing.
 
 **Goal:** fill the design-doc requirement that "the slice should ship at least one player-side board verb" (§"Parallel play"). Drops one verb spell into the discoverable spell pool so player and enemy both gain board verbs in the same arc (H2b ships enemy verbs; H2b.5 ships the symmetric player half).
 
@@ -303,7 +305,9 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-### Phase H2c — Caster color-hex + Swarmer cluster-shove
+### Phase H2c — Caster color-hex + Swarmer cluster-shove ✅ COMPLETE
+
+**Status:** shipped 2026-05-26. Both archetypes registered (Caster HP 12, hex duration 2 phases, Weak-on-hit attack rider; Swarmer HP 8, length-2 cluster-shove run). Color-hex applies Weak with stacks=match.cells.length on hexed-colour matches via cascadeProcessor (refresh semantics). Cluster-shove uses per-cell `pendingShove` flags so counter-play works independently — clearing one source cell denies its shove without affecting the other. Map weights extended (Caster + Swarmer at cols 1-3) and 4 new role-mixed compositions added (caster+rallier, swarmer×2/×3, defender+caster). 296 tests passing.
 
 **Goal:** the two non-cell-flag verbs land — board-global state for Caster, board mutation for Swarmer.
 
@@ -363,7 +367,7 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ### Phase H4a — Spell roster expansion
 
-> **Design pivot (2026-05-25):** Initial pass shipped 7 spells but design review (with the user) flagged 3 as too plain — Bash mirrored Bulwark, Steel Heart duplicated green-match healing, Cleanse's "−1 stack" was too marginal to be worth casting. Replaced with: **Ignite** (3R, apply Burn 3 to target), **Regenerate** (3G, regen 3 self → 6 HP over 3 turns), **Purify** (2G, remove a status entirely; +3 HP if it was Burn). Added 4 new spells for synergy depth: **Skewer** (2R, next match deals 2× damage), **Brittle** (3B, target Vulnerable 2), **Surge** (3Y, next match counts as cascade level +2), **Cinder Lash** (2R+1G, apply Burn 2 + heal 2 — first multi-cost spell). Final pool: 10 spells + 1 ultimate.
+> **Design pivot (2026-05-25):** Initial pass shipped 7 spells but design review (with the user) flagged 3 as too plain — Bash mirrored Bulwark, Steel Heart duplicated green-match healing, Cleanse's "−1 stack" was too marginal to be worth casting. Replaced with: **Ignite** (3R, apply 3 Burn to target), **Regenerate** (3G, regen 3 self → 6 HP over 3 turns), **Purify** (2G, remove a status entirely; +3 HP if it was Burn). Added 4 new spells for synergy depth: **Skewer** (2R, next match deals 2× damage), **Brittle** (3B, target 2 Vulnerable), **Surge** (3Y, next match counts as cascade level +2), **Cinder Lash** (2R+1G, apply 2 Burn + heal 2 — first multi-cost spell). Final pool: 10 spells + 1 ultimate.
 
 **Goal:** the Knight's spell list grows from 2 → 10 (+1 ultimate). All spells respect the multi-color mana economy from H3.
 
@@ -372,13 +376,13 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 - **Reinforce** (4B, pending) — block doubled + carries to next phase. Pairs with Bulwark.
 - **Volley** (4R, pending, picker) — 3-hit AOE, player allocates targets at cast. Defers red damage during the phase; EOP splits the pool.
 - **Focus** (2Y explicit, immediate, picker) — move up to 3 mana from source colour → target colour. Yellow can't fund itself.
-- **Ignite** (3R, immediate, auto-target) — Burn 3 to current target.
-- **Regenerate** (3G, immediate, self) — Regen 3 to self → heals 3/2/1 over 3 turns (6 HP total).
+- **Ignite** (3R, immediate, auto-target) — 3 Burn to current target.
+- **Regenerate** (3G, immediate, self) — 3 Regen to self → heals 3/2/1 over 3 turns (6 HP total).
 - **Purify** (2G, immediate, picker) — remove a player status entirely. If Burn, also heal 3.
 - **Skewer** (2R, pending one-shot) — next match's red damage is doubled. Cleared by the next match (NOT EOP).
-- **Brittle** (3B, immediate, auto-target) — Vulnerable 2 to current target.
+- **Brittle** (3B, immediate, auto-target) — 2 Vulnerable to current target.
 - **Surge** (3Y, pending one-shot) — next match counts as cascade level +2 (triggers Cascade Crystal & future cascade relics on level-0 matches).
-- **Cinder Lash** (2R+1G, immediate, auto-target) — Burn 2 to target + heal 2 self.
+- **Cinder Lash** (2R+1G, immediate, auto-target) — 2 Burn to target + heal 2 self.
 - **Riposte** (8 charge, ultimate) — unchanged.
 
 **Engine plumbing:**
@@ -396,13 +400,13 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 **Acceptance:**
 - ✓ 10 spells + 1 ultimate visible in the spell tray, costs rendered as colored mana pips
 - ✓ Existing Bulwark / Reinforce / Volley / Focus / Riposte work unchanged
-- ✓ **Ignite:** cast → target gains Burn 3; stacks with existing Burn
-- ✓ **Regenerate:** cast → Regen 3 on player; ticks 3, 2, 1 HP over the next 3 turns, then expires
+- ✓ **Ignite:** cast → target gains 3 Burn; stacks with existing Burn
+- ✓ **Regenerate:** cast → 3 Regen on player; ticks 3, 2, 1 HP over the next 3 turns, then expires
 - ✓ **Purify:** cast → picker opens → pick status → it's removed entirely; if Burn, +3 HP
 - ✓ **Skewer:** cast → pip in PendingStrip → next match's red damage is doubled, then the pip clears
-- ✓ **Brittle:** cast → target gains Vulnerable 2 (existing refresh rule applies)
+- ✓ **Brittle:** cast → target gains 2 Vulnerable (existing refresh rule applies)
 - ✓ **Surge:** cast → pip in PendingStrip → next match's cascade level is treated as +2 (visible via Cascade Crystal triggering on a level-0 match), then pip clears
-- ✓ **Cinder Lash:** cast → target gains Burn 2 + player heals 2; needs both R and G mana (with wild substitution allowed)
+- ✓ **Cinder Lash:** cast → target gains 2 Burn + player heals 2; needs both R and G mana (with wild substitution allowed)
 - ✓ Target-required spells (Ignite/Brittle/Cinder Lash/Volley) disabled when no living enemy
 - ✓ Purify disabled when player has no harmful statuses (Regen alone doesn't count)
 - ✓ **Tests:** Ignite/Brittle/Cinder Lash apply correct statuses + heal; Regenerate apply + per-turn tick (3→2→1→expire) + cap at maxHp + burn-before-regen ordering; Purify removes entirely + Burn-kicker heals + caps + no-op on absent; Focus mana shift; Volley EOP split + remainder + dead-target skip + Vulnerable composition + kill reroute. (Skewer/Surge end-to-end coverage left to playtest — flag-then-consume cascade-walker logic is wired through store; unit-test harness would need a deterministic board.)
@@ -609,8 +613,8 @@ Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) 
 | H4b | Ally-target intents + role-mixed compositions | 3-4h ✅ |
 | H4c | Hero power | DROPPED — verbs moved to discoverable-spell pool |
 | H2b | Brute column-smash + Defender petrify-row | 5-6h ✅ |
-| H2b.5 | First player-side verb spell (micro-phase) | 1-2h |
-| H2c | Caster color-hex + Swarmer cluster-shove | 5-7h |
+| H2b.5 | First player-side verb spell (micro-phase) | 1-2h ✅ |
+| H2c | Caster color-hex + Swarmer cluster-shove | 5-7h ✅ |
 | I | Shop + rest | 3-4h |
 | J1 | Boss gimmick (Corruptor) | 3-4h |
 | J2 | Content fill + tuning | 6-8h |

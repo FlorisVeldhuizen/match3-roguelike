@@ -95,9 +95,50 @@ const defender: ArchetypeDef = {
   petrifyDuration: 2,
 }
 
+// Caster: H2c fragile debuff specialist. Low HP, no block — the danger
+// is the colour-hex board verb (a 2-phase trap on a chosen colour) plus
+// a Weak-rider attack between hexes. Pattern starts with `attack` so
+// the player gets a normal first telegraph; the hex telegraph appears
+// from turn 2 onward. Stats: HP 12 (below Skirmisher's 11 would feel
+// trivial; 12 keeps the kill realistic against a fresh red pool but
+// still firmly fragile), attack 1-2 (debuff is the real cost), no block.
+const caster: ArchetypeDef = {
+  id: 'caster',
+  name: 'Caster',
+  maxHp: 12,
+  pattern: ['attack', 'color-hex'],
+  attackRange: { min: 1, max: 2 },
+  blockRange: { min: 0, max: 0 },
+  // Weak on hit pairs with the hex — both apply Weak from different
+  // angles (attack reliably, hex by tempting the player to keep matching).
+  onHitStatus: { kind: 'weak', stacks: 2 },
+  // 2 enemy-phases active matches Defender's petrifyDuration cadence.
+  // Long enough to force routing, short enough not to grind the fight.
+  colorHexDuration: 2,
+  hexWeakStacksPerCell: 1,
+}
+
+// Swarmer: H2c group-spawning disruption archetype. Very low HP (8 —
+// dies to most single matches), low attack (1-2), no block. Spawns in
+// groups of 2-3 per map node so the cluster-shove pressure compounds.
+// Pattern alternates attack and cluster-shove for a steady disruption
+// drumbeat. clusterShoveLength stays at the default 2 — heavier runs
+// would overshadow Defender's row lockout and break the verb gradient.
+const swarmer: ArchetypeDef = {
+  id: 'swarmer',
+  name: 'Swarmer',
+  maxHp: 8,
+  pattern: ['attack', 'cluster-shove'],
+  attackRange: { min: 1, max: 2 },
+  blockRange: { min: 0, max: 0 },
+  clusterShoveLength: 2,
+}
+
 // Side-effect registration: bootstrap imports this file once from main.tsx.
 registerArchetype(brute)
 registerArchetype(smolder)
 registerArchetype(skirmisher)
 registerArchetype(rallier)
 registerArchetype(defender)
+registerArchetype(caster)
+registerArchetype(swarmer)

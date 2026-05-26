@@ -23,7 +23,6 @@ export function HUD() {
     hpHit,
     hpBurnHit,
     blockPulse,
-    hudBurnImpact,
   } = useHudEventChannel()
 
   const cls = (color: GemColor, base: string) =>
@@ -49,7 +48,7 @@ export function HUD() {
 
   return (
     <section
-      className={`hud${hudBurnImpact ? ' burn-impact' : ''}`}
+      className="hud"
       aria-label="Player status"
       data-player-hud="true"
     >

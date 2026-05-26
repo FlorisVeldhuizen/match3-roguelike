@@ -89,6 +89,7 @@ export function freshFight(
     player: freshPlayer(resetFightFlags(relics)),
     enemies: builtEnemies,
     targetEnemyId: builtEnemies[0]?.id ?? null,
+    hexedColors: [],
   }
   if (options.isBoss) fight.isBoss = true
   return {

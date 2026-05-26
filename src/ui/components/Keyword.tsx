@@ -3,13 +3,20 @@ import { HoverTooltip } from './HoverTooltip'
 
 // Inline highlighted keyword (Burn, Vulnerable, Block, ...). Hovering
 // the word spawns a sub-tooltip with the keyword's definition — so a
-// player reading an intent like "Hits for 3, applies Burn 2" can hover
-// "Burn" without leaving the intent tooltip to recall what Burn does.
+// player reading an intent like "applies 2 Burn" can hover "Burn"
+// without leaving the intent tooltip to recall what Burn does.
 //
 // Usage:
-//   <Keyword id="burn" />          // renders the keyword name
-//   <Keyword id="burn">Burn 2</Keyword>  // override the visible text
-//                                        (useful for "Burn N" inline)
+//   Apply 3 <Keyword id="burn" /> to target.   // canonical — number
+//                                              // OUTSIDE the chip, just
+//                                              // the keyword name inside
+//   <Keyword id="block">armor</Keyword>        // override visible text
+//                                              // (e.g. flavour synonym)
+//
+// Convention: status stack counts read **"N Keyword"**, never
+// "Keyword N" — matches the intent-display pattern and Slay-the-Spire
+// idiom. Put the number outside the chip; keep the chip as just the
+// keyword name.
 export function Keyword({
   id,
   children,

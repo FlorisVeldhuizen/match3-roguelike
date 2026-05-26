@@ -29,19 +29,18 @@ describe('applyStatusToList', () => {
     expect(list).toEqual([burn(5)])
   })
 
-  it('Vulnerable re-application takes the longer remaining (refresh, no stack)', () => {
+  it('Vulnerable re-application stacks additively (H2c: stacks like Burn)', () => {
     let list: StatusInstance[] = [vuln(2)]
     list = applyStatusToList(list, vuln(5))
-    expect(list).toEqual([vuln(5)])
-    // Smaller incoming does not shorten an active stack.
+    expect(list).toEqual([vuln(7)])
     list = applyStatusToList(list, vuln(1))
-    expect(list).toEqual([vuln(5)])
+    expect(list).toEqual([vuln(8)])
   })
 
-  it('Weak re-application takes the longer remaining', () => {
+  it('Weak re-application stacks additively', () => {
     let list: StatusInstance[] = [weak(2)]
     list = applyStatusToList(list, weak(1))
-    expect(list).toEqual([weak(2)])
+    expect(list).toEqual([weak(3)])
   })
 })
 
@@ -63,7 +62,7 @@ describe('tickStatuses', () => {
     expect(expired).toHaveLength(2)
   })
 
-  it('Burn 3 ticks over 3 turns: 3 → 2 → 1 → expired (6 total dmg)', () => {
+  it('3 Burn ticks over 3 turns: 3 → 2 → 1 → expired (6 total dmg)', () => {
     let statuses: StatusInstance[] = [burn(3)]
     let total = 0
     for (let i = 0; i < 3; i++) {

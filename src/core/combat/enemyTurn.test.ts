@@ -256,7 +256,7 @@ describe('executeEnemyTurn', () => {
     const burningEnemy = makeEnemy({
       hp: 20,
       block: 4,
-      // Burn 3 → fully absorbed by 4 block; 1 block survives.
+      // 3 Burn → fully absorbed by 4 block; 1 block survives.
       statuses: [{ kind: 'burn', stacks: 3 }],
     })
     const result = executeEnemyTurn(makePlayer(), [burningEnemy], [], { seed: 1 })

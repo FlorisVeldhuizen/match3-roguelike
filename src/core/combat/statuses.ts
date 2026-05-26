@@ -6,21 +6,23 @@ import type {
 } from '../../types'
 
 // Tile-burn Smolder bonus on top of the cleared-cell count. Keeps a
-// 1-cell match meaningful (1 cell → Burn 2 → 3 dmg total) while letting
+// 1-cell match meaningful (1 cell → 2 Burn → 3 dmg total) while letting
 // the triangle curve scale sharply for multi-cell clears (4 cells →
-// Burn 5 → 15 dmg). Lives next to the rest of Burn's mechanics — the
+// 5 Burn → 15 dmg). Lives next to the rest of Burn's mechanics — the
 // cascade walker in store.ts reads it, and tuning it here re-balances
 // the whole interaction.
 export const BURN_FROM_TILE_BONUS = 1
 
-// Apply / re-apply rules (StS pattern — one number per status):
-// - Burn / Regen: stacks += incoming.stacks. Each tick deals/heals
-//   stacks, then stacks decrements by 1. So Burn 3 deals 3 → 2 → 1
-//   (6 total); Regen 3 heals 3 → 2 → 1 the same way. A fresh Burn 2
-//   on top of an existing Burn 3 = Burn 5 (5+4+3+2+1=15).
-// - Vulnerable / Weak: stacks = max(current, incoming.stacks). The
-//   multiplier is binary (active iff stacks > 0); stacks doubles as
-//   "turns left", which we refresh to the longer remaining.
+// Apply / re-apply rules (StS pattern — one number per status). All
+// kinds stack ADDITIVELY: stacks += incoming.stacks. Switched from
+// refresh-max for Vulnerable/Weak in H2c after the Caster hex made the
+// refresh feel like a hard cap (3-match → 3 Weak, repeat 3-match →
+// still 3 Weak). Additive matches Burn's "the more you take, the
+// longer you suffer" intuition and is consistent across all statuses.
+//
+// Note: the *multipliers* for Vulnerable/Weak are still binary (×1.5 /
+// ×0.5, no compound) — only the duration accumulates. Burn/Regen tick
+// damage/heal scales with stacks the same as before.
 export function applyStatusToList(
   list: readonly StatusInstance[],
   incoming: StatusInstance,
@@ -29,25 +31,9 @@ export function applyStatusToList(
   if (!existing) {
     return [...list, { kind: incoming.kind, stacks: incoming.stacks }]
   }
-  if (incoming.kind === 'burn' || incoming.kind === 'regen') {
-    return list.map((s) =>
-      s.kind === incoming.kind
-        ? { kind: incoming.kind, stacks: s.stacks + incoming.stacks }
-        : s,
-    )
-  }
-  // Strength stacks additively (like Burn) — each application adds to the bonus.
-  if (incoming.kind === 'strength') {
-    return list.map((s) =>
-      s.kind === 'strength'
-        ? { kind: 'strength', stacks: s.stacks + incoming.stacks }
-        : s,
-    )
-  }
-  // Vulnerable / Weak: refresh by taking the longer remaining.
   return list.map((s) =>
     s.kind === incoming.kind
-      ? { kind: s.kind, stacks: Math.max(s.stacks, incoming.stacks) }
+      ? { kind: s.kind, stacks: s.stacks + incoming.stacks } as StatusInstance
       : s,
   )
 }

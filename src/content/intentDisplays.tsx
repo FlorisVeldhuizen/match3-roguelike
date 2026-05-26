@@ -118,5 +118,33 @@ export function intentDisplay(intent: Intent): IntentDisplay {
         label: `Petrifies row ${intent.row + 1}`,
         description: `Next turn, row ${intent.row + 1} is petrified for 2 phases — its gems are locked (can't be swapped) and matches can't originate there. Cascades and matches anchored elsewhere can still flow through.`,
       }
+    case 'color-hex': {
+      const colorName =
+        intent.color.charAt(0).toUpperCase() + intent.color.slice(1)
+      return {
+        icon: '🔮',
+        // Coordinate would be the gem-colour index — meaningless to the
+        // player. The board overlay pulses every gem of that colour.
+        label: `Hexes ${colorName}`,
+        description: (
+          <>
+            Next turn, {colorName} gems are hexed. Matching them while the
+            hex is up piles on <Keyword id="weak" /> (one stack per gem
+            cleared, stacks add up). Wait it out or burn through the cost.
+          </>
+        ),
+      }
+    }
+    case 'cluster-shove':
+      return {
+        // 🙌 names the shove *verb* on the enemy frame; the cell-level
+        // markers handle source vs destination separately. The old `↗`
+        // collided with the destination chevron and read as one icon
+        // floating above the board with no clear ownership.
+        icon: '🙌',
+        // No badge number — the overlay shows source brackets + landing ring.
+        label: `Shoves ${intent.sources.length} gems`,
+        description: `Next turn, ${intent.sources.length} flagged gems get shoved to a new spot — their colours overwrite the destination cells. Match the source gems first to deny the shove.`,
+      }
   }
 }

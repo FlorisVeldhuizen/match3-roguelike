@@ -59,7 +59,7 @@ const makeEnemy = (overrides: Partial<Enemy> = {}): Enemy => ({
 // ----- Ignite -----
 
 describe('Ignite (immediate, apply Burn to target)', () => {
-  it('applies Burn 3 to a living target', () => {
+  it('applies 3 Burn to a living target', () => {
     const enemy = makeEnemy()
     const r = resolveIgnite([enemy], enemy.id)
     expect(r.enemies[0]?.statuses).toContainEqual({
@@ -92,7 +92,7 @@ describe('Ignite (immediate, apply Burn to target)', () => {
 // ----- Brittle -----
 
 describe('Brittle (immediate, apply Vulnerable to target)', () => {
-  it('applies Vulnerable 2 to a living target', () => {
+  it('applies 2 Vulnerable to a living target', () => {
     const enemy = makeEnemy()
     const r = resolveBrittle([enemy], enemy.id)
     expect(r.enemies[0]?.statuses).toContainEqual({
@@ -101,18 +101,18 @@ describe('Brittle (immediate, apply Vulnerable to target)', () => {
     })
   })
 
-  it('refreshes (max) existing Vulnerable rather than stacking', () => {
-    // Vulnerable refresh rule: max(current, incoming).
+  it('stacks additively onto existing Vulnerable (H2c rule)', () => {
+    // Vulnerable now stacks additively across all status sources.
     const enemy = makeEnemy({ statuses: [{ kind: 'vulnerable', stacks: 5 }] })
     const r = resolveBrittle([enemy], enemy.id)
-    expect(r.enemies[0]?.statuses[0]?.stacks).toBe(5) // 5 > 2
+    expect(r.enemies[0]?.statuses[0]?.stacks).toBe(5 + BRITTLE_VULN_STACKS)
   })
 })
 
 // ----- Cinder Lash -----
 
 describe('Cinder Lash (immediate, Burn + self heal)', () => {
-  it('applies Burn 2 to target and heals 2 to self', () => {
+  it('applies 2 Burn to target and heals 2 to self', () => {
     const player = makePlayer({ hp: 50 })
     const enemy = makeEnemy()
     const r = resolveCinderLash(player, [enemy], enemy.id)
@@ -136,7 +136,7 @@ describe('Cinder Lash (immediate, Burn + self heal)', () => {
 // ----- Regenerate -----
 
 describe('Regenerate (immediate, apply Regen to self)', () => {
-  it('applies Regen 3 to the player statuses', () => {
+  it('applies 3 Regen to the player statuses', () => {
     const player = makePlayer()
     const r = resolveRegenerate(player)
     expect(r.player.statuses).toContainEqual({
@@ -188,9 +188,9 @@ describe('Regen ticks at player turn start', () => {
   })
 
   it('burn ticks BEFORE regen heals so DoT damage applies first', () => {
-    // Burn 3 + Regen 3 with hp=2: burn ticks 3 dmg (player goes to 0,
+    // 3 Burn + 3 Regen with hp=2: burn ticks 3 dmg (player goes to 0,
     // would die — but we test the non-fatal version here). Choose hp
-    // such that we survive: hp=10. Burn 3 dmg → 7 HP, then Regen 3
+    // such that we survive: hp=10. 3 Burn dmg → 7 HP, then 3 Regen
     // heals → 10 HP. Net 0 but the order matters for "would-die" cases.
     const p = makePlayer({
       hp: 10,

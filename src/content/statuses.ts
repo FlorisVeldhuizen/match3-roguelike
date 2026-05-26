@@ -9,15 +9,15 @@ import { registerStatusTemplate } from '../core/combat/statuses'
 // NOTE: Strength does NOT tick down — it sticks until removed. The
 // template stacks=2 is used as the default application magnitude.
 export const STATUS_TEMPLATES: Record<StatusKind, StatusInstance> = {
-  // Burn 2 → ticks 2, then 1 (3 damage total over 2 turns).
+  // 2 Burn → ticks 2, then 1 (3 damage total over 2 turns).
   burn: { kind: 'burn', stacks: 2 },
-  // Vulnerable / Weak 2 → multiplier active for 2 turns.
+  // Vulnerable / 2 Weak → multiplier active for 2 turns.
   vulnerable: { kind: 'vulnerable', stacks: 2 },
   weak: { kind: 'weak', stacks: 2 },
-  // Regen 3 → heals 3, then 2, then 1 (6 HP total over 3 turns).
+  // 3 Regen → heals 3, then 2, then 1 (6 HP total over 3 turns).
   // Mirror of Burn's decay. Used by H4a Regenerate spell.
   regen: { kind: 'regen', stacks: 3 },
-  // Strength 2 → flat +2 to outgoing attacks. Stacks additively, never ticks.
+  // 2 Strength → flat +2 to outgoing attacks. Stacks additively, never ticks.
   strength: { kind: 'strength', stacks: 2 },
 }
 

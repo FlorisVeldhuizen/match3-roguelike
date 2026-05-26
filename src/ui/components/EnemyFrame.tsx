@@ -3,6 +3,8 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
+  type CSSProperties,
   type Dispatch,
   type SetStateAction,
 } from 'react'
@@ -19,6 +21,9 @@ import {
 import { getStatusDef } from '../../content/statuses'
 import { intentDisplay } from '../../content/intentDisplays'
 import { StatusBar } from './StatusBar'
+import { setHoveredEnemy } from '../state/hoveredEnemy'
+import { getHoveredCell, subscribeHoveredCell } from '../state/hoveredCell'
+import { shoveHueFor } from '../state/shoveHues'
 
 const HIT_FLASH_MS = 280
 // Must match (or slightly outlast) the longest .firing-* animation in
@@ -44,6 +49,11 @@ export function EnemyFrame() {
   const playerHp = useGameStore((s) => s.fight.player.hp)
   const playerBlock = useGameStore((s) => s.fight.player.block)
   const animatedPhase = useAnimatedPhase()
+  // Reciprocal-hover: when the player points at a cell that's part of
+  // a swarmer's cluster-shove (source or destination), the matching
+  // enemy frame above lights up in that swarmer's accent hue. Lets the
+  // player trace "whose shove is this" without leaving the board.
+  const hoveredCell = useSyncExternalStore(subscribeHoveredCell, getHoveredCell)
 
   // Displayed HP per enemy, mirrored event-driven so the bar drains on
   // `damage-dealt` (animation-timed) instead of snapping when the store
@@ -53,11 +63,18 @@ export function EnemyFrame() {
     for (const e of enemies) out[e.id] = e.hp
     return out
   })
-  // The badge belongs to the *player phase that's about to end* — it tells
-  // the player "this is what the enemy will do." Once the enemy starts
-  // acting (animated phase = enemy-acting) we hide it; the firing pulse on
-  // the enemy frame represents the intent resolving.
-  const showIntent = animatedPhase === 'player-acting'
+  // Per-enemy "has this enemy fired its intent yet this enemy turn?" flag.
+  // Reset to false for everyone on phase-changed → enemy-acting (start of
+  // the enemy turn). Set to true on enemy-acted (emitted by executeEnemyTurn
+  // after each enemy's action events). Cleared again on intent-telegraphed
+  // (end-of-turn batch — every surviving enemy gets a fresh intent, so the
+  // badge should show again with the new intent).
+  //
+  // The badge then shows per-enemy as: (a) during player phase, always;
+  // (b) during enemy phase, only for enemies that haven't yet acted. Net
+  // effect: badges fade one at a time as each enemy plays out its action,
+  // instead of all hiding at once when the enemy phase starts.
+  const [firedIntent, setFiredIntent] = useState<Record<string, boolean>>({})
 
   // Displayed intent lags the store: it only updates when intent-telegraphed
   // plays (after the enemy has visibly resolved the previous one).
@@ -224,6 +241,27 @@ export function EnemyFrame() {
           ...prev,
           [event.enemyId]: (prev[event.enemyId] ?? 0) + 1,
         }))
+        // Telegraph batch fires at turn end; clear firedIntent so the
+        // newly telegraphed badge shows. Same-frame setState with the
+        // displayedIntent above lands together → badge re-appears with
+        // the new intent.
+        setFiredIntent((prev) => {
+          if (!prev[event.enemyId]) return prev
+          const next = { ...prev }
+          delete next[event.enemyId]
+          return next
+        })
+      } else if (event.kind === 'enemy-acted') {
+        // Fires AFTER this enemy's action events. Mark fired → the
+        // per-enemy badge gate hides this enemy's badge while siblings
+        // that haven't yet acted keep theirs visible.
+        setFiredIntent((prev) => ({ ...prev, [event.enemyId]: true }))
+      } else if (event.kind === 'phase-changed' && event.phase === 'enemy-acting') {
+        // Fresh enemy turn: reset all firedIntent flags so badges show
+        // at the start. (They start showing because firedIntent is
+        // empty AND animatedPhase is still player-acting until the
+        // anim layer updates; either way the gate opens.)
+        setFiredIntent({})
       } else if (event.kind === 'status-applied' && event.target !== 'player') {
         // Apply IMMEDIATELY at event time. Was delayed by
         // TRAIL_ARRIVAL_MS to sync with the particle trail; that delay
@@ -364,6 +402,20 @@ export function EnemyFrame() {
         // inert so the cursor doesn't mislead.
         const selectable =
           !dead && !isTarget && fightPhase === 'player-acting'
+        // Frame lights up when the hovered cell is one of this swarmer's
+        // shove source/destination cells. Uses the displayed (lagged)
+        // intent so it stays in sync with the badge/overlay rather
+        // than the store-immediate intent that updates a frame earlier.
+        const shoveCellHovered =
+          !dead &&
+          hoveredCell !== null &&
+          intent.kind === 'cluster-shove' &&
+          (intent.sources.some(
+            (p) => p.x === hoveredCell.x && p.y === hoveredCell.y,
+          ) ||
+            intent.destinations.some(
+              (p) => p.x === hoveredCell.x && p.y === hoveredCell.y,
+            ))
         return (
           <div
             key={enemy.id}
@@ -379,6 +431,7 @@ export function EnemyFrame() {
               isTrailHit ? 'trail-pulsing' : '',
               isFiring ? `firing-${firingKind}` : '',
               isStaggered ? 'staggered' : '',
+              shoveCellHovered ? 'shove-cell-hovered' : '',
             ]
               .filter(Boolean)
               .join(' ')}
@@ -388,6 +441,10 @@ export function EnemyFrame() {
             onClick={() => {
               if (selectable) setTargetEnemy(enemy.id)
             }}
+            onMouseEnter={() => setHoveredEnemy(enemy.id)}
+            onMouseLeave={() => setHoveredEnemy(null)}
+            onFocus={() => setHoveredEnemy(enemy.id)}
+            onBlur={() => setHoveredEnemy(null)}
             onKeyDown={(e) => {
               if (!selectable) return
               if (e.key === 'Enter' || e.key === ' ') {
@@ -396,14 +453,20 @@ export function EnemyFrame() {
               }
             }}
           >
-            {!dead && showIntent && (
-              <IntentBadge
-                intent={intent}
-                tick={intentTick[enemy.id] ?? 0}
-                lethal={lethalIntent}
-                enemies={enemies}
-              />
-            )}
+            {!dead &&
+              (animatedPhase === 'player-acting' || !firedIntent[enemy.id]) && (
+                <IntentBadge
+                  intent={intent}
+                  tick={intentTick[enemy.id] ?? 0}
+                  lethal={lethalIntent}
+                  enemies={enemies}
+                  shoveHue={
+                    intent.kind === 'cluster-shove'
+                      ? shoveHueFor(enemies, enemy.id)
+                      : null
+                  }
+                />
+              )}
             <div className="enemy-sprite" aria-hidden>
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
@@ -459,11 +522,13 @@ function IntentBadge({
   tick,
   lethal,
   enemies,
+  shoveHue,
 }: {
   intent: Intent
   tick: number
   lethal: boolean
   enemies: Enemy[]
+  shoveHue: number | null
 }) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -518,6 +583,11 @@ function IntentBadge({
         // pop-in animation replays for the freshly telegraphed intent.
         key={`${intent.kind}-${display.number ?? 'x'}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
+        style={
+          shoveHue !== null
+            ? ({ ['--shove-hue']: String(shoveHue) } as CSSProperties)
+            : undefined
+        }
         role="img"
         aria-label={`${display.label}${allyTargetName ? ` → ${allyTargetName}` : ''}${lethal ? ' — lethal!' : ''}`}
         tabIndex={0}
@@ -540,7 +610,7 @@ function IntentBadge({
             {getStatusDef(intent.onHit.status).icon}
             {/* Rider stacks — surfaces the magnitude of the applied
                 status so the player can read the full threat as a
-                single sentence: "⚔ 3 🔥 2" → "hit for 3, apply Burn 2".
+                single sentence: "⚔ 3 🔥 2" → "hit for 3, apply 2 Burn".
                 The chip will show the same number once it lands. */}
             <span className="intent-rider-amount">{intent.onHit.stacks}</span>
           </span>

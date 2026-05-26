@@ -20,10 +20,13 @@ import {
   emitDebugSwap,
   getTimeScale,
   isStepMode,
+  isUnlockAllSpells,
   setStepMode,
   setTimeScale,
+  setUnlockAllSpells,
   subscribeStepMode,
   subscribeTimeScale,
+  subscribeUnlockAllSpells,
 } from '../../debug/devControls'
 
 // Single header-anchored popover that combines all runtime settings:
@@ -64,8 +67,10 @@ export function SettingsPanel() {
   // hook order stable, but the values they observe are inert in prod).
   const [speed, setSpeed] = useState(getTimeScale())
   const [stepOn, setStepOn] = useState(isStepMode())
+  const [unlockAll, setUnlockAll] = useState(isUnlockAllSpells())
   useEffect(() => subscribeTimeScale(setSpeed), [])
   useEffect(() => subscribeStepMode(setStepOn), [])
+  useEffect(() => subscribeUnlockAllSpells(setUnlockAll), [])
 
   // Close on outside click / Escape (same pattern the old FXToggle used).
   useEffect(() => {
@@ -107,7 +112,14 @@ export function SettingsPanel() {
   }
 
   const forceFight = (
-    archetype: 'skirmisher' | 'brute' | 'smolder' | 'defender' | 'rallier',
+    archetype:
+      | 'skirmisher'
+      | 'brute'
+      | 'smolder'
+      | 'defender'
+      | 'rallier'
+      | 'caster'
+      | 'swarmer',
   ) => {
     useGameStore.getState().debugForceFight(archetype)
     setOpen(false)
@@ -115,6 +127,11 @@ export function SettingsPanel() {
 
   const forceTrio = () => {
     useGameStore.getState().debugForceFight(['skirmisher', 'brute', 'smolder'])
+    setOpen(false)
+  }
+
+  const forceSwarm = () => {
+    useGameStore.getState().debugForceFight(['swarmer', 'swarmer', 'swarmer'])
     setOpen(false)
   }
 
@@ -244,9 +261,30 @@ export function SettingsPanel() {
                   <button
                     type="button"
                     className="settings-chip"
+                    onClick={() => forceFight('caster')}
+                  >
+                    Caster
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={() => forceFight('swarmer')}
+                  >
+                    Swarmer
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
                     onClick={forceTrio}
                   >
                     Trio
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={forceSwarm}
+                  >
+                    Swarm×3
                   </button>
                 </div>
               </div>
@@ -281,6 +319,17 @@ export function SettingsPanel() {
               >
                 Step ▶
               </button>
+              <label
+                className="settings-row"
+                title="Show the full spell pool in the tray. Off = starter kit only (baseline kit + ultimate); rest are treated as discoverable."
+              >
+                <input
+                  type="checkbox"
+                  checked={unlockAll}
+                  onChange={(e) => setUnlockAllSpells(e.target.checked)}
+                />
+                <span className="settings-label">Unlock all spells</span>
+              </label>
             </section>
           ) : null}
         </div>

@@ -1,8 +1,11 @@
 import { Sprite, type Container, type Texture } from 'pixi.js'
 import type { GameEvent, GemColor, MatchShape, Pos, StatusKind } from '../types'
+import { BOARD_WIDTH } from '../types'
+import { useGameStore } from '../core/state/store'
 import { tweenSwap } from './animations/swap'
 import { tweenClear } from './animations/clear'
 import { tweenDrop } from './animations/drop'
+import { tweenShoveArc } from './animations/shove'
 import { emitGameEvent } from '../core/events/emitter'
 import { awaitStep, getTimeScale } from '../debug/devControls'
 import { statusKindFromDamageSource } from '../core/combat/statuses'
@@ -50,6 +53,26 @@ function shuffledColumnOrder(width: number): number[] {
   return order
 }
 const HIT_STOP_MS = 80 // pause-frames on 4+ matches before clear plays
+
+// Event kinds that make up the end-of-enemy-turn telegraph batch. Deferred
+// in executeEnemyTurn so they all fire together; the play() loop detects
+// the trailing run of these kinds and emits them in one frame so the
+// reveal reads as "all new intents pop in at once" instead of "intents
+// tick in one by one across the enemy turn."
+const TELEGRAPH_BATCH_KINDS = new Set<GameEvent['kind']>([
+  'intent-telegraphed',
+  'enemy-block-gained',
+  'column-smash-placed',
+  'color-hex-placed',
+  'cluster-shove-placed',
+  'petrify-placed',
+  'tile-burn-placed',
+])
+// Swarmer cluster-shove: flight time for each gem arc from source to
+// destination. Long enough to read as a deliberate "throw" beat
+// (distinct from a swap or fall); short enough that 2-3 swarmers
+// shoving in parallel doesn't stall the enemy turn.
+const SHOVE_FLIGHT_MS = 420
 
 // Brief freeze before damage popup + shake. Heavy hits (5+) get a
 // dedicated "ouch" beat; lighter hits get a barely-perceptible nudge.
@@ -165,6 +188,29 @@ const FLAME_PALETTE: readonly number[] = [
 // Bright molten core (replaces the default pearl white) so the bright
 // center of each spark reads as fire, not a sparkle.
 const FLAME_CORE_HEX = 0xffe39a
+
+// Caster hex palette — purples in the same role FLAME_PALETTE plays for
+// Smolder's burn. Deeper violet base + brighter lavender tip so the
+// trail reads as "arcane curse incoming" against the board's gem
+// palette. Core is a bright lavender-white to keep the bright center
+// of each spark legible against dark gems.
+const HEX_PALETTE: readonly number[] = [
+  0x6b21a8, // arcane-1: deep violet
+  0x9333ea, // arcane-2: bright purple
+  0xa855f7, // arcane-3: lavender
+  0xd8b4fe, // arcane-4: pale lavender tip
+] as const
+const HEX_CORE_HEX = 0xeed6ff
+
+// Defender petrify palette — cool greys with a slight blue-grey hue,
+// matching the .petrify-cell wash. No bright tip color; petrify is
+// heavy and grounded, not flickering.
+const STONE_PALETTE: readonly number[] = [
+  0x4a5260, // stone-1: deep grey
+  0x6b7888, // stone-2: medium grey
+  0x96a4b8, // stone-3: light grey-blue
+] as const
+const STONE_CORE_HEX = 0xd6dde7
 
 // Bright gold-white core for blessed trails — replaces the default
 // pearl-white so each pool-trail particle reads as "lit by something
@@ -367,6 +413,12 @@ export class AnimationController {
   // with blessed=true triggers blessed-style trails for its own pool
   // credits regardless of the rest of the cascade.
   private currentMatchBlessed = false
+  // Swarmer cluster-shove: populated when cluster-shove-resolved animates a
+  // gem AWAY from its source. The immediately-following gems-cleared event
+  // for those same source cells then suppresses its burst FX (the gem
+  // visibly flew off — a clear-burst on top would read as both a move AND
+  // a destruction). Drained after each gems-cleared.
+  private shovedSources = new Set<string>()
 
   constructor(opts: {
     parent: Container
@@ -558,6 +610,57 @@ export class AnimationController {
             this.spawnCascadeCallout(event.level + 1, anchor)
             continue
           }
+          // Telegraph batch: enemyTurn defers all enemy-block-gained
+          // (telegraph pre-apply), intent-telegraphed, and verb-placed
+          // events to the END of the event queue so they fire together.
+          // When we hit one and the rest of the queue is also telegraph
+          // (or a terminal phase-changed), emit them all in a single
+          // frame with one shared closing beat — without this, each
+          // would impose its own per-event wait (320ms enemyBlockGained
+          // + 80ms intentTelegraphed per enemy) and the player would
+          // still see them tick in one by one.
+          if (TELEGRAPH_BATCH_KINDS.has(event.kind)) {
+            let allTelegraph = true
+            for (let k = i; k < events.length; k++) {
+              const e = events[k]
+              if (!e) continue
+              if (e.kind === 'phase-changed') continue
+              if (!TELEGRAPH_BATCH_KINDS.has(e.kind)) {
+                allTelegraph = false
+                break
+              }
+            }
+            if (allTelegraph) {
+              while (i < events.length) {
+                const e = events[i]
+                if (!e || !TELEGRAPH_BATCH_KINDS.has(e.kind)) break
+                emitGameEvent(e)
+                if (e.kind === 'enemy-block-gained') {
+                  this.spawnEnemyBlockPopup(e.enemyId, e.amount)
+                } else if (e.kind === 'tile-burn-placed') {
+                  this.spawnVerbToCellsTrail(
+                    e.enemyId,
+                    e.cells,
+                    FLAME_PALETTE,
+                    FLAME_CORE_HEX,
+                  )
+                }
+                i++
+              }
+              // Single closing beat so the eye lands on the freshly
+              // revealed intents before phase-changed kicks the player
+              // turn off. Use intentTelegraphed (the shorter beat —
+              // enemyBlockGained's longer 320ms was per-event-pacing and
+              // is unnecessary now that they all pop together).
+              await wait(BEAT.intentTelegraphed)
+              // Outer for-loop increments i, but we already advanced
+              // past the last telegraph event. Back off by one so the
+              // next iteration lands on (events.length) or the
+              // phase-changed.
+              i--
+              continue
+            }
+          }
           await this.playEvent(event)
         }
       } finally {
@@ -604,10 +707,21 @@ export class AnimationController {
         if (event.grantsExtraTurn) this.spawnExtraTurnCallout(event.cells)
         if (event.size >= 4) await wait(HIT_STOP_MS)
         return
-      case 'gems-cleared':
-        this.spawnBurstsForCells(event.cells)
-        await this.animateClear(event.cells)
+      case 'gems-cleared': {
+        // Suppress burst FX AND the clear tween for cells the shove handler
+        // already animated away. The gem visibly flew off, so a burst at the
+        // source would double-read; the clear tween is worse — if another
+        // shove flew into this source (chained or cross-swarmer moves), the
+        // just-arrived sprite would be destroyed here, leaving a permanent
+        // visual gap that gravity won't refill (state has a cell there).
+        const cells = this.shovedSources.size
+          ? event.cells.filter((c) => !this.shovedSources.has(keyOf(c)))
+          : event.cells
+        this.shovedSources.clear()
+        this.spawnBurstsForCells(cells)
+        await this.animateClear(cells)
         return
+      }
       case 'gems-fell':
         await this.animateFall(event.movements)
         return
@@ -791,6 +905,9 @@ export class AnimationController {
       case 'status-expired':
         await wait(BEAT.statusExpired)
         return
+      case 'cluster-shove-resolved':
+        await this.animateClusterShove(event.enemyId, event.moves)
+        return
       case 'tile-burn-placed':
         // Generic "enemy verb → board cells" trail. Fires one trail per
         // affected cell from the casting enemy's frame to that cell's
@@ -803,6 +920,58 @@ export class AnimationController {
           FLAME_PALETTE,
           FLAME_CORE_HEX,
         )
+        return
+      case 'color-hex-fired': {
+        // Caster fires hex → purple trail flies from the caster to
+        // every gem of the hexed colour currently on the board. Cells
+        // are read from the live store at fire time (hex targets a
+        // colour, not a fixed cell set, so the event payload only
+        // carries the colour). Mirrors tile-burn-placed's enemy →
+        // cells beat but with the arcane palette.
+        const board = useGameStore.getState().board.cells
+        const cells: Pos[] = []
+        for (let y = 0; y < board.length; y++) {
+          const row = board[y]
+          if (!row) continue
+          for (let x = 0; x < row.length; x++) {
+            if (row[x]?.gemColor === event.color) cells.push({ x, y })
+          }
+        }
+        if (cells.length > 0) {
+          this.spawnVerbToCellsTrail(
+            event.enemyId,
+            cells,
+            HEX_PALETTE,
+            HEX_CORE_HEX,
+          )
+        }
+        return
+      }
+      case 'petrify-fired': {
+        // Defender fires petrify → grey trail flies from the defender
+        // to every cell in the locked row. Heavy, grounded palette
+        // (no flickering tip) matches the static "frozen" reading of
+        // the .petrify-cell wash.
+        const cells: Pos[] = []
+        for (let x = 0; x < BOARD_WIDTH; x++) {
+          cells.push({ x, y: event.row })
+        }
+        this.spawnVerbToCellsTrail(
+          event.enemyId,
+          cells,
+          STONE_PALETTE,
+          STONE_CORE_HEX,
+        )
+        return
+      }
+      case 'column-smash-resolved':
+        // Brute smashes a column → hard shake to sell the impact.
+        // Magnitude 1.1 sits between the cascade-streak shake (0.6) and
+        // the kill shake (1.6) — heavier than streak (it's a board-
+        // altering hit, not a follow-up), lighter than kill (the column
+        // refills, the fight continues). No particles per design call —
+        // the gems-cleared burst already carries the visual impact.
+        emitGameEvent({ kind: 'screen-shake', magnitude: 1.1 })
         return
       case 'tile-blessed-placed':
         // Match-5 reward beat. Fires after gems-spawned in the cascade
@@ -951,6 +1120,99 @@ export class AnimationController {
     })
     await Promise.all(promises)
     for (const { sprite, to } of moves) this.setSprite(to, sprite)
+  }
+
+  // Swarmer cluster-shove: each surviving (source, destination) pair flies
+  // the source sprite on an arc to its destination. The pre-existing
+  // destination sprite (if any) is destroyed at arrival — the shove is
+  // overwriting whatever was there. Source cells get vacated from the
+  // sprite grid up-front so the upcoming gems-cleared event finds null
+  // (no double-destroy); shovedSources also flags those cells so the
+  // burst FX in gems-cleared is suppressed for them.
+  private async animateClusterShove(
+    enemyId: string,
+    moves: { source: Pos; destination: Pos; color: GemColor }[],
+  ): Promise<void> {
+    if (moves.length === 0) return
+    type Flight = { sprite: Sprite; destination: Pos }
+    const flights: Flight[] = []
+    for (const m of moves) {
+      const sprite = this.getSprite(m.source)
+      if (!sprite) continue
+      this.setSprite(m.source, null)
+      this.shovedSources.add(keyOf(m.source))
+      flights.push({ sprite, destination: m.destination })
+    }
+    if (flights.length === 0) return
+    await Promise.all(
+      flights.map(({ sprite, destination }) => {
+        const target = this.geometry.cellCenter(destination.x, destination.y)
+        return tweenShoveArc(sprite, target.x, target.y, SHOVE_FLIGHT_MS)
+      }),
+    )
+    // Commit: dispose any existing destination sprites and slot the flown
+    // sprites into the grid. Done after all flights resolve so concurrent
+    // shoves don't trip over each other if their paths cross.
+    for (const { sprite, destination } of flights) {
+      const old = this.getSprite(destination)
+      if (old) {
+        this.parent.removeChild(old)
+        old.destroy()
+      }
+      this.setSprite(destination, sprite)
+    }
+    // Landing puff at each destination. A small burst in the swarmer's
+    // hue gives the "thud" the long arc was missing — without it the
+    // gem just slides into place and the impact reads silently. Tuned
+    // small (count/speed/life all below match-clear defaults) so multiple
+    // landings in a 2-cell cluster don't feel like a celebration.
+    this.spawnShoveLandingBursts(enemyId, flights.map((f) => f.destination))
+  }
+
+  // HSL→hex helper for the shove landing puff colour. shoveHueFor returns
+  // a hue in degrees; the burst pipeline wants a 24-bit hex. Saturation
+  // and lightness match the source halo's lit values so the puff reads
+  // as the same coloured energy spilling on impact.
+  private hueToHex(hue: number): number {
+    const s = 0.85
+    const l = 0.65
+    const k = (n: number) => (n + hue / 30) % 12
+    const a = s * Math.min(l, 1 - l)
+    const f = (n: number) =>
+      l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+    const r = Math.round(f(0) * 255)
+    const g = Math.round(f(8) * 255)
+    const b = Math.round(f(4) * 255)
+    return (r << 16) | (g << 8) | b
+  }
+
+  private spawnShoveLandingBursts(enemyId: string, destinations: Pos[]): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const enemies = useGameStore.getState().fight.enemies
+    const idx = enemies.findIndex((e) => e.id === enemyId)
+    // Same palette + ordering as ClusterShoveOverlay's shoveHueFor.
+    // Inlined so this module doesn't reach into ui/state/ for an
+    // animation-time read. If the enemy died mid-flight (no match), fall
+    // back to the lead hue rather than dropping the puff entirely.
+    const SHOVE_HUES = [170, 290, 38, 130] as const
+    const hue =
+      idx >= 0 ? SHOVE_HUES[idx % SHOVE_HUES.length] : SHOVE_HUES[0]
+    const hex = this.hueToHex(hue)
+    for (const dst of destinations) {
+      const at = this.cellScreenCenter(dst)
+      if (!at) continue
+      overlay.spawnBurst(at, hex, {
+        count: 8,
+        speedMin: 55,
+        speedMax: 130,
+        radiusMin: 1.6,
+        radiusMax: 3.2,
+        lifeMs: 360,
+        gravity: 90,
+        spread: 0.9,
+      })
+    }
   }
 
   // No-legal-swaps reshuffle. Plays a "NO MOVES" banner + screenshake, then

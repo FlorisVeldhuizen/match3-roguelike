@@ -20,6 +20,16 @@ export const GEM_COLORS: readonly GemColor[] = [
 export type CellFlags = {
   burning?: number
   blessed?: true
+  // H2c: Swarmer cluster-shove flag. Pre-flagged at telegraph time on
+  // each source cell of the 2-cell run; each cell carries its own
+  // destination position so the resolver can shove cells independently
+  // (if one source is matched before fire, only the other shoves).
+  // Travels with the gem under gravity (same as `burning`). No duration
+  // — fires on the swarmer's next turn, then the flag is consumed.
+  // `sourceEnemyId` scopes the flag so a board with multiple swarmers
+  // resolves one swarmer's shoves at a time (each swarmer's intent fires
+  // in turn and only picks up its own flagged cells).
+  pendingShove?: { dst: Pos; sourceEnemyId: string }
 }
 
 // H2b: Defender's petrify-row is *position-bound*, not gem-bound — the
@@ -69,7 +79,7 @@ export type StatusKind = 'burn' | 'vulnerable' | 'weak' | 'regen' | 'strength'
 // One number per status (Slay-the-Spire pattern). `stacks` is both
 // "magnitude" and "turns left" — every tick decrements stacks by 1, and
 // for Burn the tick also deals damage equal to current stacks. So a
-// Burn 3 deals 3 → 2 → 1 → expires (6 damage over 3 turns). Vulnerable
+// 3 Burn deals 3 → 2 → 1 → expires (6 damage over 3 turns). Vulnerable
 // and Weak don't tick damage; their multiplier is active as long as
 // stacks > 0.
 export type StatusInstance = {
@@ -220,6 +230,33 @@ export type GameEvent =
   // active lockout map). FX layer rides this for the weakening →
   // released animation hand-off.
   | { kind: 'petrify-row-ticked'; row: number; remaining: number }
+  // H2c: Caster telegraphs which colour will be hexed next phase.
+  // Overlay pre-renders a warning pulse on every gem of that colour.
+  | { kind: 'color-hex-placed'; enemyId: string; color: GemColor }
+  // H2c: Caster's hex resolves — the colour is added to
+  // FightState.hexedColors for `turnsLeft` enemy phases.
+  | { kind: 'color-hex-fired'; enemyId: string; color: GemColor; turnsLeft: number }
+  // H2c: A hex entry ticked down; remaining=0 means it just expired
+  // and was removed from hexedColors.
+  | { kind: 'color-hex-ticked'; color: GemColor; remaining: number }
+  // H2c: Match landed a hexed colour — Weak applied to player.
+  | { kind: 'hex-triggered'; color: GemColor; stacks: number; cells: Pos[] }
+  // H2c: Swarmer telegraphs the source 2-cell run + destination cells.
+  // Overlay reads this for the warning ring + arrow.
+  | {
+      kind: 'cluster-shove-placed'
+      enemyId: string
+      sources: Pos[]
+      destinations: Pos[]
+    }
+  // H2c: Shove resolves. `moves` carries only the surviving source/dst
+  // pairs (cells the player matched away pre-fire don't shove). May be
+  // empty if every source was countered.
+  | {
+      kind: 'cluster-shove-resolved'
+      enemyId: string
+      moves: { source: Pos; destination: Pos; color: GemColor }[]
+    }
   // Emitted when a match clears one or more cells whose `burning` flag was
   // active. The consumer (store) computes Burn magnitude from cells.length
   // plus a content-side bonus (see BURN_FROM_TILE_BONUS in content/statuses).
@@ -257,6 +294,11 @@ export type GameEvent =
   // the enemy "spent" their turn recovering instead of acting. Drives the
   // "Staggered" banner + enemy-frame recoil.
   | { kind: 'enemy-staggered'; enemyId: string }
+  // Fired AFTER an enemy's intent has fully resolved (action events
+  // already pushed). Drives the per-enemy intent-badge fade so each
+  // badge stays visible until ITS action completes, instead of all
+  // badges hiding at the start of the enemy phase.
+  | { kind: 'enemy-acted'; enemyId: string }
   | { kind: 'intent-telegraphed'; enemyId: string; intent: Intent }
   | { kind: 'extra-turn-granted' }
   | { kind: 'turn-ended' }
@@ -298,6 +340,8 @@ export type IntentKind =
   | 'shield-ally'
   | 'column-smash'
   | 'petrify-row'
+  | 'color-hex'
+  | 'cluster-shove'
 
 // Optional status rider carried on attack intents. Smolder uses this
 // to apply Burn on hit. Surfaced on the intent badge so the player
@@ -320,8 +364,26 @@ export type Intent =
   // telegraph can pre-flag the threatened cells (counter-play loop).
   | { kind: 'column-smash'; column: number }
   | { kind: 'petrify-row'; row: number }
+  // H2c: Caster's color-hex picks a gem colour at roll time; on fire it
+  // pushes the entry into FightState.hexedColors. While the entry is
+  // active, matching gems of that colour applies Weak to the player
+  // (per-cell stacks). Ticks down on each enemy phase.
+  | { kind: 'color-hex'; color: GemColor }
+  // H2c: Swarmer cluster-shove picks two adjacent source cells + two
+  // destination positions at roll time. Telegraph flags the source
+  // cells with `pendingShove`; on fire, surviving flagged cells write
+  // their colour to their destination and gravity refills the source.
+  // `sources` and `destinations` are aligned by index (sources[i] → destinations[i]).
+  | { kind: 'cluster-shove'; sources: Pos[]; destinations: Pos[] }
 
-export type EnemyArchetype = 'brute' | 'smolder' | 'skirmisher' | 'rallier' | 'defender'
+export type EnemyArchetype =
+  | 'brute'
+  | 'smolder'
+  | 'skirmisher'
+  | 'rallier'
+  | 'defender'
+  | 'caster'
+  | 'swarmer'
 
 export type PhasePools = {
   red: number
@@ -451,7 +513,15 @@ export type FightState = {
   // True for the boss-column node. Used to route the post-fight transition
   // to the run-victory screen instead of the reward roll.
   isBoss?: boolean
+  // H2c: Caster's color-hex active set. Board-global (not per-cell):
+  // matching gems of an active colour applies Weak to the player at
+  // match time. Ticks at start of enemy phase; entries expire when
+  // turnsLeft reaches 0. Multiple casters can stack independent hexes,
+  // but two entries for the same colour collapse to max(turnsLeft).
+  hexedColors?: HexedColor[]
 }
+
+export type HexedColor = { color: GemColor; turnsLeft: number }
 
 // H1: branching procedural map. Layout per 02-scope §Map structure —
 // 4 encounter columns + boss column 5. Nodes are identified by stable

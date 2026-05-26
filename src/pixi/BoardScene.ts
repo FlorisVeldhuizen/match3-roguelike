@@ -19,6 +19,7 @@ import {
   subscribeTimeScale,
 } from '../debug/devControls'
 import { findAllValidSwaps } from '../core/board/generation'
+import { setHoveredCell } from '../ui/state/hoveredCell'
 
 // Idle-hint nudge: after this long without player activity, pulse a random
 // pair of gems that swap into a match. New pair every NUDGE_CYCLE_MS.
@@ -838,6 +839,12 @@ export class BoardScene {
 
     const onPointerMove = (ev: PointerEvent) => {
       this.resetNudgeIdle()
+      // Broadcast the cell under the cursor for HTML overlays that can't
+      // catch hover themselves (they're pointer-events: none so swaps
+      // pass through to the canvas). Runs on every move regardless of
+      // phase — the cluster-shove telegraph reveals on hover during
+      // enemy turns too. Cheap: setHoveredCell short-circuits on no-op.
+      setHoveredCell(this.clientToCell(ev.clientX, ev.clientY))
       const active = this.activePointer
       if (active) {
         if (active.pointerId !== ev.pointerId) return

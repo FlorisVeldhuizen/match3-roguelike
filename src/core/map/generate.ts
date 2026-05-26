@@ -48,29 +48,37 @@ type ArchetypeWeight = { archetype: EnemyArchetype; weight: number }
 
 const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
   // col 0: easy start — Skirmisher heavy, the others present but rare.
-  // Defender is absent here (its slow-grind identity wants meaningful HP
-  // pressure, which the early curve doesn't have yet).
+  // Defender / Caster / Swarmer absent here (their identities want
+  // meaningful HP pressure or multi-enemy plumbing, which the early
+  // curve doesn't have yet).
   [
     { archetype: 'skirmisher', weight: 6 },
     { archetype: 'brute', weight: 2 },
     { archetype: 'smolder', weight: 1 },
+    { archetype: 'swarmer', weight: 1 },
   ],
   // col 1: balanced — Skirmisher still common; Defender debuts at low
   // weight so the player meets the petrify lockout before the elite
-  // column lands a heavier Defender variant.
+  // column lands a heavier Defender variant. Caster also debuts here
+  // so the Weak rider / hex pressure shows up before col 2.
   [
     { archetype: 'skirmisher', weight: 4 },
     { archetype: 'brute', weight: 3 },
     { archetype: 'smolder', weight: 2 },
     { archetype: 'defender', weight: 1 },
+    { archetype: 'caster', weight: 1 },
+    { archetype: 'swarmer', weight: 1 },
   ],
   // col 2 (incl. elite): heavier hitters dominate; Skirmisher becomes
-  // filler in multi-enemy groups rather than a centerpiece. Defender
-  // pulls full weight as a mid-tier threat alongside Brute / Smolder.
+  // filler in multi-enemy groups rather than a centerpiece. Caster /
+  // Swarmer pull full weight as mid-tier disruption alongside the
+  // existing wall (Defender) and hitters (Brute / Smolder).
   [
     { archetype: 'brute', weight: 4 },
     { archetype: 'smolder', weight: 3 },
     { archetype: 'defender', weight: 3 },
+    { archetype: 'caster', weight: 2 },
+    { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
   ],
   // col 3: only rest/shop here today; left for symmetry / future tiers
@@ -78,6 +86,8 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'brute', weight: 4 },
     { archetype: 'smolder', weight: 3 },
     { archetype: 'defender', weight: 2 },
+    { archetype: 'caster', weight: 2 },
+    { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
   ],
   // col 4: boss column; not used by the weight roller
@@ -106,6 +116,19 @@ const ROLE_MIXED_COMPOSITIONS: EnemyArchetype[][] = [
   // Strength stacks make the Defender's small attack genuinely
   // dangerous, while the petrify slows the player down.
   ['defender', 'rallier'],
+  // H2c: Caster + Rallier — debuff carrier protected by a buffer.
+  // Rallier's Strength makes the Caster's small attack matter while
+  // the hex bleeds Weak onto the player's match payouts.
+  ['caster', 'rallier'],
+  // H2c: 2-3 Swarmer cluster — group spawn matches Swarmer's design
+  // identity ("spawn in groups"). Cluster-shove fires from multiple
+  // sources every turn, layering disruption.
+  ['swarmer', 'swarmer'],
+  ['swarmer', 'swarmer', 'swarmer'],
+  // H2c: Defender + Caster — wall + hex. Player has to route around
+  // petrified rows while avoiding the hexed colour. Punishing for
+  // greedy match planners.
+  ['defender', 'caster'],
 ]
 
 // Probability (out of 10) that a mid-column multi-enemy fight node draws
