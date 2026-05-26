@@ -114,5 +114,27 @@ export function intentDisplay(intent: Intent): IntentDisplay {
         label: `Shoves ${intent.sources.length} gems`,
         description: `Next turn, ${intent.sources.length} flagged gems get shoved to a new spot — their colours overwrite the destination cells. Match the source gems first to deny the shove.`,
       }
+    case 'color-drain': {
+      const drainName =
+        intent.color.charAt(0).toUpperCase() + intent.color.slice(1)
+      return {
+        icon: '🩸',
+        label: `Drains ${drainName}`,
+        description: (
+          <>
+            Next turn, {drainName} gems are cursed. Matching them while the
+            drain is up heals this enemy for every gem matched. Avoid
+            the colour or kill the source.
+          </>
+        ),
+      }
+    }
+    case 'trick':
+      return {
+        icon: '❓',
+        label: 'Scheming…',
+        description:
+          'This enemy is unpredictable — their next action could be an attack or a block. Prepare for either.',
+      }
   }
 }

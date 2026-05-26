@@ -15,6 +15,7 @@ import {
 } from '../../relics/engine'
 import {
   type CombatPhase,
+  type DrainedColor,
   type GameEvent,
   type GemColor,
   type HexedColor,
@@ -24,6 +25,7 @@ import {
   type RunPhase,
 } from '../../../types'
 import {
+  tickDrainedColors,
   tickFlagDuration,
   tickHexedColors,
   tickPetrifiedRows,
@@ -85,6 +87,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
       current.fight.enemies,
       current.fight.targetEnemyId,
       current.fight.hexedColors ?? [],
+      current.fight.drainedColors ?? [],
     )
     player = processed.player
     let enemies = processed.enemies
@@ -119,6 +122,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
     const tailEvents: GameEvent[] = []
     let tickedPetrifiedRows: PetrifiedRows = current.board.petrifiedRows
     let tickedHexedColors: HexedColor[] = current.fight.hexedColors ?? []
+    let tickedDrainedColors: DrainedColor[] = current.fight.drainedColors ?? []
 
     const anyEnemyAlive = enemies.some((e) => e.hp > 0)
     const extraTurn = anyEnemyAlive && hasExtraTurnMatch(swap.events)
@@ -171,6 +175,11 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         tickedHexedColors = hexTick.hexedColors
         tailEvents.push(...hexTick.events)
 
+        // Drain ticks: same pattern as hex ticks
+        const drainTick = tickDrainedColors(current.fight.drainedColors ?? [])
+        let tickedDrainedColors = drainTick.drainedColors
+        tailEvents.push(...drainTick.events)
+
         const enemyResult = executeEnemyTurn(
           player,
           enemies,
@@ -179,12 +188,14 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
           tickedPetrifiedRows,
           tickedHexedColors,
           targetEnemyId,
+          tickedDrainedColors,
         )
         player = enemyResult.player
         enemies = enemyResult.enemies
         finalBoard = enemyResult.board
         tickedPetrifiedRows = enemyResult.petrifiedRows
         tickedHexedColors = enemyResult.hexedColors
+        tickedDrainedColors = enemyResult.drainedColors
         enemyRng = enemyResult.rng
         phase = enemyResult.phase
         targetEnemyId = enemyResult.targetEnemyId
@@ -270,6 +281,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
       s.fight.enemies = enemies
       s.fight.targetEnemyId = targetEnemyId
       s.fight.hexedColors = tickedHexedColors
+      s.fight.drainedColors = tickedDrainedColors
       s.pendingReward = pendingReward
       s.runPhase = nextRunPhase
       s.map.completedNodeIds = completedNodeIds

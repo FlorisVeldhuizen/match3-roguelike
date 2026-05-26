@@ -1,10 +1,12 @@
 import {
   MANA_CAPS,
+  type DrainedColor,
   type Enemy,
   type GameEvent,
   type HexedColor,
   type Player,
 } from '../../types'
+import { getArchetype } from './archetypeRegistry'
 import { applyMultiplier } from './math'
 import { getCascadeMultiplier } from './multipliers'
 import {
@@ -17,12 +19,27 @@ import { applyMatchRedDamage, pickNextTarget } from './aoe'
 import { applyStatusToList } from './statuses'
 import { getStatusTemplate, BURN_FROM_TILE_BONUS } from './statuses'
 
+function checkEnrage(enemies: Enemy[], stream: GameEvent[]): Enemy[] {
+  return enemies.map((e) => {
+    if (e.enraged || e.hp <= 0) return e
+    const def = getArchetype(e.archetype)
+    if (!def.enragePattern) return e
+    const threshold = def.enrageThreshold ?? 0.5
+    if (e.hp / e.maxHp <= threshold) {
+      stream.push({ kind: 'enemy-enraged', enemyId: e.id })
+      return { ...e, enraged: true, nextIntentIndex: -1 }
+    }
+    return e
+  })
+}
+
 export function processCascadeEvents(
   cascadeEvents: readonly GameEvent[],
   initialPlayer: Player,
   initialEnemies: Enemy[],
   initialTargetEnemyId: string | null,
   hexedColors: readonly HexedColor[] = [],
+  drainedColors: readonly DrainedColor[] = [],
 ): {
   player: Player
   enemies: Enemy[]
@@ -70,6 +87,7 @@ export function processCascadeEvents(
     if (ev.kind !== 'match-found') continue
 
     const surgeConsumed = player.surgeArmed === true
+    let chainConsumed = false
     const effectiveCascade = surgeConsumed ? cascadeLevel + 2 : cascadeLevel
 
     const cascadeMult = getCascadeMultiplier(effectiveCascade)
@@ -135,6 +153,28 @@ export function processCascadeEvents(
       })
     }
 
+    // Color-drain: matching a drained color heals the draining enemy.
+    for (const drain of drainedColors) {
+      if (drain.color !== ev.color) continue
+      const drainEnemy = enemies.find((e) => e.id === drain.enemyId && e.hp > 0)
+      if (!drainEnemy) continue
+      const healAmount = ev.cells.length
+      const healedHp = Math.min(drainEnemy.maxHp, drainEnemy.hp + healAmount)
+      const actualHeal = healedHp - drainEnemy.hp
+      if (actualHeal > 0) {
+        enemies = enemies.map((e) =>
+          e.id === drain.enemyId ? { ...e, hp: healedHp } : e,
+        )
+        stream.push({
+          kind: 'drain-triggered',
+          color: drain.color,
+          healAmount: actualHeal,
+          enemyId: drain.enemyId,
+          cells: ev.cells,
+        })
+      }
+    }
+
     const isAoe =
       ev.shape === 'T' || ev.shape === 'L' || (ev.shape === 'line' && ev.size === 5)
 
@@ -147,15 +187,18 @@ export function processCascadeEvents(
         if (player.pendingSpells.includes('volley')) continue
         const skewerConsumed = player.skewerArmed === true
         const dmgAmount = skewerConsumed ? amount * 2 : amount
+        chainConsumed = player.chainLightningArmed === true
         const aoe = applyMatchRedDamage(
           enemies,
           targetEnemyId,
           dmgAmount,
           player.statuses,
-          isAoe,
+          isAoe || chainConsumed,
         )
         enemies = aoe.enemies
         stream.push(...aoe.events)
+        // Check enrage after damage
+        enemies = checkEnrage(enemies, stream)
         for (const killedId of aoe.killedIds) {
           stream.push({ kind: 'enemy-killed', enemyId: killedId })
           const killEvents = runOnEnemyKilled(
@@ -193,6 +236,14 @@ export function processCascadeEvents(
         pendingSpells: player.pendingSpells.filter((id) => id !== 'surge'),
       }
       stream.push({ kind: 'pending-effect-resolved', spellId: 'surge' })
+    }
+    if (chainConsumed) {
+      player = {
+        ...player,
+        chainLightningArmed: false,
+        pendingSpells: player.pendingSpells.filter((id) => id !== 'chain-lightning'),
+      }
+      stream.push({ kind: 'pending-effect-resolved', spellId: 'chain-lightning' })
     }
   }
 

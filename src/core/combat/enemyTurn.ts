@@ -2,6 +2,7 @@ import type { RngState } from '../rng/mulberry32'
 import type {
   Cell,
   CombatPhase,
+  DrainedColor,
   Enemy,
   GameEvent,
   HexedColor,
@@ -10,6 +11,7 @@ import type {
   Player,
 } from '../../types'
 import { applyIntentTelegraph, rollIntent } from './intents'
+import { getArchetype } from './archetypeRegistry'
 import { applyDamage } from './damage'
 import { tickStatuses } from './statuses'
 import {
@@ -17,6 +19,7 @@ import {
   resolveBlockIntent,
   resolveBuffAllyIntent,
   resolveClusterShoveIntent,
+  resolveColorDrainIntent,
   resolveColorHexIntent,
   resolveColumnSmashIntent,
   resolveHealAllyIntent,
@@ -34,6 +37,7 @@ export type EnemyTurnResult = {
   board: Cell[][]
   petrifiedRows: PetrifiedRows
   hexedColors: HexedColor[]
+  drainedColors: DrainedColor[]
   rng: RngState
   phase: CombatPhase
   events: GameEvent[]
@@ -48,9 +52,9 @@ export function executeEnemyTurn(
   petrifiedRows: PetrifiedRows = {},
   hexedColors: HexedColor[] = [],
   targetEnemyId: string | null = null,
+  drainedColors: DrainedColor[] = [],
 ): EnemyTurnResult {
   const events: GameEvent[] = []
-  // Telegraph events deferred to end so all new intents pop in simultaneously
   const telegraphEvents: GameEvent[] = []
   const siblingNextIntents: Intent[] = []
   let nextPlayer: Player = player
@@ -58,6 +62,7 @@ export function executeEnemyTurn(
   let nextBoard: Cell[][] = board
   let nextPetrifiedRows: PetrifiedRows = petrifiedRows
   let nextHexedColors: HexedColor[] = hexedColors
+  let nextDrainedColors: DrainedColor[] = drainedColors
   let nextRng = rng
   let nextTargetEnemyId: string | null = targetEnemyId
 
@@ -150,9 +155,44 @@ export function executeEnemyTurn(
       const r = resolveShieldAllyIntent(intent, updatedEnemy, nextEnemies)
       nextEnemies = r.enemies
       events.push(...r.events)
+    } else if (intent.kind === 'color-drain') {
+      const r = resolveColorDrainIntent(intent, updatedEnemy, nextDrainedColors)
+      nextDrainedColors = r.drainedColors
+      events.push(...r.events)
+    } else if (intent.kind === 'trick') {
+      // Trick resolves as its inner intent (attack or block).
+      events.push({
+        kind: 'trick-swapped',
+        enemyId: updatedEnemy.id,
+        telegraphed: 'trick',
+        actual: intent.resolved.kind,
+      })
+      const inner = intent.resolved
+      if (inner.kind === 'attack') {
+        const r = resolveAttackIntent(inner, updatedEnemy, nextPlayer, nextEnemies)
+        updatedEnemy = r.source
+        nextPlayer = r.player
+        events.push(...r.events)
+      } else if (inner.kind === 'block') {
+        const r = resolveBlockIntent(updatedEnemy)
+        events.push(...r.events)
+      }
     }
 
     events.push({ kind: 'enemy-acted', enemyId: updatedEnemy.id })
+
+    // Enrage check: when an enemy drops below its HP threshold,
+    // swap to enragePattern and reset the pattern index.
+    if (!updatedEnemy.enraged && updatedEnemy.hp > 0) {
+      const def = getArchetype(updatedEnemy.archetype)
+      if (def.enragePattern) {
+        const threshold = def.enrageThreshold ?? 0.5
+        if (updatedEnemy.hp / updatedEnemy.maxHp <= threshold) {
+          updatedEnemy = { ...updatedEnemy, enraged: true, nextIntentIndex: -1 }
+          events.push({ kind: 'enemy-enraged', enemyId: updatedEnemy.id })
+        }
+      }
+    }
 
     if (updatedEnemy.hp > 0) {
       const nextIndex = updatedEnemy.nextIntentIndex + 1
@@ -163,6 +203,7 @@ export function executeEnemyTurn(
         nextEnemies,
         updatedEnemy.id,
         siblingNextIntents,
+        updatedEnemy.enraged,
       )
       siblingNextIntents.push(rolled.intent)
       nextRng = rolled.rng
@@ -253,6 +294,7 @@ export function executeEnemyTurn(
     board: nextBoard,
     petrifiedRows: nextPetrifiedRows,
     hexedColors: nextHexedColors,
+    drainedColors: nextDrainedColors,
     rng: nextRng,
     phase,
     events,

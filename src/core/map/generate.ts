@@ -25,6 +25,7 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'defender', weight: 1 },
     { archetype: 'caster', weight: 1 },
     { archetype: 'swarmer', weight: 1 },
+    { archetype: 'shade', weight: 1 },
   ],
   [
     { archetype: 'brute', weight: 4 },
@@ -33,6 +34,9 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'caster', weight: 2 },
     { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
+    { archetype: 'leech', weight: 2 },
+    { archetype: 'shade', weight: 1 },
+    { archetype: 'trickster', weight: 1 },
   ],
   [
     { archetype: 'brute', weight: 4 },
@@ -41,6 +45,9 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'caster', weight: 2 },
     { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
+    { archetype: 'leech', weight: 2 },
+    { archetype: 'shade', weight: 2 },
+    { archetype: 'trickster', weight: 2 },
   ],
   [
     { archetype: 'brute', weight: 4 },
@@ -49,6 +56,9 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'caster', weight: 2 },
     { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
+    { archetype: 'leech', weight: 2 },
+    { archetype: 'shade', weight: 2 },
+    { archetype: 'trickster', weight: 2 },
   ],
   [{ archetype: 'tyrant', weight: 1 }],
 ]
@@ -64,6 +74,11 @@ const ROLE_MIXED_COMPOSITIONS: EnemyArchetype[][] = [
   ['swarmer', 'swarmer'],
   ['swarmer', 'swarmer', 'swarmer'],
   ['defender', 'caster'],
+  ['leech', 'rallier'],
+  ['shade', 'shade'],
+  ['trickster', 'brute'],
+  ['leech', 'trickster'],
+  ['shade', 'leech'],
 ]
 
 const ROLE_MIXED_CHANCE_NUMERATOR = 4

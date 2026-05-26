@@ -224,6 +224,44 @@ export function rollClusterShoveIntent(
   return { intent: { kind: 'cluster-shove', sources, destinations }, rng: r }
 }
 
+// Color-drain: picks a mana color (never gold), same retry pattern as color-hex.
+export function rollColorDrainIntent(
+  rng: RngState,
+  claimedColors: ReadonlySet<GemColor> = new Set(),
+): { intent: Intent; rng: RngState } {
+  let r = rng
+  let lastIdx = 0
+  for (let i = 0; i < 16; i++) {
+    const [idx, nr] = nextInt(r, MANA_GEM_COLORS.length)
+    r = nr
+    lastIdx = idx
+    const color = MANA_GEM_COLORS[idx]
+    if (color && !claimedColors.has(color)) {
+      return { intent: { kind: 'color-drain', color }, rng: r }
+    }
+  }
+  const color = MANA_GEM_COLORS[lastIdx]
+  if (!color) throw new Error('rollColorDrainIntent: gem-color index oob')
+  return { intent: { kind: 'color-drain', color }, rng: r }
+}
+
+// Trick: resolves at fire time as either attack or block (50/50).
+// The rolled intent is stored inside the trick wrapper so the resolver
+// can execute it, but the telegraph shows "???" to the player.
+export function rollTrickIntent(
+  def: ArchetypeDef,
+  rng: RngState,
+): { intent: Intent; rng: RngState } {
+  const [coin, r1] = nextInt(rng, 2)
+  if (coin === 0) {
+    const { intent: resolved, rng: r2 } = rollAttackIntent(def, r1)
+    return { intent: { kind: 'trick', resolved }, rng: r2 }
+  } else {
+    const { intent: resolved, rng: r2 } = rollBlockIntent(def, r1)
+    return { intent: { kind: 'trick', resolved }, rng: r2 }
+  }
+}
+
 function rollInRange(rng: RngState, range: IntentRange): [number, RngState] {
   const span = range.max - range.min + 1
   const [delta, next] = nextInt(rng, span)

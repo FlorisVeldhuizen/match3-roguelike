@@ -103,6 +103,7 @@ export function freshFight(
     enemies: builtEnemies,
     targetEnemyId: builtEnemies[0]?.id ?? null,
     hexedColors: [],
+    drainedColors: [],
   }
   if (options.isBoss) fight.isBoss = true
   if (isElite) fight.isElite = true
