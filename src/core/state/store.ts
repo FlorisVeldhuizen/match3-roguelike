@@ -68,6 +68,7 @@ import {
   resolveRegenerate,
 } from '../combat/spellResolvers'
 import { tickFlagDuration, tickPetrifiedRows } from '../board/flags'
+import { makeDebugForceFight } from './actions/debug'
 
 export type BoardState = {
   width: number
@@ -1157,37 +1158,6 @@ export const useGameStore = create<GameStore>()(
       })
       return { from: { x: 3, y: 4 }, to: { x: 3, y: 3 } }
     },
-    debugForceFight: (archetypes: EnemyArchetype | EnemyArchetype[]) => {
-      const current = get()
-      const list = Array.isArray(archetypes) ? archetypes : [archetypes]
-      const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics, {
-        archetypes: list,
-      })
-      enemyRoll.fight.player.hp = Math.min(
-        enemyRoll.fight.player.maxHp,
-        current.fight.player.hp,
-      )
-      enemyRoll.fight.player.mana = { ...current.fight.player.mana }
-      const boardRoll = generateBoard(current.rng.board)
-      runOnRoundStarted(
-        { fightId: 0 },
-        enemyRoll.fight.player.relics,
-        snapshotOf(
-          enemyRoll.fight.player,
-          enemyRoll.fight.enemies,
-          enemyRoll.fight.targetEnemyId,
-          0,
-        ),
-      )
-      set((s) => {
-        s.fight = enemyRoll.fight
-        s.rng.enemy = enemyRoll.rng
-        s.board.cells = boardRoll.board
-        s.rng.board = boardRoll.rng
-        s.board.selected = null
-        s.fightCounter += 1
-        s.runPhase = 'fight'
-      })
-    },
+    debugForceFight: makeDebugForceFight(set, get),
   })),
 )
