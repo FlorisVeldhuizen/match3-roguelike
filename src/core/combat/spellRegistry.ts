@@ -90,14 +90,19 @@ export function listSpells(): SpellDef[] {
   return [...spellRegistry.values()]
 }
 
-// Tray-facing spell list. Returns only the class-baseline starter kit
-// unless the caller explicitly opts into the full set (dev override).
-// Future shop/reward system will replace this with per-run owned-spell
-// state on the player; until then the starter flag IS the source of
-// truth for what the player begins with.
-export function listSpellsForTray(unlockAll: boolean): SpellDef[] {
+// Tray-facing spell list. Reads the player's run-owned set (seeded from
+// the starter flag at run start, grown by acquireSpell on
+// reward / shop). The dev "unlock all" override still bypasses to the
+// full registry so the testing flow stays usable.
+export function listSpellsForTray(
+  ownedIds: readonly string[],
+  unlockAll: boolean,
+): SpellDef[] {
   if (unlockAll) return listSpells()
-  return [...spellRegistry.values()].filter((s) => s.starter === true)
+  const owned = new Set(ownedIds)
+  // Preserve registry order so the tray layout is deterministic across
+  // runs (acquisition order doesn't reshuffle the row).
+  return [...spellRegistry.values()].filter((s) => owned.has(s.id))
 }
 
 export function listUltimates(): UltimateDef[] {

@@ -44,6 +44,9 @@ export function EnemyFrame() {
   const setTargetEnemy = useGameStore((s) => s.setTargetEnemy)
   const fightPhase = useGameStore((s) => s.fight.phase)
   const fightCounter = useGameStore((s) => s.fightCounter)
+  // Phase I: elite badge surfaces tougher-than-normal stats. Reads from
+  // FightState (set by freshFight via the elite node kind in nodes.ts).
+  const isElite = useGameStore((s) => s.fight.isElite === true)
   // Drive the lethal-intent warning. Store values (not HUD's display-timed
   // ones) — intent only shows during player-acting, when they're settled.
   const playerHp = useGameStore((s) => s.fight.player.hp)
@@ -470,7 +473,14 @@ export function EnemyFrame() {
             <div className="enemy-sprite" aria-hidden>
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
-            <div className="enemy-name">{enemy.name}</div>
+            <div className="enemy-name">
+              {enemy.name}
+              {isElite && (
+                <span className="enemy-elite-badge" title="Elite — tougher than the standard archetype">
+                  ELITE
+                </span>
+              )}
+            </div>
             {/* Effects row: block badge + status chips share one slot.
                 The block badge is always mounted (.empty when no block) so
                 this row's height is reserved regardless of statuses — adding

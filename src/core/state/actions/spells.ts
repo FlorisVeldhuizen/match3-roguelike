@@ -15,7 +15,8 @@ import {
   type StatusKind,
   type UltimateId,
 } from '../../../types'
-import { rollReward } from '../../relics/reward'
+import { rollPostFightReward } from '../../relics/reward'
+import { rollGoldDrop } from '../../map/goldDrop'
 import { getSpell, getUltimate } from '../../combat/spellRegistry'
 import { canAffordSpell, consumeSpellCost } from '../../combat/mana'
 import {
@@ -268,12 +269,35 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
         finalPlayer = { ...finalPlayer, hp: finalPlayer.maxHp }
         nextRunPhase = 'victory'
       } else if (nextPendingReward == null) {
-        const rolled = rollReward(finalPlayer.relics, 'common', nextLootRng, 0)
+        // Phase I: spell-cast victory uses the same reward roller as
+        // attemptSwap, including gold-drop tier + spell-vs-relic split.
+        // Elite-flag is respected even when the killing blow is a spell.
+        const clearedNode = current.map.nodes.find(
+          (n) => n.id === current.map.currentNodeId,
+        )
+        let goldDrop = 0
+        if (clearedNode) {
+          const goldRoll = rollGoldDrop(clearedNode, nextLootRng)
+          goldDrop = goldRoll.gold
+          nextLootRng = goldRoll.rng
+        }
+        const rarity = current.fight.isElite === true ? 'uncommon' : 'common'
+        const rolled = rollPostFightReward({
+          ownedRelics: finalPlayer.relics,
+          ownedSpellIds: finalPlayer.ownedSpellIds,
+          rarity,
+          rng: nextLootRng,
+          gold: goldDrop,
+        })
         nextPendingReward = rolled.reward
         nextLootRng = rolled.rng
         victoryEvents.push({
           kind: 'reward-offered',
-          offeredRelicIds: rolled.reward.offeredRelicIds,
+          offerKind: rolled.reward.kind,
+          offeredRelicIds:
+            rolled.reward.kind === 'relic' ? rolled.reward.offeredRelicIds : [],
+          offeredSpellIds:
+            rolled.reward.kind === 'spell' ? rolled.reward.offeredSpellIds : [],
           gold: rolled.reward.gold,
         })
         nextRunPhase = 'reward'

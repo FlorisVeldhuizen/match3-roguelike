@@ -25,6 +25,7 @@ const makePlayer = (relics: RelicInstance[]): Player => ({
   carryBlockNextPhase: false,
   relics,
   gold: 0,
+  ownedSpellIds: [],
 })
 
 const inst = (id: string): RelicInstance => ({

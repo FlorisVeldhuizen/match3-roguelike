@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Status: **Phase H2c complete.** Working on I (Shop + rest, gold economy) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
+Status: **Phase I complete.** Working on J1 (Boss gimmick — Corruptor) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 
@@ -464,25 +464,36 @@ Phases are sized for "single-session" work (~2-4 hours). If a phase grows beyond
 
 ---
 
-## Phase I — Shop, rest, gold economy
+## Phase I — Shop, rest, gold economy ✅ COMPLETE
+
+**Status:** shipped 2026-05-26. Gold introduced as the 6th gem colour (not in original spec — added during phase open). Elite scaling, spell discovery via post-fight rewards + shop, and the full shop/rest screen pair all landed. 354 tests passing.
 
 **Goal:** shop nodes let you spend gold on relics/heals/removes. Rest nodes offer heal-or-upgrade choice.
 
-**Scope:**
-- Gold tracking, drops per fight tier
-- React ShopScreen: 3 relic offers (cost by rarity), 2 heals, 1 relic-remove
-- React RestScreen: heal 30% HP OR upgrade a relic (relic upgrade = +1 to its numeric value where applicable; defer non-numeric upgrade design)
-- Map node types fully implemented: fight, elite, shop, rest, boss
-- Elite fights drop better relics (force uncommon/rare draw)
+**Scope (as shipped):**
+- **Gold as a 6th gem colour** (added beyond original scope): ~10% spawn rate across all spawn sites (initial board, cascade refill, intent-resolver refills); 2g per cleared cell on match, cascade + blessed multipliers apply same as mana; no in-match side effect. Enemy hex restricted to the 5 mana colours (`MANA_GEM_COLORS`).
+- **Gold tracking:** `Player.gold` (run-persistent, carried across fights in enterNode), HUD chip in the mana cluster, particle trail homes to the chip.
+- **Gold drops per fight tier:** col 0-1 = 10-15g, col 2 = 15-20g, col 3 = 20-25g, elite = 35-50g, boss = 0. Rolled at victory in swap.ts (and the spell-cast victory path in spells.ts), credited on reward-pick / skip.
+- **Shop:** 3 relics (rarity-weighted: 70% common, 25% uncommon, 5% rare), 2 unowned non-starter spells (flat 80g), 2 heals (Bandage 25g/+15 HP, Tonic 50g/+35 HP), 1 relic-remove (75g). Items mark `purchased: true` after buy; the row stays rendered (dimmed). Heals refuse at full HP. Relic-remove preserves acquisition order.
+- **Rest:** 30% of maxHp heal OR upgrade one owned upgradable relic. Upgrade flag on `RelicInstance.upgraded`; relic hooks opt in via `RelicDef.upgradable=true` and read `ctx.upgraded` to double their primary numeric. Iron Buckler / Sharp Edge / Thornmail are upgradable (1→2); Stoneheart and Cascade Crystal are not (binary trigger / multiplier).
+- **Elite scaling** (added beyond original spec): elites are tougher variants of their archetype — HP ×1.4, attack and block telegraphs +1. `FightState.isElite` drives a badge on the enemy card. Drops route through `rollPostFightReward` with rarity='uncommon'.
+- **Discoverable spells:** `Player.ownedSpellIds` (carries across fights). Knight starter set: Bulwark, Reinforce, Ignite. Other 9 spells acquired via post-fight reward (30% chance per fight) or shop. `listSpellsForTray(ownedIds, unlockAll)` rewired to read from the owned set.
+- **PendingReward** is now a discriminated union (`kind: 'relic' | 'spell'`); the `rollPostFightReward` orchestrator decides which to roll and falls back to a relic offer when the spell pool is exhausted.
+- Map node types fully implemented: fight, elite, shop, rest, boss (rest no longer auto-completes).
 
-**Out of scope:** Corruptor curse gimmick, save/load, 10 remaining relics.
+**Out of scope (deferred):** Corruptor curse gimmick (J1), save/load (K), 10 remaining relics + gold-keyed relic content fill (J2).
 
 **Acceptance:**
-- ✓ Gold drops visible after each fight
-- ✓ Shop renders, items purchasable / disabled by gold availability
-- ✓ Rest heal works, rest upgrade works
-- ✓ Path through map respects rules (elite drops better relic)
+- ✓ Gold drops visible after each fight (per-tier ranges)
+- ✓ Gold gems spawn (~10%) and pay gold on match
+- ✓ HUD shows a gold chip in the mana cluster
+- ✓ Shop renders, items purchasable / disabled by gold availability / sold-out
+- ✓ Rest heal works, rest upgrade works (with non-upgradable relics filtered)
+- ✓ Path through map respects rules (elite drops uncommon-rarity relic)
+- ✓ Elites are visibly tougher (badge + scaled stats)
+- ✓ Spells appear in post-fight rewards and shop; ownedSpellIds drives the tray
 - ✓ Run completes start-to-boss with shop+rest nodes encountered
+- ✓ **Tests:** gem spawn rate, gold-match payout, gold drops per tier, elite scaling, spell reward rolling, owned-spell tray filter, relic upgrade flag, rest actions, shop actions (354 tests total)
 
 ---
 
@@ -588,7 +599,7 @@ Audio (sfx, music) is a non-goal for the slice — see `02-scope.md`. Not in thi
 ## Dependency graph
 
 ```
-A → B → C → D → E → F → G → H1 → H2a → H3 → H4a → H4b → H2b → H2b.5 → H2c → I → J1 → J2 → K → L
+A → B → C → D → E → F → G → H1 → H2a → H3 → H4a → H4b → H2b → H2b.5 → H2c → I ✅ → J1 → J2 → K → L
 ```
 
 Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) and the spell roster expansion (H4) need to land before the verb work because verb threats become much more interesting once the player has a richer response toolkit. Without H3/H4, H2b/H2c verbs would feel like one-note board hazards rather than threats the player engages with through spell choice. H1 must precede H2a (multi-enemy combat needs the run-flow scaffolding); H3 must precede H4 (spells are designed around the multi-color economy from day 1); J1 must precede J2 (boss must be fightable before the difficulty pass means anything).
@@ -615,7 +626,7 @@ Note the H3/H4 insertion between H2a and H2b: the multi-color mana economy (H3) 
 | H2b | Brute column-smash + Defender petrify-row | 5-6h ✅ |
 | H2b.5 | First player-side verb spell (micro-phase) | 1-2h ✅ |
 | H2c | Caster color-hex + Swarmer cluster-shove | 5-7h ✅ |
-| I | Shop + rest | 3-4h |
+| I | Shop + rest + gold economy + gold gem + elite scaling + spell discovery | ~5h ✅ |
 | J1 | Boss gimmick (Corruptor) | 3-4h |
 | J2 | Content fill + tuning | 6-8h |
 | K | Auto-save | 2-3h |

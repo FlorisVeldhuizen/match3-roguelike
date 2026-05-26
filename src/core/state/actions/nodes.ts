@@ -12,10 +12,10 @@ import type { BoardState } from '../store'
 import type { StoreSet, StoreGet } from './types'
 import { freshBoardState, freshFight } from './helpers'
 
-// Flat HP restored when entering a rest node. Bosses heal to full; regular
-// fights carry HP forward (see enterNode). Rest sits between: a top-up that
-// doesn't make the map trivial.
-const REST_HEAL_AMOUNT = 10
+// Phase I rest-screen tuning. 30% of maxHp (rounded) per pick — bosses
+// still heal to full and regular fights carry HP forward (see enterNode),
+// so rest sits between as a player-paced top-up.
+export const REST_HEAL_PERCENT = 0.3
 
 export type InitialStateResult = {
   board: BoardState
@@ -40,20 +40,21 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     const node = current.map.nodes.find((n) => n.id === nodeId)
     if (!node) return
 
-    // Shop/rest in H1: auto-complete, mark visited, stay on map.
-    // Phase I builds the real screens. Rest nodes top up HP by a flat
-    // REST_HEAL_AMOUNT (clamped to maxHp) — boss kills heal fully, so
-    // rest sits between fight carry-over and boss reset.
-    if (node.kind === 'shop' || node.kind === 'rest') {
+    // Phase I: shop / rest nodes open their dedicated screens. They no
+    // longer auto-complete — the player must pick an action (or "leave")
+    // before the node is marked visited. The screens dispatch the
+    // appropriate store actions and route back to the map themselves.
+    if (node.kind === 'shop') {
       set((s) => {
         s.map.currentNodeId = nodeId
-        if (!s.map.completedNodeIds.includes(nodeId)) {
-          s.map.completedNodeIds.push(nodeId)
-        }
-        if (node.kind === 'rest') {
-          const p = s.fight.player
-          p.hp = Math.min(p.maxHp, p.hp + REST_HEAL_AMOUNT)
-        }
+        s.runPhase = 'shop'
+      })
+      return
+    }
+    if (node.kind === 'rest') {
+      set((s) => {
+        s.map.currentNodeId = nodeId
+        s.runPhase = 'rest'
       })
       return
     }
@@ -73,6 +74,7 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     const enemyRoll = freshFight(current.rng.enemy, current.fight.player.relics, {
       archetypes: node.archetypes,
       isBoss: node.kind === 'boss',
+      isElite: node.kind === 'elite',
     })
     enemyRoll.fight.player.hp = Math.min(
       enemyRoll.fight.player.maxHp,
@@ -81,6 +83,10 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     // Phase I: gold is run-persistent (spent at shops between fights).
     // freshPlayer always seeds 0; copy the live total forward here.
     enemyRoll.fight.player.gold = current.fight.player.gold
+    // Phase I: owned-spell set is also run-persistent. freshPlayer seeds
+    // it from the registry's starter flag every time; we overwrite with
+    // whatever the player has actually accumulated this run.
+    enemyRoll.fight.player.ownedSpellIds = current.fight.player.ownedSpellIds
     const boardRoll = generateBoard(current.rng.board)
     // onRoundStarted fires for the new encounter. Events are dropped on
     // the floor here — there's no animation queue between map clicks and

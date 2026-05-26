@@ -13,6 +13,7 @@ import {
   type PetrifiedRows,
   type Pos,
   type RunPhase,
+  type ShopOffer,
   type SpellId,
   type StatusKind,
   type UltimateId,
@@ -21,7 +22,24 @@ import { generateMap } from '../map/generate'
 import { getSpell } from '../combat/spellRegistry'
 import { canAffordSpell } from '../combat/mana'
 import { makeDebugForceFight } from './actions/debug'
-import { makeAcquireRelic, makeSkipReward } from './actions/rewards'
+import {
+  makeAcquireRelic,
+  makeAcquireSpellReward,
+  makeSkipReward,
+} from './actions/rewards'
+import {
+  makeLeaveRest,
+  makeRestHeal,
+  makeRestUpgrade,
+} from './actions/rest'
+import {
+  makeLeaveShop,
+  makeRollShopOffer,
+  makeShopBuyHeal,
+  makeShopBuyRelic,
+  makeShopBuySpell,
+  makeShopRemoveRelic,
+} from './actions/shop'
 import { makeEnterNode, makeRestart } from './actions/nodes'
 import { freshBoardState, freshPlayer } from './actions/helpers'
 import {
@@ -60,6 +78,10 @@ export type GameStore = {
   // Rolled when a non-boss fight transitions to 'victory'; nulled by
   // acquireRelic / skipReward. UI mounts RewardScreen on runPhase==='reward'.
   pendingReward: PendingReward | null
+  // Phase I shop state. Rolled when a shop node is entered; nulled when
+  // the player leaves. Mutated in-place when items are purchased so the
+  // UI can render "sold out" rows.
+  currentShopOffer: ShopOffer | null
   // H1: procedural map + run-level phase machine. runPhase drives the
   // top-level screen (map / fight / reward / victory / game-over) while
   // fight.phase still drives in-fight transitions.
@@ -102,6 +124,28 @@ export type GameStore = {
   beginBoardTargeting: (spellId: SpellId) => boolean
   cancelBoardTargeting: () => void
   acquireRelic: (id: string) => { ok: boolean; events: GameEvent[] }
+  // Phase I: add a discoverable spell to the player's owned set (from
+  // shop). No-op if already owned. Returns ok=false if the id isn't a
+  // registered spell so callers can keep their UI honest about a stale
+  // offer. For spell-kind reward offers (post-fight), use
+  // acquireSpellReward instead — that path also credits the reward's
+  // gold and clears pendingReward.
+  acquireSpell: (id: SpellId) => { ok: boolean }
+  acquireSpellReward: (id: SpellId) => { ok: boolean }
+  // Phase I rest node — exactly one of these fires (or leaveRest if the
+  // player backs out without picking).
+  restHeal: () => { ok: boolean }
+  restUpgrade: (relicId: string) => { ok: boolean }
+  leaveRest: () => void
+  // Phase I shop. rollShopOfferIfNeeded is idempotent — safe for the
+  // screen to call on every mount; only the first call after entering
+  // the shop actually rolls.
+  rollShopOfferIfNeeded: () => void
+  shopBuyRelic: (relicId: string) => { ok: boolean }
+  shopBuySpell: (spellId: SpellId) => { ok: boolean }
+  shopBuyHeal: (kind: 'small' | 'big') => { ok: boolean }
+  shopRemoveRelic: (relicId: string) => { ok: boolean }
+  leaveShop: () => void
   skipReward: () => void
   // Map navigation. Validates against getReachableFrom; no-op on invalid
   // target. Spins up a fresh fight for fight/elite/boss nodes; auto-
@@ -137,6 +181,7 @@ function initialState(seed: string): {
   fight: FightState
   fightCounter: number
   pendingReward: PendingReward | null
+  currentShopOffer: ShopOffer | null
   map: MapState
   runPhase: RunPhase
   boardTargetingSpell: SpellId | null
@@ -161,6 +206,7 @@ function initialState(seed: string): {
     fight: sentinelFight,
     fightCounter: 0,
     pendingReward: null,
+    currentShopOffer: null,
     map,
     runPhase: 'map',
     boardTargetingSpell: null,
@@ -221,6 +267,32 @@ export const useGameStore = create<GameStore>()(
     },
     castUltimate: makeCastUltimate(set, get),
     acquireRelic: makeAcquireRelic(set, get),
+    acquireSpell: (id) => {
+      // Validate against the registry so a stale UI offer can't sneak in
+      // a non-existent spell id. Silent no-op if already owned — matches
+      // the acquireRelic "dedupe + ok" pattern.
+      try {
+        getSpell(id)
+      } catch {
+        return { ok: false }
+      }
+      set((s) => {
+        if (!s.fight.player.ownedSpellIds.includes(id)) {
+          s.fight.player.ownedSpellIds.push(id)
+        }
+      })
+      return { ok: true }
+    },
+    acquireSpellReward: makeAcquireSpellReward(set, get),
+    restHeal: makeRestHeal(set, get),
+    restUpgrade: makeRestUpgrade(set, get),
+    leaveRest: makeLeaveRest(set, get),
+    rollShopOfferIfNeeded: makeRollShopOffer(set, get),
+    shopBuyRelic: makeShopBuyRelic(set, get),
+    shopBuySpell: makeShopBuySpell(set, get),
+    shopBuyHeal: makeShopBuyHeal(set, get),
+    shopRemoveRelic: makeShopRemoveRelic(set, get),
+    leaveShop: makeLeaveShop(set, get),
     skipReward: makeSkipReward(set, get),
     enterNode: makeEnterNode(set, get),
     restart: makeRestart(set, get, () => initialState(newSliceSeed())),

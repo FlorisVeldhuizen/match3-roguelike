@@ -31,6 +31,7 @@ const makePlayer = (overrides: Partial<Player> = {}): Player => ({
   carryBlockNextPhase: false,
   relics: [],
   gold: 0,
+  ownedSpellIds: [],
   ...overrides,
 })
 

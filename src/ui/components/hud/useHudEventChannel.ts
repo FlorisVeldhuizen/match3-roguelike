@@ -407,6 +407,28 @@ export function useHudEventChannel(): HudEventChannel {
   // resync to canonical state. Keyed on fightCounter so it fires for
   // both same-run new-fight transitions and full restarts (which also
   // bump it).
+  // Snap displayedGold whenever the store-side total changes outside
+  // the in-fight cascade pathway — reward-pick / shop spending happen
+  // off the animation stream, so without this the chip would lag until
+  // the next fight starts and fightCounter resyncs the rest of the
+  // HUD. In-fight pool-gained events are still animation-driven via
+  // the subscriber above; the cascade processor's synchronous
+  // player.gold update lands a few frames before the trail arrives,
+  // but the bump function below uses a (g) => g + amount closure so
+  // it commutes with this snap.
+  useEffect(() => {
+    let prevRunPhase = useGameStore.getState().runPhase
+    return useGameStore.subscribe((s) => {
+      const phase = s.runPhase
+      // Snap on runPhase transitions (covers reward-pick / shop exit)
+      // even when the gold delta is zero — keeps the chip honest.
+      if (phase !== prevRunPhase && phase !== 'fight') {
+        setDisplayedGold(s.fight.player.gold)
+      }
+      prevRunPhase = phase
+    })
+  }, [])
+
   useEffect(() => {
     let prevFightCounter = useGameStore.getState().fightCounter
     return useGameStore.subscribe((s) => {

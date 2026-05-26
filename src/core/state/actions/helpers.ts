@@ -2,6 +2,7 @@ import { nextInt, type RngState } from '../../rng/mulberry32'
 import { rollIntent } from '../../combat/intents'
 import { getArchetype } from '../../combat/archetypeRegistry'
 import { resetFightFlags } from '../../relics/engine'
+import { listSpells } from '../../combat/spellRegistry'
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
@@ -49,13 +50,32 @@ export function freshPlayer(relics: RelicInstance[] = []) {
     // so callers that want to carry gold across fights (enterNode) must
     // copy it over after — same pattern as HP.
     gold: 0,
+    // Phase I: seed owned-spell set from the registry's starter flag.
+    // Carries across fights via enterNode (mirrors gold / relics). Tests
+    // that bypass the registry get an empty list — harmless because the
+    // spell tray would just render nothing.
+    ownedSpellIds: listSpells()
+      .filter((s) => s.starter === true)
+      .map((s) => s.id),
   }
 }
+
+// Phase I elite scaling. Applied per-enemy when freshFight is called with
+// isElite=true. Hand-tuned to feel like a "tougher version of the same
+// archetype": +40% HP, +1 to attack & block telegraphs. Stays additive on
+// block / attack so weak archetypes still feel weak — the scaler is a
+// danger amplifier, not an identity rewrite.
+const ELITE_HP_SCALAR = 1.4
+const ELITE_INTENT_BONUS = 1
 
 export function freshFight(
   enemyRng: RngState,
   relics: RelicInstance[] = [],
-  options: { archetypes?: EnemyArchetype[]; isBoss?: boolean } = {},
+  options: {
+    archetypes?: EnemyArchetype[]
+    isBoss?: boolean
+    isElite?: boolean
+  } = {},
 ): { fight: FightState; rng: RngState } {
   // H2a: archetypes is a list (length 1-3 today; boss stays length 1).
   // If absent (boot sentinel, tests that bypass the map), fall back to
@@ -68,22 +88,39 @@ export function freshFight(
     archetypes = [candidates[archIdx] ?? 'brute']
     workingRng = n
   }
+  const isElite = options.isElite === true
   const builtEnemies: Enemy[] = []
   archetypes.forEach((archetype, i) => {
     const def = getArchetype(archetype)
     const first = rollIntent(archetype, 0, workingRng)
     workingRng = first.rng
+    // Elite scaling: bump HP and (for attack / block intents) the rolled
+    // amount. Other intent kinds (column-smash, petrify-row, ally-buff,
+    // etc.) keep their telegraphed payload — scaling them would distort
+    // the verb's design (e.g. a 2× column-smash is "smashes 2 columns",
+    // a different mechanic, not a tougher version of the same one).
+    const baseHp = isElite ? Math.round(def.maxHp * ELITE_HP_SCALAR) : def.maxHp
+    let intent = first.intent
+    let blockSeed = intent.kind === 'block' ? intent.amount : 0
+    if (isElite) {
+      if (intent.kind === 'attack') {
+        intent = { ...intent, amount: intent.amount + ELITE_INTENT_BONUS }
+      } else if (intent.kind === 'block') {
+        intent = { ...intent, amount: intent.amount + ELITE_INTENT_BONUS }
+        blockSeed = intent.amount
+      }
+    }
     builtEnemies.push({
       id: `enemy-${i + 1}`,
       name: def.name,
       archetype,
-      hp: def.maxHp,
-      maxHp: def.maxHp,
+      hp: baseHp,
+      maxHp: baseHp,
       // Initial block intent is pre-applied so the enemy is already
       // guarded when the player makes their first move. Mirrors the
       // telegraph-time pre-application done by executeEnemyTurn.
-      block: first.intent.kind === 'block' ? first.intent.amount : 0,
-      currentIntent: first.intent,
+      block: blockSeed,
+      currentIntent: intent,
       nextIntentIndex: 0,
       statuses: [],
     })
@@ -96,6 +133,7 @@ export function freshFight(
     hexedColors: [],
   }
   if (options.isBoss) fight.isBoss = true
+  if (isElite) fight.isElite = true
   return {
     fight,
     rng: workingRng,

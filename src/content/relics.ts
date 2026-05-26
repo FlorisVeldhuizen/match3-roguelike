@@ -12,12 +12,15 @@ const ironBuckler: RelicDef = {
   rarity: 'common',
   icon: '🛡',
   description: 'Each blue match grants +1 block at end of phase.',
+  upgradable: true,
+  upgradedDescription: 'Each blue match grants +2 block at end of phase.',
   hooks: {
-    onMatch: (payload) => {
+    onMatch: (payload, ctx) => {
       if (payload.match.color !== 'blue') return payload
+      const bonus = ctx.upgraded ? 2 : 1
       return {
         ...payload,
-        deltas: { ...payload.deltas, blue: payload.deltas.blue + 1 },
+        deltas: { ...payload.deltas, blue: payload.deltas.blue + bonus },
       }
     },
   },
@@ -29,12 +32,15 @@ const sharpEdge: RelicDef = {
   rarity: 'common',
   icon: '⚔',
   description: 'Each red match deals +1 damage.',
+  upgradable: true,
+  upgradedDescription: 'Each red match deals +2 damage.',
   hooks: {
-    onMatch: (payload) => {
+    onMatch: (payload, ctx) => {
       if (payload.match.color !== 'red') return payload
+      const bonus = ctx.upgraded ? 2 : 1
       return {
         ...payload,
-        deltas: { ...payload.deltas, red: payload.deltas.red + 1 },
+        deltas: { ...payload.deltas, red: payload.deltas.red + bonus },
       }
     },
   },
@@ -46,16 +52,19 @@ const thornmail: RelicDef = {
   rarity: 'common',
   icon: '🌵',
   description: 'When an enemy attacks you, reflect 1 damage back.',
+  upgradable: true,
+  upgradedDescription: 'When an enemy attacks you, reflect 2 damage back.',
   hooks: {
     onDamageTaken: (payload, ctx) => {
       // Only enemy attacks trigger thornmail — burn, self-curse (J1),
       // and other sources are explicitly excluded per architecture §2.
       if (payload.source !== 'enemy-attack') return
       if (payload.attackerId == null) return
+      const reflect = ctx.upgraded ? 2 : 1
       ctx.emit({
         kind: 'relic-triggered',
         relicId: 'thornmail',
-        effect: 'reflected 1 damage',
+        effect: `reflected ${reflect} damage`,
       })
       // The store walker scans engine-emitted damage-dealt events with
       // source='thornmail' and applies them to the attacker. Engine only
@@ -63,7 +72,7 @@ const thornmail: RelicDef = {
       ctx.emit({
         kind: 'damage-dealt',
         targetId: payload.attackerId,
-        amount: 1,
+        amount: reflect,
         blocked: 0,
         source: 'thornmail',
       })

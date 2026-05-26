@@ -165,3 +165,47 @@
   color: var(--parchment);
 }
 
+
+/* Phase I shop additions. The shop reuses .reward-overlay / .reward-card
+   / .reward-relic so its sections sit visually next to the relic-reward
+   modal. Specific tweaks below: section header, price chip, and a
+   sold-out styling that keeps the card visible (dimmed) instead of
+   hiding it. */
+.shop-card {
+  /* Shop renders multiple sections; widen the card so the rows don't
+     line-wrap awkwardly. The body keeps its parchment frame. */
+  max-width: 880px;
+}
+
+.shop-section-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--parchment-dim);
+  margin: 1rem 0 0.4rem;
+  text-align: center;
+}
+
+.shop-price {
+  display: inline-block;
+  margin-top: 0.4rem;
+  padding: 0.15em 0.55em;
+  background: rgba(200, 163, 90, 0.1);
+  color: var(--gold-2);
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--gold-1);
+  border-radius: 0.2rem;
+}
+
+.reward-relic.sold-out {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  cursor: default;
+}
+.reward-relic.sold-out .shop-price {
+  color: var(--parchment-dim);
+  border-color: rgba(200, 163, 90, 0.3);
+}

@@ -5,7 +5,8 @@ import { executeEnemyTurn } from '../../combat/enemyTurn'
 import { pickNextTarget } from '../../combat/aoe'
 import { hasExtraTurnMatch } from '../../combat/pools'
 import { processCascadeEvents } from '../../combat/cascadeProcessor'
-import { rollReward } from '../../relics/reward'
+import { rollPostFightReward } from '../../relics/reward'
+import { rollGoldDrop } from '../../map/goldDrop'
 import {
   runOnBlockGained,
   runOnPhaseStart,
@@ -282,12 +283,40 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         player = { ...player, hp: player.maxHp }
         nextRunPhase = 'victory'
       } else if (pendingReward == null) {
-        const rolled = rollReward(player.relics, 'common', nextLootRng, 0)
+        // Phase I: gold drop is rolled from the cleared map node's tier
+        // BEFORE the relic offer so both consume rng.loot in a stable
+        // order (gold first, then relic pool draws). Falls back to 0g if
+        // the current node can't be located (boot sentinel / save-load
+        // edge cases).
+        const clearedNode = current.map.nodes.find(
+          (n) => n.id === current.map.currentNodeId,
+        )
+        let goldDrop = 0
+        if (clearedNode) {
+          const goldRoll = rollGoldDrop(clearedNode, nextLootRng)
+          goldDrop = goldRoll.gold
+          nextLootRng = goldRoll.rng
+        }
+        // Phase I: elite nodes drop an uncommon-rarity offer (ladder
+        // promotes to rare if uncommon pool is exhausted, per rollReward).
+        // Boss skips the reward roll entirely (handled above).
+        const rarity = current.fight.isElite === true ? 'uncommon' : 'common'
+        const rolled = rollPostFightReward({
+          ownedRelics: player.relics,
+          ownedSpellIds: player.ownedSpellIds,
+          rarity,
+          rng: nextLootRng,
+          gold: goldDrop,
+        })
         pendingReward = rolled.reward
         nextLootRng = rolled.rng
         tailEvents.push({
           kind: 'reward-offered',
-          offeredRelicIds: rolled.reward.offeredRelicIds,
+          offerKind: rolled.reward.kind,
+          offeredRelicIds:
+            rolled.reward.kind === 'relic' ? rolled.reward.offeredRelicIds : [],
+          offeredSpellIds:
+            rolled.reward.kind === 'spell' ? rolled.reward.offeredSpellIds : [],
           gold: rolled.reward.gold,
         })
         nextRunPhase = 'reward'

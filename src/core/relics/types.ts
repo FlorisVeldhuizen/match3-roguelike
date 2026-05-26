@@ -70,6 +70,10 @@ export type HookCtx = {
   getFightFlag: (key: string) => JsonValue | undefined
   setFightFlag: (key: string, value: JsonValue) => void
   emit: (event: GameEvent) => void
+  // Phase I: true when the relic was upgraded at a rest node. Relics
+  // that opt into upgradability (RelicDef.upgradable === true) read this
+  // to double their primary numeric. Non-opt-in relics ignore it.
+  upgraded: boolean
 }
 
 export type FightSnapshot = {
@@ -97,6 +101,15 @@ export type RelicDef = {
   // Ordering hint shown in the tooltip when an effect is order-sensitive.
   // J2 will lean on this; Phase G uses it for Cascade Crystal.
   orderHint?: string
+  // Phase I: opt into rest-node upgrades. When true, the relic's hook is
+  // expected to honor ctx.upgraded (usually by doubling its primary
+  // numeric — see content/relics.ts for canonical pattern). Defaults to
+  // false; non-numeric relics like Stoneheart or hard-to-balance
+  // multipliers like Cascade Crystal keep their base values.
+  upgradable?: boolean
+  // Optional alt description rendered when the relic instance is
+  // upgraded — keeps the tooltip honest about the active numbers.
+  upgradedDescription?: string
   hooks: {
     onMatch?: Modifier<MatchPayload>
     onCascade?: Listener<{ level: number }>

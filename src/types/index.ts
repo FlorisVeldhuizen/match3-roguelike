@@ -324,7 +324,15 @@ export type GameEvent =
   | { kind: 'relic-gained'; relicId: string }
   // Emitted when a fight ends and a reward roll has been generated.
   // RewardScreen mounts on this; engine could also use it for run logging.
-  | { kind: 'reward-offered'; offeredRelicIds: string[]; gold: number }
+  // Phase I: rewards are now discriminated between relic and spell offers
+  // — exactly one of offeredRelicIds / offeredSpellIds will be populated.
+  | {
+      kind: 'reward-offered'
+      offerKind: 'relic' | 'spell'
+      offeredRelicIds: string[]
+      offeredSpellIds: SpellId[]
+      gold: number
+    }
   // UI-only signal: the player's cursor is over a board cell (or
   // null = pointer left the board). Emitted by BoardScene when its
   // internal hoveredCell transitions. BurningOverlay listens to react
@@ -446,6 +454,10 @@ export type RelicInstance = {
   id: string
   runFlags: Record<string, JsonValue>
   fightFlags: Record<string, JsonValue>
+  // Phase I: rest-node upgrade flag. Set once via the rest screen and
+  // read by hooks that opt in (RelicDef.upgradable === true). False /
+  // absent means "base values."
+  upgraded?: boolean
 }
 
 export type JsonValue =
@@ -499,17 +511,58 @@ export type Player = {
   // (the 6th gem colour, ~10% spawn) and from post-fight reward drops.
   // Spent at shop nodes. Reset on restart.
   gold: number
+  // Phase I: per-run owned spells. Seeded from the registry's `starter`
+  // flag at run start; grown by acquireSpell (reward / shop). Replaces
+  // the old "starter flag IS the tray contents" rule — the registry's
+  // starter flag now only seeds the initial set.
+  ownedSpellIds: SpellId[]
 }
 
 // Rolled at fight-end from rng.loot; persists in the store while the
-// player picks. Cleared by acquireRelic / skipReward.
-export type PendingReward = {
-  rarity: RelicRarity
-  offeredRelicIds: string[]
-  gold: number
-}
+// player picks. Cleared by acquireRelic / acquireSpellReward / skipReward.
+// Discriminated by `kind` so the UI knows which row variant to render and
+// which acquire-action to dispatch.
+export type PendingReward =
+  | {
+      kind: 'relic'
+      rarity: RelicRarity
+      offeredRelicIds: string[]
+      gold: number
+    }
+  | {
+      kind: 'spell'
+      offeredSpellIds: SpellId[]
+      gold: number
+    }
 
 export type RelicRarity = 'common' | 'uncommon' | 'rare'
+
+// Phase I shop offer. Rolled once when the player enters a shop node;
+// items mutate to `purchased: true` after a successful buy so a re-mount
+// keeps them sold-out. Single offer per node — leaving the shop discards
+// it; re-entering (not possible in Phase I's no-loop map) would re-roll.
+export type ShopOffer = {
+  relics: {
+    id: string
+    cost: number
+    purchased: boolean
+  }[]
+  spells: {
+    id: SpellId
+    cost: number
+    purchased: boolean
+  }[]
+  heals: {
+    kind: 'small' | 'big'
+    cost: number
+    amount: number
+    purchased: boolean
+  }[]
+  // Relic-remove offer (single use per shop entry). Player picks which
+  // owned relic to discard at point-of-purchase, so we don't store the
+  // target id here. `used` flips after a successful remove.
+  removeOffer: { cost: number; used: boolean } | null
+}
 
 export type Enemy = {
   id: string
@@ -531,6 +584,9 @@ export type FightState = {
   // True for the boss-column node. Used to route the post-fight transition
   // to the run-victory screen instead of the reward roll.
   isBoss?: boolean
+  // Phase I: true for elite (col-2 marked) nodes. Drives the EnemyCard
+  // "elite" badge and the uncommon-rarity reward roll on victory.
+  isElite?: boolean
   // H2c: Caster's color-hex active set. Board-global (not per-cell):
   // matching gems of an active colour applies Weak to the player at
   // match time. Ticks at start of enemy phase; entries expire when
@@ -574,4 +630,11 @@ export type MapState = {
 // FightState.phase drives in-fight transitions. 'reward' mounts the
 // existing RewardScreen modal. 'victory' is the run-cleared (boss-down)
 // terminal state; 'game-over' is run-failed.
-export type RunPhase = 'map' | 'fight' | 'reward' | 'victory' | 'game-over'
+export type RunPhase =
+  | 'map'
+  | 'fight'
+  | 'reward'
+  | 'shop'
+  | 'rest'
+  | 'victory'
+  | 'game-over'

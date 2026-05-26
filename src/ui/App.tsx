@@ -17,6 +17,8 @@ import { ColorHexOverlay } from './components/ColorHexOverlay'
 import { ClusterShoveOverlay } from './components/ClusterShoveOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
+import { RestScreen } from './components/RestScreen'
+import { ShopScreen } from './components/ShopScreen'
 import { MapScreen } from './components/MapScreen'
 import { useGameStore } from '../core/state/store'
 
@@ -109,6 +111,8 @@ export function App() {
             modal would carry reveal=true into the next fight. */}
         {runPhase === 'victory' ? <VictoryOverlay /> : null}
         {runPhase === 'reward' ? <RewardScreen /> : null}
+        {runPhase === 'rest' ? <RestScreen /> : null}
+        {runPhase === 'shop' ? <ShopScreen /> : null}
         <GameOverOverlay />
       </main>
       <MapScreen />

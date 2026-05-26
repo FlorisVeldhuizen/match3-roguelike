@@ -50,6 +50,7 @@ function buildCtx(
       inst.fightFlags[key] = value
     },
     emit,
+    upgraded: inst.upgraded === true,
   }
 }
 

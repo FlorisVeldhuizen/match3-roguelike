@@ -97,6 +97,7 @@ export function SpellTray() {
   const pending = useGameStore((s) => s.fight.player.pendingSpells)
   const statuses = useGameStore((s) => s.fight.player.statuses)
   const enemies = useGameStore((s) => s.fight.enemies)
+  const ownedSpellIds = useGameStore((s) => s.fight.player.ownedSpellIds)
   const castSpell = useGameStore((s) => s.castSpell)
   const castUltimate = useGameStore((s) => s.castUltimate)
   // Board-pick UX state. Generic across all board-targeting spells
@@ -139,7 +140,7 @@ export function SpellTray() {
 
   return (
     <div className="spell-tray" aria-label="Spells">
-      {listSpellsForTray(unlockAll).map((def) => {
+      {listSpellsForTray(ownedSpellIds, unlockAll).map((def) => {
         const queued = pending.includes(def.id)
         const canPay = canAffordSpell(mana, def.cost)
         // H4a per-spell extra gates beyond mana/queued:
