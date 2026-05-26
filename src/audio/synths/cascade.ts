@@ -6,11 +6,16 @@ function synthCascadeChime(level: number): void {
   if (!c) return
   const now = c.currentTime
 
+  // Pentatonic ascent; caps so high chains don't get harsh.
   const STEPS = [0, 2, 4, 7, 9, 12, 14, 16]
   const step = STEPS[Math.min(level - 1, STEPS.length - 1)] ?? 0
+  // E5 base keeps high cascade levels out of the harsh 2–3 kHz band.
   const baseFreq = 660 * Math.pow(2, step / 12)
+
+  // Volume builds from ~45% at level 1 to full by level 4.
   const loudness = Math.min(1, 0.45 + 0.18 * (level - 1))
 
+  // (ratio, peakGain, decayMs)
   const partials: [number, number, number][] = [
     [1.0, 0.075, 460],
     [2.0, 0.025, 260],
@@ -48,13 +53,14 @@ function synthCascadeCelebration(levels: number): void {
 
   const ARPEGGIO_RATIOS = [
     1.0,
-    Math.pow(2, 7 / 12),
-    2.0,
-    Math.pow(2, 17 / 12),
-    Math.pow(2, 19 / 12),
-    4.0,
+    Math.pow(2, 7 / 12),  // perfect fifth
+    2.0,                   // octave
+    Math.pow(2, 17 / 12), // octave + perfect fourth
+    Math.pow(2, 19 / 12), // octave + fifth
+    4.0,                   // two octaves
   ]
   const noteCount = Math.min(ARPEGGIO_RATIOS.length, Math.max(3, levels))
+
   const stagger = 0.07 + 0.005 * (noteCount - 3)
   const depthScale = Math.min(1, 0.55 + 0.12 * (levels - 3))
 

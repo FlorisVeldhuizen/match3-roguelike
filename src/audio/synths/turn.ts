@@ -5,7 +5,7 @@ function synthTurnStartTriad(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
-  const baseFreq = 440
+  const baseFreq = 440 // A4
   const RATIOS = [1.0, 5 / 4, 3 / 2]
   const stagger = 0.065 + (Math.random() - 0.5) * 0.01
   for (let i = 0; i < RATIOS.length; i++) {
@@ -47,6 +47,7 @@ function synthEnemyTurnDescend(): void {
   if (!c) return
   const now = c.currentTime
   const gap = 0.1 + (Math.random() - 0.5) * 0.012
+  // A3 → F3 (descending minor third).
   const notes: [number, number][] = [
     [220, 0],
     [174.6, gap],
@@ -72,7 +73,7 @@ function synthEnemyTurnDescend(): void {
       osc.start(t)
       osc.stop(t + decayS + 0.02)
     }
-    // +6 cents detuned octave for a soft ~1 Hz beat.
+    // Slightly sharp (~+6 cents) so it beats against the clean octave at ~1 Hz.
     const detune = c.createOscillator()
     detune.type = 'sine'
     detune.frequency.value = freq * 2.0 * 1.00347
@@ -106,6 +107,7 @@ function synthExtraTurn(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
+  // G major arpeggio: G5 → B5 → D6 → G6.
   const baseFreq = 784
   const ARP_RATIOS = [1, 5 / 4, 3 / 2, 2]
   const stagger = 0.075 + (Math.random() - 0.5) * 0.015
@@ -140,7 +142,7 @@ function synthExtraTurn(): void {
   const arpDur = stagger * (ARP_RATIOS.length - 1) + 0.3
   for (let i = 0; i < 3; i++) {
     const t = now + 0.05 + Math.random() * arpDur
-    const freq = baseFreq * (3 + Math.random() * 2.5)
+    const freq = baseFreq * (3 + Math.random() * 2.5) // 2.4–4.4 kHz band
     if (freq > 5000) continue
     const ping = c.createOscillator()
     ping.type = 'sine'

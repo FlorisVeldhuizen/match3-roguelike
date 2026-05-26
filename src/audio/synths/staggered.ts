@@ -5,7 +5,6 @@ function synthStaggered(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
-  // Minor-flavored descent (roughly E5 → C#5 → A4).
   const detune = jitter(0.03)
   const FREQS = [660, 555, 440]
   const gap = 0.085 + (Math.random() - 0.5) * 0.012
@@ -24,7 +23,6 @@ function synthStaggered(): void {
       osc.type = 'sine'
       const startF = freq * ratio * detune
       osc.frequency.setValueAtTime(startF, t)
-      // ~6% downward bend for a dazed wobble.
       osc.frequency.exponentialRampToValueAtTime(startF * 0.94, t + decay)
       const g = c.createGain()
       const peakJ = peak * jitter(0.2)

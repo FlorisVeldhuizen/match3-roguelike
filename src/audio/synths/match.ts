@@ -1,6 +1,7 @@
 import { getCtx, isMuted, out } from '../context'
 import { jitter, makeNoiseBurst } from '../utils'
 
+// Gentler than damage/heal scaling since clack fires constantly.
 function matchIntensity(clusterSize: number): number {
   return 1 + 0.18 * Math.log2(Math.max(1, clusterSize / 3))
 }
@@ -34,7 +35,7 @@ function renderTwinkleSeq(
   }
 }
 
-// Parked: coin-pickup ping, not currently bound to any event.
+// Parked for a future coin/gold/loot cue.
 function synthCoinPing(amount: number): void {
   const c = getCtx()
   if (!c) return

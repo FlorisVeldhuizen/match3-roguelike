@@ -1,15 +1,10 @@
 import { getCtx, isMuted, out } from '../context'
 import { jitter } from '../utils'
 
-// 7-note C-major arpeggio climbing two octaves (~770ms) + sustained C3
-// bass + sparkle shower. Final note rings ~2s so the cue lands rather
-// than beeps.
 function synthVictory(): void {
   const c = getCtx()
   if (!c) return
   const now = c.currentTime
-  // C5 base, ascending triad doubled across two octaves on pure 5/4/3/2
-  // ratios so the climb lands on chord tones.
   const baseFreq = 523.25
   const RATIOS = [1, 5 / 4, 3 / 2, 2, 5 / 2, 3, 4]
   const noteCount = RATIOS.length
@@ -17,12 +12,9 @@ function synthVictory(): void {
   for (let i = 0; i < noteCount; i++) {
     const ratio = RATIOS[i]
     if (ratio === undefined) continue
-    // First note locks the downbeat; rest humanise with small jitter.
     const staggerJ = i === 0 ? 0 : (Math.random() - 0.5) * 0.025
     const t = now + stagger * i + staggerJ
     const isLast = i === noteCount - 1
-    // Final note rings ~3.5× longer — turns the arpeggio into a chord
-    // landing instead of a 7-note trill.
     const decayMul = isLast ? 3.6 : 1.0
     const partials: [number, number, number][] = [
       [1.0, 0.1, 600 * decayMul],
@@ -45,7 +37,6 @@ function synthVictory(): void {
       osc.stop(t + decayS + 0.02)
     }
   }
-  // C3 bass thrum — center of gravity under the arpeggio.
   const arpEnd = now + stagger * (noteCount - 1)
   const bass = c.createOscillator()
   bass.type = 'sine'
@@ -58,7 +49,6 @@ function synthVictory(): void {
   bass.connect(bg).connect(out(c))
   bass.start(now)
   bass.stop(arpEnd + 1.6)
-  // 8 high pings scattered through the arpeggio for shimmer.
   const arpDur = stagger * (noteCount - 1) + 1.0
   for (let i = 0; i < 8; i++) {
     const t = now + 0.08 + Math.random() * arpDur

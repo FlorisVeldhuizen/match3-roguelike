@@ -7,7 +7,6 @@ function synthShieldThump(amount: number): void {
   const now = c.currentTime
   const I = intensity(amount)
 
-  // Heavier blocks pitch lower and hit louder.
   const subJ = jitter(0.12) * (1 - 0.15 * (I - 1) / 0.7)
   const subVel = jitter(0.2) * I
   const sub = c.createOscillator()
@@ -23,7 +22,6 @@ function synthShieldThump(amount: number): void {
   sub.stop(now + 0.18)
 
   const f0 = 180 + (Math.random() - 0.5) * 20
-  // (ratio, peakGain, decayMs)
   const partials: [number, number, number][] = [
     [1.0, 0.22, 140],
     [2.31, 0.1, 90],
@@ -57,7 +55,6 @@ function synthShieldThump(amount: number): void {
   noise.stop(now + 0.08)
 }
 
-// Stacked instances drop the third ring partial to avoid frequency crowding.
 let lastShieldCrackAtSec = 0
 
 function synthShieldCrack(amount: number): void {
@@ -118,8 +115,7 @@ function synthShieldCrack(amount: number): void {
   crunch.start(now)
   crunch.stop(now + 0.18)
 
-  // Three inharmonic sine partials staggered ~12ms apart so they merge
-  // into shimmer rather than registering as a pitched tone.
+  // Inharmonic ratios (not octave-stacked) so partials merge into shimmer, not a tone.
   const ringPartials: [number, number, number][] = stacked
     ? [
         [1820, 0.0, 0.13],
@@ -144,7 +140,7 @@ function synthShieldCrack(amount: number): void {
     osc.stop(t + decay + 0.02)
   }
 
-  const debrisCount = stacked ? 2 : 3 + Math.floor((I - 1) * 3) // I=1 → 3, I=1.7 → 5
+  const debrisCount = stacked ? 2 : 3 + Math.floor((I - 1) * 3)
   for (let i = 0; i < debrisCount; i++) {
     const t = now + 0.06 + Math.random() * 0.2
     const burst = makeNoiseBurst(c)

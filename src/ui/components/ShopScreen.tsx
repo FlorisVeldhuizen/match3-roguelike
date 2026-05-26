@@ -4,10 +4,6 @@ import { tryGetRelic } from '../../core/relics/registry'
 import { getSpell } from '../../core/combat/spellRegistry'
 import type { SpellId } from '../../types'
 
-// Phase I shop. One offer per shop entry — rolled by the store on mount
-// (idempotent) so refreshing or remounting doesn't re-roll. Items
-// mutate to `purchased: true` after a successful buy; the row stays
-// rendered as "sold" until the player leaves.
 export function ShopScreen() {
   const runPhase = useGameStore((s) => s.runPhase)
   const offer = useGameStore((s) => s.currentShopOffer)

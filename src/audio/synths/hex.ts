@@ -21,6 +21,7 @@ function synthHexApply(): void {
   noise.start(now)
   noise.stop(now + dur + 0.02)
 
+  // Minor triad chord (A4, C5, E5) — all three hit together.
   const detune = jitter(0.04)
   const FREQS = [440, 523, 659]
   const decay = 0.32

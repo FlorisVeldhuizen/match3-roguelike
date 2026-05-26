@@ -1,6 +1,7 @@
 import { getCtx, isMuted, out } from '../context'
 import { intensity, jitter, makeNoiseBurst } from '../utils'
 
+// Brown-noise approximation via cascaded lowpass filters.
 function brownishNoise(
   c: AudioContext,
   cutoffHz: number,
@@ -18,6 +19,7 @@ function brownishNoise(
   return { src, out: lp2 }
 }
 
+// LFO-modulated gain for fire flicker character.
 function makeFlickerGain(
   c: AudioContext,
   t0: number,
@@ -177,13 +179,14 @@ function synthBurnFizzle(count: number): void {
   hp.frequency.exponentialRampToValueAtTime(3500 * jitter(0.06), now + 0.8)
   hp.Q.value = 0.9
 
-  // ~6.8 kHz peaking gives the /s/ phoneme character.
+  // Peaking boost at ~6.8 kHz gives the /s/ phoneme sibilance.
   const peak = c.createBiquadFilter()
   peak.type = 'peaking'
   peak.frequency.value = 6800 * jitter(0.05)
   peak.gain.value = 6
   peak.Q.value = 1.8
 
+  // Multi-stage ramp avoids the perceptual "cut off" of a single long exponentialRamp.
   const ng = c.createGain()
   ng.gain.setValueAtTime(0.0001, now)
   ng.gain.exponentialRampToValueAtTime(0.07 * jitter(0.15) * I, now + 0.025)
