@@ -190,6 +190,9 @@
 }
 
 @media (max-width: 420px) {
+  .board-shell {
+    --board-chrome: 410px;
+  }
   .hud-title {
     font-size: 0.72rem;
     letter-spacing: 0.14em;
@@ -199,6 +202,9 @@
   }
   .game-header {
     padding: 0.28rem 0.5rem;
+  }
+  .game {
+    gap: 0.4rem;
   }
   .spell-btn {
     font-size: 0.66rem;
@@ -229,6 +235,28 @@
   }
   .mana-cap {
     display: none;
+  }
+  /* Allow the stat+resource row to wrap so the resource cluster drops
+     below HP/block instead of overflowing the viewport. */
+  .hud-stat-resource-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.3rem 0.5rem;
+  }
+  .hud-stat-cluster {
+    justify-content: center;
+    flex: 1 1 100%;
+  }
+  .hud-resource-cluster {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem 0.35rem;
+  }
+  .hud {
+    padding: 0.5rem 0.6rem 0.55rem;
+  }
+  .player-statuses-floating {
+    left: 0.6rem;
   }
   .enemy-frame {
     min-width: 110px;
