@@ -291,7 +291,16 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
     let finalBoardRng = swap.rng
     const shuffleEvents: GameEvent[] = []
     if (!hasValidSwap(finalBoard, current.board.petrifiedRows)) {
-      const regen = generateBoard(finalBoardRng)
+      // Thread petrifiedRows in so the regenerated board has a valid
+      // swap OUTSIDE the locked row(s). Otherwise the regen could
+      // hand back another no-valid-moves state under an active
+      // petrify lockout.
+      const regen = generateBoard(
+        finalBoardRng,
+        undefined,
+        undefined,
+        current.board.petrifiedRows,
+      )
       finalBoard = regen.board
       finalBoardRng = regen.rng
       const cells: { at: Pos; color: GemColor }[] = []
@@ -378,8 +387,11 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         // source enemy isn't around to fire it).
         const petrifyTick = tickPetrifiedRows(current.board.petrifiedRows)
         // petrifiedRows update is staged into `s.board.petrifiedRows` in
-        // the `set` block below — accumulate locally for now.
+        // the `set` block below — accumulate locally for now. The
+        // per-row tick events drive the PetrifyOverlay's weakening →
+        // expired transitions on the animator's timeline.
         tickedPetrifiedRows = petrifyTick.petrifiedRows
+        tailEvents.push(...petrifyTick.events)
 
         const enemyResult = executeEnemyTurn(
           player,

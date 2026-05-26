@@ -1,0 +1,281 @@
+/* --- H2b board-verb threat overlays ---
+   Column-smash (Brute) and petrify-row (Defender) telegraph layers.
+   Both mount inside .board-mount with the same insets as the burning
+   overlay so the 8x8 grid lines up with the gem grid inside the Pixi
+   canvas. The two overlays sit at neighbouring z-indices and are
+   pointer-events:none so the player can still swap gems through them. */
+
+/* === Column smash === */
+.column-smash-overlay {
+  position: absolute;
+  top: calc(8 / 528 * 100%);
+  left: calc(8 / 528 * 100%);
+  right: calc(8 / 528 * 100%);
+  bottom: calc(8 / 528 * 100%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.column-smash-cell {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: column-smash-pulse 0.9s ease-in-out infinite;
+}
+
+/* Red threat wash — heavier than the burn wash since the smash is
+   imminent (next turn) and total (whole column wiped), not a
+   per-tile DoT. Solid red gradient blended additively so the gem
+   color underneath still reads through. */
+.column-smash-cell::before {
+  content: '';
+  position: absolute;
+  inset: 6%;
+  border-radius: 14%;
+  background: radial-gradient(
+    circle at center,
+    rgba(220, 38, 38, 0.55) 0%,
+    rgba(220, 38, 38, 0.3) 55%,
+    rgba(220, 38, 38, 0) 85%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes column-smash-pulse {
+  0%, 100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* One chevron per threatened column. Sits above the board (negative
+   top relative to the overlay box) and bobs vertically toward the
+   column to telegraph the "incoming hit from above" direction. */
+.column-smash-chevron {
+  position: absolute;
+  /* Sits above the top row. Negative top puts it outside the cell
+     grid; `transform: translateX(-50%)` centres it on the column's
+     left coordinate (which CellAnchor math sets to the leftmost edge
+     of the cell, so adding 0.5×CELL_STEP_PCT in JSX gets the centre). */
+  top: -4%;
+  transform: translateX(-50%);
+  font-size: clamp(1.2rem, 5.5vmin, 2rem);
+  color: rgba(255, 200, 200, 0.98);
+  filter: drop-shadow(0 0 8px rgba(220, 38, 38, 0.9));
+  animation: column-smash-chevron-bob 0.85s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 5;
+  line-height: 1;
+}
+
+@keyframes column-smash-chevron-bob {
+  0%, 100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, 38%);
+  }
+}
+
+/* === Petrify row === */
+.petrify-overlay {
+  position: absolute;
+  top: calc(8 / 528 * 100%);
+  left: calc(8 / 528 * 100%);
+  right: calc(8 / 528 * 100%);
+  bottom: calc(8 / 528 * 100%);
+  pointer-events: none;
+  /* Sits ABOVE column-smash so a petrify lockout on a threatened
+     column still reads (the stone wash overrides the red threat tint
+     visually — both effects active, but petrify is the more "static"
+     state and should ground the visual). */
+  z-index: 5;
+}
+
+.petrify-cell {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* Cool grey stone wash. Static — no pulse. Petrify reads as "frozen,
+   heavy, immovable"; pulsing would suggest active motion when in fact
+   the row is in a hold state. Slight blue-grey hue separates it from
+   neutral shadow. */
+.petrify-cell::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 14%;
+  background: linear-gradient(
+    135deg,
+    rgba(110, 120, 140, 0.5) 0%,
+    rgba(70, 80, 95, 0.55) 50%,
+    rgba(110, 120, 140, 0.5) 100%
+  );
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 320ms ease-out;
+}
+
+/* Pending (telegraph) treatment — distinct visual language from the
+   active lockout. Warm amber "warning stripe" with diagonal hashing,
+   pulsing slowly. Reads as "incoming, not active yet" — different
+   palette + pattern, not just a fainter version of the active wash. */
+.petrify-cell.is-pending::before {
+  background:
+    /* Diagonal hash for the "caution stripe" reading */
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 200, 90, 0.28) 0px,
+      rgba(255, 200, 90, 0.28) 4px,
+      rgba(255, 200, 90, 0) 4px,
+      rgba(255, 200, 90, 0) 8px
+    ),
+    /* Underlying amber wash so the gem still tints warmly */
+    linear-gradient(
+      135deg,
+      rgba(245, 175, 70, 0.18) 0%,
+      rgba(235, 155, 50, 0.22) 50%,
+      rgba(245, 175, 70, 0.18) 100%
+    );
+  mix-blend-mode: screen;
+  animation: petrify-pending-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes petrify-pending-pulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Weakening treatment — the final phase of the lockout. Three
+   reinforcing signals: a slight wash pulse, a low-amplitude tremble
+   on the cell, and falling dust specks that suggest the stone is
+   shedding fragments. Together they read as "this is about to
+   crumble" without any single layer needing to scream.
+   The tremble's duration and delay are set per-cell via inline CSS
+   vars (see WeakeningCell), so neighbouring cells shake at their own
+   speed and phase rather than ticking in lockstep. */
+.petrify-cell.is-weakening {
+  animation-name: petrify-weakening-tremble;
+  animation-duration: var(--tremble-dur, 0.6s);
+  animation-delay: var(--tremble-delay, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.petrify-cell.is-weakening::before {
+  animation: petrify-weakening-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes petrify-weakening-pulse {
+  0%, 100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes petrify-weakening-tremble {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-1.2px, 0.4px);
+  }
+  40% {
+    transform: translate(1.2px, -0.3px);
+  }
+  60% {
+    transform: translate(-0.8px, 0.5px);
+  }
+  80% {
+    transform: translate(0.8px, -0.4px);
+  }
+}
+
+/* Falling dust specks — small grey particles crumbling down OUT THE
+   BOTTOM of the weakening cell. Subtle: small, soft, low peak
+   opacity, no drop-shadow. The shake/pulse carry the "about to
+   release" reading on their own; the dust is ambient confirmation,
+   not a feature. Position (left), animation-delay and
+   animation-duration are inline-styled per particle by PetrifyDust
+   (randomized on mount, position re-rolled on each animation loop)
+   so dust appears to crumble organically rather than tile across
+   cells. They start right at the bottom edge of the cell (top: 94%)
+   so the crumbling reads as "dust shedding from underneath the
+   stone" rather than "particles floating mid-cell". */
+/* Dust positioning container. Lives alongside (not inside) the
+   shaking petrify-cell wrapper so the dust doesn't inherit the
+   tremble transform. Same 12.5% cell box so absolute children
+   anchor to the same grid spot. */
+.petrify-dust-layer {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  pointer-events: none;
+}
+
+/* Dust specks — small particles crumbling out the BOTTOM of the
+   weakening cell. Tone matches the wash's cool grey-blue palette
+   (not a brighter highlight on top) so the dust reads as "the stone
+   itself shedding" rather than "sparkles on top of the stone".
+   Position (left), animation-delay and animation-duration are
+   inline-styled per particle by PetrifyDust (randomized on mount,
+   position re-rolled on each animation loop). */
+.petrify-dust {
+  position: absolute;
+  width: 4%;
+  height: 4%;
+  top: 93%;
+  border-radius: 50%;
+  /* Cool slate, dimmer than the wash's center stop — pulled out of
+     the wash's own colour family so it sits IN the petrify palette
+     rather than competing with it. */
+  background: radial-gradient(
+    circle at center,
+    rgba(120, 130, 150, 0.7) 0%,
+    rgba(95, 105, 125, 0.4) 55%,
+    rgba(80, 90, 110, 0) 100%
+  );
+  pointer-events: none;
+  opacity: 0;
+  animation-name: petrify-dust-fall;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+
+@keyframes petrify-dust-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  18% {
+    opacity: 0.85;
+    transform: translateY(40%) scale(0.95);
+  }
+  65% {
+    opacity: 0.55;
+    transform: translateY(380%) scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(700%) scale(0.7);
+  }
+}

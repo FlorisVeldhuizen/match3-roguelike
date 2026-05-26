@@ -120,17 +120,15 @@ export function applyIntentTelegraph(
     }
   }
   if (intent.kind === 'petrify-row') {
+    // Telegraph-only: emit the placed event for the FX layer (so the
+    // overlay can render a "warning" treatment on the row), but do NOT
+    // mutate petrifiedRows yet. The actual lockout is applied at fire
+    // time by resolvePetrifyRowIntent — matching attack semantics
+    // (telegraph this turn → effect lands next turn). The pending state
+    // is derived by the overlay from enemies[].currentIntent so we
+    // don't need to materialize a separate "pending" map.
     const def = getArchetype(archetype)
-    // Default 2 phases of lockout. The row stays petrified across the
-    // telegraph phase AND the next phase, decremented at phase start.
     const duration = def.petrifyDuration ?? 2
-    const nextPetrifiedRows: PetrifiedRows = {
-      ...petrifiedRows,
-      [intent.row]: Math.max(petrifiedRows[intent.row] ?? 0, duration),
-    }
-    // Emit cells for the FX layer even though storage is row-level —
-    // overlays render per cell, so packaging the positions here keeps
-    // the consumer simple.
     const cells: Pos[] = []
     const w = board[0]?.length ?? 0
     for (let x = 0; x < w; x++) {
@@ -138,7 +136,7 @@ export function applyIntentTelegraph(
     }
     return {
       board,
-      petrifiedRows: nextPetrifiedRows,
+      petrifiedRows,
       events: [
         {
           kind: 'petrify-placed',

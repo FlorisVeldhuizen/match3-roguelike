@@ -102,20 +102,28 @@ export function tickFlagDuration(
 }
 
 // H2b: tick the position-bound petrifiedRows map by one phase. Rows
-// that hit 0 are removed from the map; FX layer can read `expired` for
-// "row unlocked" animations.
+// that hit 0 are removed from the map. Emits per-row `petrify-row-
+// ticked` events (with the new `remaining` count) so the FX layer can
+// drive its weakening → released animation hand-off on the animator's
+// playback timeline rather than the synchronous store commit.
 export function tickPetrifiedRows(
   petrifiedRows: PetrifiedRows,
-): { petrifiedRows: PetrifiedRows; expired: number[] } {
+): {
+  petrifiedRows: PetrifiedRows
+  expired: number[]
+  events: GameEvent[]
+} {
   const next: PetrifiedRows = {}
   const expired: number[] = []
+  const events: GameEvent[] = []
   for (const [rowStr, turns] of Object.entries(petrifiedRows)) {
     const remaining = turns - 1
     const row = Number(rowStr)
     if (remaining > 0) next[row] = remaining
     else expired.push(row)
+    events.push({ kind: 'petrify-row-ticked', row, remaining: Math.max(0, remaining) })
   }
-  return { petrifiedRows: next, expired }
+  return { petrifiedRows: next, expired, events }
 }
 
 // Pick N cells from `rng` that don't already carry `flag` (Smolder won't

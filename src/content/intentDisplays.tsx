@@ -19,10 +19,11 @@ import { Keyword } from '../ui/components/Keyword'
 export type IntentDisplay = {
   icon: string
   // Badge number. Magnitude for damage-y intents (attack amount,
-  // tile-burn count, ally-buff stacks), index for board verbs
-  // (column-smash → column, petrify-row → row). The board verbs are
-  // outliers but it's still the most relevant single integer to show.
-  number: number
+  // tile-burn count, ally-buff stacks). Omitted for board verbs
+  // (column-smash, petrify-row) because the only "number" they have
+  // is a coordinate, which reads as a duration counter and confuses
+  // players — the board overlay shows the location visually.
+  number?: number
   // Short tooltip-title sentence. Verbal but compressed.
   label: string
   // Longer tooltip body. May embed inline <Keyword/> chips that
@@ -104,16 +105,18 @@ export function intentDisplay(intent: Intent): IntentDisplay {
     case 'column-smash':
       return {
         icon: '💥',
-        number: intent.column,
-        label: `Smashes column ${intent.column}`,
-        description: `Next turn, this column is smashed — every gem in it that isn't matched first is cleared with no payout. Match the threatened gems to deny the smash.`,
+        // No badge number — the threat overlay shows the targeted column
+        // visually. A coordinate here misreads as "lasts N turns". The
+        // description still names the column so the player can confirm
+        // which one the chevron points to.
+        label: `Smashes column ${intent.column + 1}`,
+        description: `Next turn, column ${intent.column + 1} is smashed — every gem in it that isn't matched first is cleared with no payout. Match the threatened gems to deny the smash.`,
       }
     case 'petrify-row':
       return {
         icon: '🪨',
-        number: intent.row,
-        label: `Petrifies row ${intent.row}`,
-        description: `Next turn, this row is petrified — matches anchored on these cells are blocked for the duration. Cascades still flow through.`,
+        label: `Petrifies row ${intent.row + 1}`,
+        description: `Next turn, row ${intent.row + 1} is petrified for 2 phases — its gems are locked (can't be swapped) and matches can't originate there. Cascades and matches anchored elsewhere can still flow through.`,
       }
   }
 }

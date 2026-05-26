@@ -516,7 +516,7 @@ function IntentBadge({
         ref={anchorRef}
         // key on the wrapping element re-mounts on intent change so the
         // pop-in animation replays for the freshly telegraphed intent.
-        key={`${intent.kind}-${display.number}-${tick}`}
+        key={`${intent.kind}-${display.number ?? 'x'}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         role="img"
         aria-label={`${display.label}${allyTargetName ? ` → ${allyTargetName}` : ''}${lethal ? ' — lethal!' : ''}`}
@@ -529,7 +529,9 @@ function IntentBadge({
         <span className="intent-icon" aria-hidden>
           {display.icon}
         </span>
-        <span className="intent-amount">{display.number}</span>
+        {display.number !== undefined && (
+          <span className="intent-amount">{display.number}</span>
+        )}
         {intent.kind === 'attack' && intent.onHit && (
           <span
             className={`intent-rider rider-${intent.onHit.status}`}

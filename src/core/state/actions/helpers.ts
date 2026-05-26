@@ -3,13 +3,35 @@ import { rollIntent } from '../../combat/intents'
 import { getArchetype } from '../../combat/archetypeRegistry'
 import { resetFightFlags } from '../../relics/engine'
 import {
+  BOARD_HEIGHT,
+  BOARD_WIDTH,
+  type Cell,
   type Enemy,
   type EnemyArchetype,
   type FightState,
   type RelicInstance,
 } from '../../../types'
+import type { BoardState } from '../store'
 
 const PLAYER_MAX_HP = 40
+
+// Single source of truth for a "clean" BoardState — used by every
+// new-fight transition (enterNode, debugForceFight, restart's
+// initialState). All board-affecting effects reset here: cells get
+// the freshly-generated grid (which wipes gem-bound flags like
+// burning / pendingSmash); board-level state (selected, petrifiedRows,
+// and any future addition like a frozen-tiles map or a global board
+// modifier) is reset to its empty default. Adding a new board-level
+// effect means extending this helper, not chasing every reset site.
+export function freshBoardState(cells: Cell[][]): BoardState {
+  return {
+    width: BOARD_WIDTH,
+    height: BOARD_HEIGHT,
+    cells,
+    selected: null,
+    petrifiedRows: {},
+  }
+}
 
 export function freshPlayer(relics: RelicInstance[] = []) {
   return {

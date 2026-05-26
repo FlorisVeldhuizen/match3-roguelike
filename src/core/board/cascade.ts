@@ -109,15 +109,26 @@ export function resolveSwap(
   rng: RngState,
   from: Pos,
   to: Pos,
-  // H2b: petrified rows active when the player attempted the swap.
-  // Threaded through both detectMatches calls so matches on locked
-  // rows neither validate the swap nor count during cascades.
+  // H2b: petrified rows are a SWAP gate. Gems on a locked row are
+  // stuck — neither the swap origin nor the swap target may sit on
+  // such a row. Matches still cascade THROUGH petrified rows when
+  // anchored elsewhere; only the swap itself is gated.
   petrifiedRows: Readonly<Record<number, number>> = {},
 ): SwapResolution {
   const events: GameEvent[] = [{ kind: 'swap', from, to }]
+  // Reject the swap up-front if either end is on a locked row. The
+  // revert event lets the UI play the same "snap back" animation as
+  // a no-match swap; gameplay-wise this is just another invalid swap.
+  if (
+    (petrifiedRows[from.y] ?? 0) > 0 ||
+    (petrifiedRows[to.y] ?? 0) > 0
+  ) {
+    events.push({ kind: 'swap-reverted', from, to })
+    return { valid: false, board: startBoard, rng, events }
+  }
   const trial = cloneBoard(startBoard)
   swapInPlace(trial, from, to)
-  const initialMatches = detectMatches(trial, petrifiedRows)
+  const initialMatches = detectMatches(trial)
   if (initialMatches.length === 0) {
     events.push({ kind: 'swap-reverted', from, to })
     return { valid: false, board: startBoard, rng, events }
@@ -242,7 +253,7 @@ export function resolveSwap(
 
     board = blessedBoard
     level++
-    matches = detectMatches(board, petrifiedRows)
+    matches = detectMatches(board)
   }
 
   // `level` was post-incremented at the bottom of every iteration, so it

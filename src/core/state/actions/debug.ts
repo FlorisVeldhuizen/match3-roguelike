@@ -2,7 +2,7 @@ import { generateBoard } from '../../board/generation'
 import { runOnRoundStarted, snapshotOf } from '../../relics/engine'
 import type { EnemyArchetype } from '../../../types'
 import type { StoreSet, StoreGet } from './types'
-import { freshFight } from './helpers'
+import { freshBoardState, freshFight } from './helpers'
 
 export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
   return (archetypes: EnemyArchetype | EnemyArchetype[]): void => {
@@ -30,9 +30,11 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
     set((s) => {
       s.fight = enemyRoll.fight
       s.rng.enemy = enemyRoll.rng
-      s.board.cells = boardRoll.board
+      // freshBoardState resets every board-affecting field together —
+      // cells (wipes gem-bound flags), selected, petrifiedRows, and
+      // any future addition. Mirrors enterNode's reset.
+      s.board = freshBoardState(boardRoll.board)
       s.rng.board = boardRoll.rng
-      s.board.selected = null
       s.fightCounter += 1
       s.runPhase = 'fight'
     })

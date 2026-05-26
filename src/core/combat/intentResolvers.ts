@@ -5,6 +5,7 @@ import type {
   GameEvent,
   GemColor,
   Intent,
+  PetrifiedRows,
   Player,
   Pos,
 } from '../../types'
@@ -346,12 +347,35 @@ export function resolveColumnSmashIntent(
 }
 
 // ---------- Petrify row (Defender, H2b) ----------
-// Fire-time is a no-op: the lockout has been in place since the
-// telegraph (applied via applyIntentTelegraph at roll time). Tick-down
-// runs per phase in the store. This resolver exists so the dispatcher
-// has an entry for the kind.
-export function resolvePetrifyRowIntent(): { events: GameEvent[] } {
-  return { events: [] }
+// Fire-time applies the row lockout. Telegraph only emits the
+// petrify-placed event for the overlay's "warning" visual; the
+// actual matches-blocked / swap-blocked behaviour starts now, when
+// the resolver runs (one phase after the telegraph) — same cadence
+// as an attack. Duration counts the player phases the lockout will
+// stay active; tick happens at the start of each subsequent enemy
+// turn (before the next resolver runs).
+export function resolvePetrifyRowIntent(
+  intent: Extract<Intent, { kind: 'petrify-row' }>,
+  source: Enemy,
+  petrifiedRows: PetrifiedRows,
+): { petrifiedRows: PetrifiedRows; events: GameEvent[] } {
+  const def = getArchetype(source.archetype)
+  const duration = def.petrifyDuration ?? 2
+  const nextRows: PetrifiedRows = {
+    ...petrifiedRows,
+    [intent.row]: Math.max(petrifiedRows[intent.row] ?? 0, duration),
+  }
+  return {
+    petrifiedRows: nextRows,
+    events: [
+      {
+        kind: 'petrify-fired',
+        enemyId: source.id,
+        row: intent.row,
+        duration,
+      },
+    ],
+  }
 }
 
 // ---------- Ally intents (Rallier, H4b) ----------

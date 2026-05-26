@@ -11,6 +11,8 @@ import { AriaLiveAnnouncer } from './components/AriaLiveAnnouncer'
 import { CRTOverlay } from './components/CRTOverlay'
 import { BurningOverlay } from './components/BurningOverlay'
 import { BlessedOverlay } from './components/BlessedOverlay'
+import { ColumnSmashOverlay } from './components/ColumnSmashOverlay'
+import { PetrifyOverlay } from './components/PetrifyOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
 import { MapScreen } from './components/MapScreen'
@@ -78,6 +80,8 @@ export function App() {
                   mount div. */}
               <BurningOverlay />
               <BlessedOverlay />
+              <ColumnSmashOverlay />
+              <PetrifyOverlay />
             </div>
           </section>
         </div>

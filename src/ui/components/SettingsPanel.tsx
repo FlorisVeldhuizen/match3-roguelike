@@ -94,7 +94,9 @@ export function SettingsPanel() {
     window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
   }
 
-  const forceFight = (archetype: 'skirmisher' | 'brute' | 'smolder') => {
+  const forceFight = (
+    archetype: 'skirmisher' | 'brute' | 'smolder' | 'defender' | 'rallier',
+  ) => {
     useGameStore.getState().debugForceFight(archetype)
     setOpen(false)
   }
@@ -193,6 +195,20 @@ export function SettingsPanel() {
                     onClick={() => forceFight('smolder')}
                   >
                     Smolder
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={() => forceFight('defender')}
+                  >
+                    Defender
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-chip"
+                    onClick={() => forceFight('rallier')}
+                  >
+                    Rallier
                   </button>
                   <button
                     type="button"

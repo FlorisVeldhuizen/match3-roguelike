@@ -212,9 +212,18 @@ export type GameEvent =
   // Carries the cells that actually got cleared (i.e. the flag survived
   // counter-matching). May be empty if the player cleared the column.
   | { kind: 'column-smash-resolved'; enemyId: string; column: number; cells: Pos[] }
-  // H2b: Defender pre-flags a row at telegraph time. detectMatches
-  // excludes these cells as match anchors for the duration.
+  // H2b: Defender telegraphs the row to be petrified next turn. The
+  // overlay shows a "warning" treatment from this event; the actual
+  // lockout doesn't take effect until petrify-fired (one phase later).
   | { kind: 'petrify-placed'; enemyId: string; row: number; cells: Pos[]; duration: number }
+  // H2b: Defender's petrify intent resolves and the row is now locked
+  // for `duration` player phases.
+  | { kind: 'petrify-fired'; enemyId: string; row: number; duration: number }
+  // H2b: tickPetrifiedRows decremented a row's remaining-turns counter.
+  // `remaining: 0` means the row just expired (was removed from the
+  // active lockout map). FX layer rides this for the weakening →
+  // released animation hand-off.
+  | { kind: 'petrify-row-ticked'; row: number; remaining: number }
   // Emitted when a match clears one or more cells whose `burning` flag was
   // active. The consumer (store) computes Burn magnitude from cells.length
   // plus a content-side bonus (see BURN_FROM_TILE_BONUS in content/statuses).

@@ -273,6 +273,25 @@ export function installSfxBindings(): void {
         // verb better, queued for a future audio pass.
         if (event.cells.length > 0) playAttackSfx(8)
         return
+      case 'petrify-fired':
+        // Defender's lockout lands. Placeholder: shield-thump scaled
+        // up reads as "heavy stone slam" — defensive thud character
+        // matches the petrify identity (frozen, immovable). Defender
+        // fires petrify twice per pattern cycle, so this is a fairly
+        // frequent cue — kept brief (the synth is a single thump,
+        // not a sustained rumble) to avoid cluttering the audio bed.
+        // Future audio pass should swap in a dedicated stone-slam.
+        playShieldThumpSfx(6)
+        return
+      case 'petrify-row-ticked':
+        // Release cue when a row's lockout expires (remaining hit 0).
+        // shield-crack reads as "stone breaking apart" — sharper and
+        // more event-y than the burn-fizzle placeholder, which felt
+        // too soft / wrong-family for a rock-shattering release.
+        // Tick events with remaining > 0 are silent — only the
+        // release moment plays.
+        if (event.remaining === 0) playShieldCrackSfx(1)
+        return
       case 'tile-burn-placed': {
         // Smolder lights cells. Particles fly enemy → cells and the
         // flame appears at arrival, so the ignite cue lands then too.

@@ -10,7 +10,7 @@ import type {
 } from '../../../types'
 import type { BoardState } from '../store'
 import type { StoreSet, StoreGet } from './types'
-import { freshFight } from './helpers'
+import { freshBoardState, freshFight } from './helpers'
 
 // Flat HP restored when entering a rest node. Bosses heal to full; regular
 // fights carry HP forward (see enterNode). Rest sits between: a top-up that
@@ -96,9 +96,12 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
       s.map.currentNodeId = nodeId
       s.fight = enemyRoll.fight
       s.rng.enemy = enemyRoll.rng
-      s.board.cells = boardRoll.board
+      // All board-affecting state resets via freshBoardState — single
+      // source of truth so a new effect added in the future (e.g. a
+      // frozen-tiles map, global board modifier) inherits the cleanup
+      // here without needing a code change at every transition site.
+      s.board = freshBoardState(boardRoll.board)
       s.rng.board = boardRoll.rng
-      s.board.selected = null
       s.fightCounter += 1
       s.runPhase = 'fight'
     })

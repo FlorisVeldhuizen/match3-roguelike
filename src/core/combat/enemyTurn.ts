@@ -165,7 +165,8 @@ export function executeEnemyTurn(
       nextRng = r.rng
       events.push(...r.events)
     } else if (intent.kind === 'petrify-row') {
-      const r = resolvePetrifyRowIntent()
+      const r = resolvePetrifyRowIntent(intent, updatedEnemy, nextPetrifiedRows)
+      nextPetrifiedRows = r.petrifiedRows
       events.push(...r.events)
     } else if (intent.kind === 'block') {
       const r = resolveBlockIntent(updatedEnemy)

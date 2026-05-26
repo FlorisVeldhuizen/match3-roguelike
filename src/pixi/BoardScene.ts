@@ -279,6 +279,12 @@ export class BoardScene {
   // mid-idle cycle picks skip the 128-detectMatches scan.
   private nudgeSwapCache: Array<{ from: Pos; to: Pos }> | null = null
   private nudgeSwapCacheCells: unknown = null
+  // H2b: petrifiedRows changes can invalidate cached suggestions without
+  // touching cells. Today both update inside the same enemy-turn commit
+  // so cells-identity also catches petrify shifts — keying on this too
+  // makes the cache safe against future code paths that update only
+  // petrifiedRows.
+  private nudgeSwapCachePetrified: unknown = null
 
   constructor(mountEl: HTMLElement) {
     this.mountEl = mountEl
@@ -786,6 +792,12 @@ export class BoardScene {
       this.cachedCanvasRect = null
       const cell = this.clientToCell(ev.clientX, ev.clientY)
       if (!cell) return
+      // H2b: gems on a petrified row are stuck — refuse to even pick
+      // them up. Without this the player gets a "phantom" lift + a
+      // post-swap revert with no explanation. Visually the row already
+      // reads as stone, so just dropping the input here matches the
+      // affordance.
+      if ((storeState.board.petrifiedRows[cell.y] ?? 0) > 0) return
       canvas.setPointerCapture(ev.pointerId)
       this.activePointer = {
         pointerId: ev.pointerId,
@@ -1013,6 +1025,17 @@ export class BoardScene {
     // Clear hover before the cascade plays so the lift/halo don't ghost
     // through cleared cells.
     this.setHover(null)
+    // H2b: refuse swaps that touch a petrified row. The store's
+    // resolveSwap reverts these too, but bailing here skips the
+    // swap-and-snap-back animation — the row already reads as locked
+    // visually, so the input should simply be ignored.
+    const petrifiedRows = useGameStore.getState().board.petrifiedRows
+    if (
+      (petrifiedRows[from.y] ?? 0) > 0 ||
+      (petrifiedRows[to.y] ?? 0) > 0
+    ) {
+      return
+    }
     const result = useGameStore.getState().attemptSwap(from, to)
     await animator.play(result.events)
     // If this swap ended the fight, sweep the board: every remaining gem
@@ -1355,8 +1378,13 @@ export class BoardScene {
     // Board doesn't change while the player sits idle, so cycle picks reuse
     // the swap list. Identity check is enough: any store update produces a
     // fresh cells array.
+    const petrifiedRows = useGameStore.getState().board.petrifiedRows
     let swaps: Array<{ from: Pos; to: Pos }>
-    if (this.nudgeSwapCacheCells === cells && this.nudgeSwapCache) {
+    if (
+      this.nudgeSwapCacheCells === cells &&
+      this.nudgeSwapCachePetrified === petrifiedRows &&
+      this.nudgeSwapCache
+    ) {
       swaps = this.nudgeSwapCache
     } else {
       // Shallow-clone rows so swapMakesMatch's transient mutations don't
@@ -1364,11 +1392,12 @@ export class BoardScene {
       // mutated by the scan, only row slots.
       const cloned = cells.map((row) => row.slice())
       // H2b: respect Defender's petrify-row lockout — the nudge
-      // shouldn't suggest a swap whose only matches sit on a locked row.
-      const petrifiedRows = useGameStore.getState().board.petrifiedRows
+      // shouldn't suggest a swap involving a locked row. findAllValidSwaps
+      // gates on petrifiedRows internally.
       swaps = findAllValidSwaps(cloned, petrifiedRows)
       this.nudgeSwapCache = swaps
       this.nudgeSwapCacheCells = cells
+      this.nudgeSwapCachePetrified = petrifiedRows
     }
     if (swaps.length === 0) return
     // Avoid re-picking the last pair when alternatives exist.

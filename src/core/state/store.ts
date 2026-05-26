@@ -3,8 +3,6 @@ import { immer } from 'zustand/middleware/immer'
 import { generateBoard } from '../board/generation'
 import { forkStreams, type RngStreams } from '../rng/streams'
 import {
-  BOARD_HEIGHT,
-  BOARD_WIDTH,
   type Cell,
   type EnemyArchetype,
   type FightState,
@@ -23,7 +21,7 @@ import { generateMap } from '../map/generate'
 import { makeDebugForceFight } from './actions/debug'
 import { makeAcquireRelic, makeSkipReward } from './actions/rewards'
 import { makeEnterNode, makeRestart } from './actions/nodes'
-import { freshPlayer } from './actions/helpers'
+import { freshBoardState, freshPlayer } from './actions/helpers'
 import {
   makeCastSpell,
   makeCastPurify,
@@ -131,13 +129,7 @@ function initialState(seed: string): {
     targetEnemyId: null,
   }
   return {
-    board: {
-      width: BOARD_WIDTH,
-      height: BOARD_HEIGHT,
-      cells: board,
-      selected: null,
-      petrifiedRows: {},
-    },
+    board: freshBoardState(board),
     rng: { ...streams, board: nextBoardRng, map: nextMapRng },
     rootSeed: seed,
     fight: sentinelFight,

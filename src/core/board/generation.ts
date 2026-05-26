@@ -21,6 +21,15 @@ export function generateBoard(
   rng: RngState,
   width: number = BOARD_WIDTH,
   height: number = BOARD_HEIGHT,
+  // H2b: optional petrify map. The post-cascade regen path in
+  // actions/swap.ts can call generateBoard while a Defender's
+  // petrify-row lockout is still active; without threading this in,
+  // the internal hasValidSwap check would happily accept a board
+  // whose only valid swaps sit on the locked row — which from the
+  // player's perspective is still a no-moves state. Defaults to
+  // empty so existing boot / new-fight callers (which have no
+  // petrify state) behave unchanged.
+  petrifiedRows: Readonly<Record<number, number>> = {},
 ): { board: Cell[][]; rng: RngState } {
   let r = rng
   const rand = (): number => {
@@ -30,8 +39,8 @@ export function generateBoard(
   }
 
   let board = fillAndDematch(width, height, rand)
-  if (!hasValidSwap(board)) {
-    board = forcePlaceSwap(board, rand)
+  if (!hasValidSwap(board, petrifiedRows)) {
+    board = forcePlaceSwap(board, rand, petrifiedRows)
   }
   return { board, rng: r }
 }
@@ -84,9 +93,10 @@ function forbiddenColorsAt(
   return out
 }
 
-// H2b: optional petrifiedRows respected when checking whether the
-// player still has a valid move. A swap whose only matches sit on
-// locked rows shouldn't keep the board from auto-regen-ing.
+// H2b: optional petrifiedRows respected as a SWAP gate. A swap whose
+// origin or target sits on a locked row is invalid — the gem itself is
+// stuck. Matches can still flow THROUGH a petrified row when anchored
+// elsewhere; that case is unaffected by this function.
 export function hasValidSwap(
   board: Cell[][],
   petrifiedRows: Readonly<Record<number, number>> = {},
@@ -94,14 +104,15 @@ export function hasValidSwap(
   const h = board.length
   const w = board[0]?.length ?? 0
   for (let y = 0; y < h; y++) {
+    if ((petrifiedRows[y] ?? 0) > 0) continue // gems in this row are stuck
     for (let x = 0; x < w; x++) {
-      // Try swap right.
+      // Try swap right (same row, so already petrify-checked above).
       if (x + 1 < w) {
-        if (swapMakesMatch(board, x, y, x + 1, y, petrifiedRows)) return true
+        if (swapMakesMatch(board, x, y, x + 1, y)) return true
       }
-      // Try swap down.
-      if (y + 1 < h) {
-        if (swapMakesMatch(board, x, y, x, y + 1, petrifiedRows)) return true
+      // Try swap down — target row must also be unpetrified.
+      if (y + 1 < h && (petrifiedRows[y + 1] ?? 0) === 0) {
+        if (swapMakesMatch(board, x, y, x, y + 1)) return true
       }
     }
   }
@@ -118,11 +129,16 @@ export function findAllValidSwaps(
   const h = board.length
   const w = board[0]?.length ?? 0
   for (let y = 0; y < h; y++) {
+    if ((petrifiedRows[y] ?? 0) > 0) continue
     for (let x = 0; x < w; x++) {
-      if (x + 1 < w && swapMakesMatch(board, x, y, x + 1, y, petrifiedRows)) {
+      if (x + 1 < w && swapMakesMatch(board, x, y, x + 1, y)) {
         out.push({ from: { x, y }, to: { x: x + 1, y } })
       }
-      if (y + 1 < h && swapMakesMatch(board, x, y, x, y + 1, petrifiedRows)) {
+      if (
+        y + 1 < h &&
+        (petrifiedRows[y + 1] ?? 0) === 0 &&
+        swapMakesMatch(board, x, y, x, y + 1)
+      ) {
         out.push({ from: { x, y }, to: { x, y: y + 1 } })
       }
     }
@@ -136,7 +152,6 @@ function swapMakesMatch(
   ay: number,
   bx: number,
   by: number,
-  petrifiedRows: Readonly<Record<number, number>> = {},
 ): boolean {
   const rowA = board[ay]
   const rowB = board[by]
@@ -146,7 +161,7 @@ function swapMakesMatch(
   if (!ca || !cb) return false
   rowA[ax] = cb
   rowB[bx] = ca
-  const hit = detectMatches(board, petrifiedRows).length > 0
+  const hit = detectMatches(board).length > 0
   rowA[ax] = ca
   rowB[bx] = cb
   return hit
@@ -155,12 +170,23 @@ function swapMakesMatch(
 // Last-resort: force a row's first 4 cells to [A,B,A,B] with A,B chosen so
 // they don't form matches with cells above or to the right. Then re-clean
 // the rest of the board (preserving the forced segment).
-function forcePlaceSwap(board: Cell[][], randIdx: () => number): Cell[][] {
+function forcePlaceSwap(
+  board: Cell[][],
+  randIdx: () => number,
+  // H2b: skip petrified rows when picking the "force placement" row —
+  // and use the petrify-aware hasValidSwap check at the end, so the
+  // forced board is genuinely playable under the active lockout.
+  petrifiedRows: Readonly<Record<number, number>> = {},
+): Cell[][] {
   const h = board.length
   const w = board[0]?.length ?? 0
   if (w < 4 || h === 0) return board
-  // Try rows in randomized order until placement works.
-  const rowOrder = Array.from({ length: h }, (_, i) => i)
+  // Try rows in randomized order until placement works. Skip rows that
+  // are currently under a petrify lockout — placing the forced segment
+  // there would just trip the lockout gate in hasValidSwap.
+  const rowOrder = Array.from({ length: h }, (_, i) => i).filter(
+    (y) => (petrifiedRows[y] ?? 0) === 0,
+  )
   for (let i = rowOrder.length - 1; i > 0; i--) {
     const j = randIdx() % (i + 1)
     const a = rowOrder[i]
@@ -179,7 +205,7 @@ function forcePlaceSwap(board: Cell[][], randIdx: () => number): Cell[][] {
         if (tryForceSegment(board, y, colA, colB)) {
           // Re-clean rest of board (preserving forced segment).
           dematchExceptSegment(board, y)
-          if (hasValidSwap(board)) return board
+          if (hasValidSwap(board, petrifiedRows)) return board
         }
       }
     }

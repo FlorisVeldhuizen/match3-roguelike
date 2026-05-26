@@ -254,8 +254,15 @@
 
 .settings-chips {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   margin-left: auto;
+  /* Allow the chip block to use multiple lines without forcing the
+     panel wider than its host. With 5+ archetype chips (Skirm, Brute,
+     Smolder, Defender, Rallier, Trio) they wrap to a second row inside
+     the popover rather than overflowing it. */
+  justify-content: flex-end;
+  max-width: 70%;
 }
 
 .settings-chip {
