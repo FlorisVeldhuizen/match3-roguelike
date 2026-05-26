@@ -253,7 +253,8 @@ describe('generateMap', () => {
   })
 
   // Multi-enemy group sizes per column band. Col 0-1 are single-enemy;
-  // col 2 fights have 2-3 enemies (mixed); elite stays solo; boss solo.
+  // col 2 fights have 2-3 enemies (mixed); col 3 fights are solo;
+  // elite stays solo; boss solo.
   it('multi-enemy group sizes match the per-column band', () => {
     for (let seed = 1; seed <= 200; seed++) {
       const map = build(seed)
@@ -264,10 +265,33 @@ describe('generateMap', () => {
         } else if (node.kind === 'fight') {
           if (node.column <= 1) expect(len).toBe(1)
           else if (node.column === 2) expect(len === 2 || len === 3).toBe(true)
+          else if (node.column === 3) expect(len).toBe(1)
         } else {
           // shop/rest carry no archetypes
           expect(node.archetypes).toBeUndefined()
         }
+      }
+    }
+  })
+
+  // Boss uses the dedicated Tyrant archetype.
+  it('boss node uses the tyrant archetype', () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const map = build(seed)
+      const boss = map.nodes.find((n) => n.kind === 'boss')!
+      expect(boss.archetypes).toEqual(['tyrant'])
+    }
+  })
+
+  // Post-elite fight column exists and only carries solo fight nodes.
+  it('column 3 carries solo fight nodes only', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const map = build(seed)
+      const col3 = map.nodes.filter((n) => n.column === 3)
+      expect(col3.length).toBe(2)
+      for (const n of col3) {
+        expect(n.kind).toBe('fight')
+        expect(n.archetypes?.length).toBe(1)
       }
     }
   })

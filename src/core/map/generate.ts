@@ -7,21 +7,23 @@ import type {
   NodeKind,
 } from '../../types'
 
-// H1 map: 5 columns total. Columns 0-3 are encounter columns, column 4 is
-// the boss. Layout per PLANNING/02-scope §Map structure.
+// Map: 6 columns total. Columns 0-4 are encounter columns, column 5 is
+// the boss. Layout per PLANNING/02-scope §Map structure (extended with
+// a post-elite fight column for an additional encounter per run).
 //
 // - col 0: 3 fight nodes (player picks any one as the first move)
 // - col 1: 2 nodes — variant A: fight + shop, variant B: 2 fights
 // - col 2: 3 nodes — exactly 1 elite + 2 fights (elite lane randomized)
-// - col 3: 2 nodes — rest + shop (the "2 shops" variant in the scope sketch
+// - col 3: 2 fight nodes (post-elite pressure before the rest stop)
+// - col 4: 2 nodes — rest + shop (the "2 shops" variant in the scope sketch
 //   would violate the "≥1 rest accessible" rule, so we always emit rest + shop)
-// - col 4: 1 boss node
+// - col 5: 1 boss node
 //
 // Edge generation:
 // - each col-N node picks 1-2 targets in col-(N+1)
 // - after that pass, any col-(N+1) node still without an incoming edge gets
 //   one from a random col-N source — guarantees no orphans
-// - all col-3 nodes connect to the boss
+// - all col-4 nodes connect to the boss
 //
 // Path guarantees (verified by tests/map-generation.test.ts):
 // - exactly 1 elite present (in col 2)
@@ -36,7 +38,7 @@ import type {
 // archetypes independently. Simple-stack groups stay in the pool via the
 // normal weighted roller — variety is the point, not gatekeeping.
 
-const COLUMN_COUNT = 5
+const COLUMN_COUNT = 6
 
 // H2a: tier-weighted archetype pool per column. Skirmisher heavier in the
 // early columns (low-HP chip damage → gentle on-ramp); Brute and Smolder
@@ -81,7 +83,19 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
   ],
-  // col 3: only rest/shop here today; left for symmetry / future tiers
+  // col 3: post-elite fight column. Reuses the col-2 mid-tier mix so
+  // the player keeps facing the heavier hitters, but solo (per
+  // rollEnemyCount) — pacing is "single tough fight" rather than the
+  // 2-3 enemy groups that col 2 already delivered.
+  [
+    { archetype: 'brute', weight: 4 },
+    { archetype: 'smolder', weight: 3 },
+    { archetype: 'defender', weight: 3 },
+    { archetype: 'caster', weight: 2 },
+    { archetype: 'swarmer', weight: 2 },
+    { archetype: 'skirmisher', weight: 2 },
+  ],
+  // col 4: only rest/shop here; left for symmetry / future tiers
   [
     { archetype: 'brute', weight: 4 },
     { archetype: 'smolder', weight: 3 },
@@ -90,8 +104,8 @@ const COLUMN_ARCHETYPE_WEIGHTS: ArchetypeWeight[][] = [
     { archetype: 'swarmer', weight: 2 },
     { archetype: 'skirmisher', weight: 2 },
   ],
-  // col 4: boss column; not used by the weight roller
-  [{ archetype: 'brute', weight: 1 }],
+  // col 5: boss column; not used by the weight roller
+  [{ archetype: 'tyrant', weight: 1 }],
 ]
 
 // H4b: Preset role-mixed compositions for mid-column fight nodes.
@@ -148,6 +162,10 @@ function rollEnemyCount(
 ): { count: number; rng: RngState } {
   if (kind === 'boss' || kind === 'elite') return { count: 1, rng }
   if (column <= 1) return { count: 1, rng }
+  // col 3 (post-elite): solo fights — the role-mixed groups belong to
+  // col 2 alone, so col 3 reads as "one tough enemy" instead of another
+  // group encounter.
+  if (column === 3) return { count: 1, rng }
   // col 2: 50/50 split between 2-enemy and 3-enemy groups
   const [pick, next] = nextInt(rng, 2)
   return { count: pick === 0 ? 2 : 3, rng: next }
@@ -189,10 +207,15 @@ function rollColumnKinds(
     return { kinds: shuffled, rng: n }
   }
   if (column === 3) {
+    // Post-elite fight column: 2 solo fights. Single lane each so the
+    // pacing reads as "narrow path" rather than another big group room.
+    return { kinds: ['fight', 'fight'], rng }
+  }
+  if (column === 4) {
     const [shuffled, n] = shuffle(rng, ['rest', 'shop'] as NodeKind[])
     return { kinds: shuffled, rng: n }
   }
-  if (column === 4) {
+  if (column === 5) {
     return { kinds: ['boss'], rng }
   }
   throw new Error(`rollColumnKinds: unknown column ${column}`)
@@ -254,8 +277,10 @@ function buildNodes(rng: RngState): {
         }
         node.archetypes = archetypes
       } else if (kind === 'boss') {
-        // Roadmap: boss uses Brute stats in H1/H2a; Corruptor lands in J1.
-        node.archetypes = ['brute']
+        // Tyrant — dedicated Apex archetype: heavier HP wall, mixed
+        // column-smash + petrify-row pattern, attack range that outpaces
+        // every other archetype in the pool.
+        node.archetypes = ['tyrant']
       }
       colNodes.push(node)
       nodes.push(node)
@@ -274,13 +299,13 @@ function buildEdges(
   for (let c = 0; c < nodesByColumn.length - 1; c++) {
     const fromCol = nodesByColumn[c]!
     const toCol = nodesByColumn[c + 1]!
-    // Col 2 → col 3 hosts the rest + shop pair. To guarantee both services
+    // Col 3 → col 4 hosts the rest + shop pair. To guarantee both services
     // are reachable from every col-0 start (per scope rules "≥1 shop
     // accessible", "≥1 rest accessible"), we force this hop to be fully
-    // connected — every col-2 node connects to BOTH col-3 nodes. Players
+    // connected — every col-3 node connects to BOTH col-4 nodes. Players
     // still pick which service to visit; they just never get locked out of
     // the other by path geometry. Other hops use the random 1-2 fanout.
-    const forceFullFanout = c === 2
+    const forceFullFanout = c === 3
     for (const from of fromCol) {
       let targetCount: number
       if (forceFullFanout) {

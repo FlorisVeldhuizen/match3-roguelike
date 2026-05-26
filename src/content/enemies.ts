@@ -134,6 +134,30 @@ const swarmer: ArchetypeDef = {
   clusterShoveLength: 2,
 }
 
+// Tyrant: the Apex boss. Beefy HP wall + the meanest verb mix in the
+// pool — column-smash AND petrify-row in the same pattern, so the
+// player has to juggle "the column the smash is about to hit" while
+// rows lock under their planned matches. Attack range outpaces every
+// other archetype so block matters even on plain attack turns.
+const tyrant: ArchetypeDef = {
+  id: 'tyrant',
+  name: 'Tyrant',
+  maxHp: 48,
+  pattern: [
+    'attack',
+    'column-smash',
+    'attack',
+    'petrify-row',
+    'block',
+    'attack',
+    'column-smash',
+    'attack',
+  ],
+  attackRange: { min: 6, max: 9 },
+  blockRange: { min: 5, max: 8 },
+  petrifyDuration: 2,
+}
+
 // Side-effect registration: bootstrap imports this file once from main.tsx.
 registerArchetype(brute)
 registerArchetype(smolder)
@@ -142,3 +166,4 @@ registerArchetype(rallier)
 registerArchetype(defender)
 registerArchetype(caster)
 registerArchetype(swarmer)
+registerArchetype(tyrant)

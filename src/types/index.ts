@@ -384,6 +384,7 @@ export type EnemyArchetype =
   | 'defender'
   | 'caster'
   | 'swarmer'
+  | 'tyrant'
 
 export type PhasePools = {
   red: number
@@ -523,15 +524,15 @@ export type FightState = {
 
 export type HexedColor = { color: GemColor; turnsLeft: number }
 
-// H1: branching procedural map. Layout per 02-scope §Map structure —
-// 4 encounter columns + boss column 5. Nodes are identified by stable
-// string ids so save state can reference them later (K).
+// H1: branching procedural map. 5 encounter columns + boss column 6.
+// Nodes are identified by stable string ids so save state can reference
+// them later (K).
 export type NodeKind = 'fight' | 'elite' | 'shop' | 'rest' | 'boss'
 
 export type MapNode = {
   id: string
   kind: NodeKind
-  column: number // 0..4 (0 = first encounter column, 4 = boss)
+  column: number // 0..5 (0 = first encounter column, 5 = boss)
   // Lane index within the column. Lets MapScreen lay out nodes
   // vertically without re-deriving position from edges.
   lane: number
