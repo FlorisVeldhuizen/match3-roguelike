@@ -10,8 +10,10 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 import { scheduleAfterMs } from '../../timing'
 import { subscribeTrailScheduled } from '../../trails/sync'
 import { useFightReset } from '../hooks/useFightReset'
+import { useTransientCellFx } from '../hooks/useTransientCellFx'
 import { BOARD_HEIGHT, BOARD_WIDTH } from '../../types'
 import type { GemColor } from '../../types'
+import { BOARD_CELL_IMPACT_MS, BoardCellImpact } from './BoardCellImpact'
 import { CellAnchor } from './CellAnchor'
 
 type HexState = { turnsLeft: number; expiring: boolean }
@@ -35,6 +37,7 @@ export function ColorHexOverlay() {
     fightCounter: number
   } | null>(null)
   const cells = useGameStore((s) => s.board.cells)
+  const impacts = useTransientCellFx(BOARD_CELL_IMPACT_MS)
 
   const seedFromStore = useCallback(() => {
     setHexStates(readHexStatesFromStore())
@@ -43,8 +46,9 @@ export function ColorHexOverlay() {
   useFightReset(
     useCallback(() => {
       setHexStates(new Map())
+      impacts.clear()
       seedFromStore()
-    }, [seedFromStore]),
+    }, [seedFromStore, impacts]),
   )
 
   useEffect(() => {
@@ -55,6 +59,18 @@ export function ColorHexOverlay() {
       scheduleAfterMs(() => {
         if (useGameStore.getState().fightCounter !== pending.fightCounter) return
         pendingHexRef.current = null
+        const board = useGameStore.getState().board.cells
+        const hitCells: { x: number; y: number }[] = []
+        for (let y = 0; y < board.length; y++) {
+          const row = board[y]
+          if (!row) continue
+          for (let x = 0; x < row.length; x++) {
+            if (row[x]?.gemColor === pending.color) {
+              hitCells.push({ x, y })
+            }
+          }
+        }
+        if (hitCells.length > 0) impacts.spawn(hitCells)
         setHexStates((prev) => {
           const next = new Map(prev)
           next.set(pending.color, {
@@ -108,7 +124,7 @@ export function ColorHexOverlay() {
       unsubTrail()
       unsub()
     }
-  }, [])
+  }, [impacts])
 
   if (hexStates.size === 0) return null
 
@@ -133,6 +149,16 @@ export function ColorHexOverlay() {
   return (
     <div className="color-hex-overlay" aria-hidden>
       {anchors}
+      {impacts.items.map((hit) => (
+        <CellAnchor
+          key={`hex-impact-${hit.id}`}
+          x={hit.x}
+          y={hit.y}
+          className="board-cell-impact"
+        >
+          <BoardCellImpact variant="hex" />
+        </CellAnchor>
+      ))}
     </div>
   )
 }

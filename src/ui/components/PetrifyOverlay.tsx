@@ -10,11 +10,15 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 import { scheduleAfterMs } from '../../timing'
 import { subscribeTrailScheduled } from '../../trails/sync'
 import { useFightReset } from '../hooks/useFightReset'
+import { useTransientCellFx } from '../hooks/useTransientCellFx'
+import { BOARD_CELL_IMPACT_MS, BoardCellImpact } from './BoardCellImpact'
 import { CellAnchor } from './CellAnchor'
 
 type Active = { row: number; remaining: number }
 
 const DUST_PER_CELL = 2
+/** Let impact particles read on the gems before the stone wash covers them. */
+const ACTIVE_WASH_DELAY_MS = 140
 
 function readPetrifyFromStore(): { pending: Set<number>; active: Map<number, Active> } {
   const s = useGameStore.getState()
@@ -47,6 +51,11 @@ export function PetrifyOverlay() {
     duration: number
     fightCounter: number
   } | null>(null)
+  const impacts = useTransientCellFx(BOARD_CELL_IMPACT_MS)
+  const impactsSpawnRef = useRef(impacts.spawn)
+  useEffect(() => {
+    impactsSpawnRef.current = impacts.spawn
+  })
 
   const seedFromStore = useCallback(() => {
     const { pending: nextPending, active: nextActive } = readPetrifyFromStore()
@@ -58,8 +67,9 @@ export function PetrifyOverlay() {
     useCallback(() => {
       setPending(new Set())
       setActive(new Map())
+      impacts.clear()
       seedFromStore()
-    }, [seedFromStore]),
+    }, [seedFromStore, impacts]),
   )
 
   useEffect(() => {
@@ -71,17 +81,27 @@ export function PetrifyOverlay() {
         if (useGameStore.getState().fightCounter !== pending.fightCounter) return
         pendingFireRef.current = null
         const row = pending.row
+        const duration = pending.duration
         setPending((prev) => {
           if (!prev.has(row)) return prev
           const next = new Set(prev)
           next.delete(row)
           return next
         })
-        setActive((prev) => {
-          const next = new Map(prev)
-          next.set(row, { row, remaining: pending.duration })
-          return next
-        })
+        const boardW = useGameStore.getState().board.cells[0]?.length ?? 0
+        if (boardW > 0) {
+          impactsSpawnRef.current(
+            Array.from({ length: boardW }, (_, x) => ({ x, y: row })),
+          )
+        }
+        scheduleAfterMs(() => {
+          if (useGameStore.getState().fightCounter !== pending.fightCounter) return
+          setActive((prev) => {
+            const next = new Map(prev)
+            next.set(row, { row, remaining: duration })
+            return next
+          })
+        }, ACTIVE_WASH_DELAY_MS)
       }, trail.arrivalMs)
     })
     const unsub = subscribeGameEvents((event) => {
@@ -121,7 +141,7 @@ export function PetrifyOverlay() {
       unsubTrail()
       unsub()
     }
-  }, [])
+  }, [impacts.spawn])
 
   const pendingCells: { x: number; y: number; key: string }[] = []
   for (const y of pending) {
@@ -154,6 +174,18 @@ export function PetrifyOverlay() {
           <CellAnchor key={key} x={x} y={y} className="petrify-cell" />
         ),
       )}
+      <div className="petrify-impact-layer" aria-hidden>
+        {impacts.items.map((hit) => (
+          <CellAnchor
+            key={`petrify-impact-${hit.id}`}
+            x={hit.x}
+            y={hit.y}
+            className="board-cell-impact"
+          >
+            <BoardCellImpact variant="stone" />
+          </CellAnchor>
+        ))}
+      </div>
     </div>
   )
 }

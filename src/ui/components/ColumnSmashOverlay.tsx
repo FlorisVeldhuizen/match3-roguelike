@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useFightReset } from '../hooks/useFightReset'
+import { useTransientCellFx } from '../hooks/useTransientCellFx'
 import { BOARD_HEIGHT } from '../../types'
+import { BOARD_CELL_IMPACT_MS, BoardCellImpact } from './BoardCellImpact'
 import { CellAnchor } from './CellAnchor'
 
 const keyOf = (owner: string, column: number) => `${owner}|${column}`
@@ -23,6 +25,7 @@ function readThreatsFromStore(): Map<string, { owner: string; column: number }> 
 
 export function ColumnSmashOverlay() {
   const [threats, setThreats] = useState(readThreatsFromStore)
+  const impacts = useTransientCellFx(BOARD_CELL_IMPACT_MS)
 
   const seedFromStore = useCallback(() => {
     setThreats(readThreatsFromStore())
@@ -31,8 +34,9 @@ export function ColumnSmashOverlay() {
   useFightReset(
     useCallback(() => {
       setThreats(new Map())
+      impacts.clear()
       seedFromStore()
-    }, [seedFromStore]),
+    }, [seedFromStore, impacts]),
   )
 
   useEffect(() => {
@@ -46,6 +50,9 @@ export function ColumnSmashOverlay() {
           return next
         })
       } else if (event.kind === 'column-smash-resolved') {
+        if (event.cells.length > 0) {
+          impacts.spawn(event.cells.map((c) => ({ x: c.x, y: c.y })))
+        }
         const ownerId = event.enemyId
         setThreats((prev) => {
           let changed = false
@@ -73,7 +80,7 @@ export function ColumnSmashOverlay() {
         })
       }
     })
-  }, [])
+  }, [impacts])
 
   return (
     <div className="column-smash-overlay" aria-hidden>
@@ -95,6 +102,16 @@ export function ColumnSmashOverlay() {
         >
           ▼
         </span>
+      ))}
+      {impacts.items.map((hit) => (
+        <CellAnchor
+          key={`smash-impact-${hit.id}`}
+          x={hit.x}
+          y={hit.y}
+          className="board-cell-impact"
+        >
+          <BoardCellImpact variant="smash" />
+        </CellAnchor>
       ))}
     </div>
   )

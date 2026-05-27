@@ -54,7 +54,20 @@
   mix-blend-mode: screen;
   pointer-events: none;
   z-index: -1;
-  animation: burning-cell-glow 1.6s ease-in-out infinite;
+  animation:
+    burning-cell-enter 520ms ease-out forwards,
+    burning-cell-glow 1.6s ease-in-out 520ms infinite;
+}
+
+@keyframes burning-cell-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
 }
 
 @keyframes burning-cell-glow {
@@ -385,8 +398,21 @@
     rgba(255, 190, 70, 0) 75%
   );
   mix-blend-mode: screen;
-  animation: blessed-pulse 1.4s ease-in-out infinite;
+  animation:
+    blessed-enter 560ms ease-out forwards,
+    blessed-pulse 1.4s ease-in-out 560ms infinite;
   pointer-events: none;
+}
+
+@keyframes blessed-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
 }
 
 @keyframes blessed-pulse {
@@ -440,6 +466,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .burning-cell::before,
   .blessed-cell::before,
   .blessed-spark {
     animation: none;

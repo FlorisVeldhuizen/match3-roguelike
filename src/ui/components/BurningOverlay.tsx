@@ -9,6 +9,7 @@ import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import { useHoveredCellKey } from '../hooks/useHoveredCellKey'
 import { removeAnchorsAt } from '../cellAnchors'
+import { BOARD_CELL_IMPACT_MS, BoardCellImpact } from './BoardCellImpact'
 import { CellAnchor } from './CellAnchor'
 import type { Pos } from '../../types'
 
@@ -28,6 +29,7 @@ export function BurningOverlay() {
   }, [meta])
   const bursts = useTransientCellFx(BURST_MS)
   const fizzles = useTransientCellFx(FIZZLE_MS)
+  const impacts = useTransientCellFx(BOARD_CELL_IMPACT_MS)
   const hoveredKey = useHoveredCellKey()
   const flameIdRef = useRef(0)
   const pendingPlaceRef = useRef<{
@@ -46,7 +48,8 @@ export function BurningOverlay() {
     setMeta(new Map())
     bursts.clear()
     fizzles.clear()
-  }, [positions, bursts, fizzles])
+    impacts.clear()
+  }, [positions, bursts, fizzles, impacts])
 
   useFightReset(
     useCallback(() => {
@@ -72,6 +75,7 @@ export function BurningOverlay() {
           placed.push({ id, remaining: pending.duration })
         }
         if (placed.length === 0) return
+        impacts.spawn(pending.cells.map((c) => ({ x: c.x, y: c.y })))
         setMeta((prev) => {
           const next = new Map(prev)
           for (const p of placed) next.set(p.id, { remaining: p.remaining })
@@ -148,7 +152,7 @@ export function BurningOverlay() {
       unsubTrail()
       unsub()
     }
-  }, [positions, bursts, fizzles])
+  }, [positions, bursts, fizzles, impacts])
 
   return (
     <div className="burning-overlay" aria-hidden>
@@ -198,6 +202,16 @@ export function BurningOverlay() {
           <span className="fizzle-smoke">
             <SmokeSvg />
           </span>
+        </CellAnchor>
+      ))}
+      {impacts.items.map((hit) => (
+        <CellAnchor
+          key={`burn-impact-${hit.id}`}
+          x={hit.x}
+          y={hit.y}
+          className="board-cell-impact"
+        >
+          <BoardCellImpact variant="flame" />
         </CellAnchor>
       ))}
     </div>
