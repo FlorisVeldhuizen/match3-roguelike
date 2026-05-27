@@ -5,7 +5,13 @@ import {
   applyStatusToList,
   statusKindFromDamageSource,
 } from '../../../core/combat/statuses'
-import { SPEND_TRAIL_ARRIVAL_MS, TRAIL_ARRIVAL_MS } from '../../../timing'
+import {
+  SPEND_TRAIL_ARRIVAL_MS,
+  TRAIL_ARRIVAL_MS,
+  scheduleAfterMs,
+} from '../../../timing'
+import { readSpellVisualBeat } from '../../../core/combat/spellVisual'
+import { subscribeTrailScheduled } from '../../../trails/sync'
 import { eventHudDelayMs } from '../../eventTiming'
 import {
   MANA_CAPS,
@@ -125,46 +131,224 @@ export function useHudEventChannel(): HudEventChannel {
   const [stagedBlue, setStagedBlue] = useState(player.block)
   const [blockCommitted, setBlockCommitted] = useState(player.block > 0)
 
+  const pendingPlayerProcRef = useRef<{
+    amount: number
+    blocked: number
+    isProc: boolean
+  } | null>(null)
+  const pendingPlayerTickRef = useRef<{
+    statusKind: StatusKind
+    remaining: number
+  } | null>(null)
+  const pendingStatusApplyRef = useRef<{
+    status: StatusInstance
+    vignette: boolean
+  } | null>(null)
+  const pendingHealRef = useRef<number | null>(null)
+  const pendingBlockRef = useRef<number | null>(null)
+
   useEffect(() => {
-    const unsub = subscribeGameEvents((event) => {
-      if (event.kind === 'pool-gained') {
-        const color = event.color
-        const amount = event.amount
-        window.setTimeout(() => {
-          setPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
-          window.setTimeout(() => {
-            setPulse((prev) => ({ ...prev, [color]: Math.max(0, prev[color] - 1) }))
-          }, PULSE_MS)
-          if (color === 'purple') setDisplayedCharge((c) => c + amount)
-          else if (color === 'red' || color === 'blue' || color === 'green' || color === 'yellow') {
-            setDisplayedMana((m) => ({
-              ...m,
-              [color]: Math.min(MANA_CAPS[color], m[color] + amount),
-            }))
-          } else if (color === 'gold') {
-            setDisplayedGold((g) => g + amount)
+    const unsubTrail = subscribeTrailScheduled((trail) => {
+      const run = () => {
+        if (trail.purpose === 'pool-earn' && trail.color != null) {
+          const color = trail.color
+          const amount = trail.amount ?? 0
+          if (amount <= 0) return
+          const dest = trail.earnDest ?? 'effect'
+          const splitMana =
+            color !== 'purple' && color !== 'yellow' && color !== 'gold'
+          const bumpPulse = () => {
+            setPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
+            window.setTimeout(() => {
+              setPulse((prev) => ({
+                ...prev,
+                [color]: Math.max(0, prev[color] - 1),
+              }))
+            }, PULSE_MS)
           }
+          if (dest === 'mana') {
+            bumpPulse()
+            if (
+              color === 'red' ||
+              color === 'blue' ||
+              color === 'green' ||
+              color === 'yellow'
+            ) {
+              setDisplayedMana((m) => ({
+                ...m,
+                [color]: Math.min(MANA_CAPS[color], m[color] + amount),
+              }))
+            }
+            return
+          }
+          bumpPulse()
           if (color === 'blue') setStagedBlue((s) => s + amount)
-        }, TRAIL_ARRIVAL_MS)
-      } else if (event.kind === 'block-gained') {
-        const delay = eventHudDelayMs(event, 0)
-        const apply = () => {
-          setStagedBlue(event.amount)
-          setBlockCommitted(true)
+          else if (color === 'purple') setDisplayedCharge((c) => c + amount)
+          else if (color === 'gold') setDisplayedGold((g) => g + amount)
+          else if (!splitMana) {
+            if (
+              color === 'red' ||
+              color === 'green' ||
+              color === 'yellow'
+            ) {
+              setDisplayedMana((m) => ({
+                ...m,
+                [color]: Math.min(MANA_CAPS[color], m[color] + amount),
+              }))
+            }
+          }
+          return
         }
-        if (delay > 0) window.setTimeout(apply, delay)
-        else apply()
+        if (
+          trail.purpose === 'status-proc' &&
+          trail.target === 'player' &&
+          trail.procFacet === 'damage'
+        ) {
+          const proc = pendingPlayerProcRef.current
+          if (proc) {
+            pendingPlayerProcRef.current = null
+            const { amount, blocked, isProc } = proc
+            setDisplayedHp((h) => Math.max(0, h - amount))
+            setStagedBlue((s) => Math.max(0, s - blocked))
+            if (amount > 0) {
+              if (isProc) {
+                setHpBurnHit(true)
+                window.setTimeout(() => setHpBurnHit(false), 520)
+                document.body.classList.add('vignette-burn')
+                window.setTimeout(
+                  () => document.body.classList.remove('vignette-burn'),
+                  520,
+                )
+              } else {
+                setHpHit(true)
+                window.setTimeout(() => setHpHit(false), 420)
+                triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
+              }
+            }
+          }
+          const tick = pendingPlayerTickRef.current
+          if (tick) {
+            pendingPlayerTickRef.current = null
+            setDisplayedStatuses((prev) =>
+              prev.map((s) =>
+                s.kind === tick.statusKind
+                  ? { ...s, stacks: tick.remaining }
+                  : s,
+              ),
+            )
+            setStatusTickMarks((prev) => ({
+              ...prev,
+              [tick.statusKind]: (prev[tick.statusKind] ?? 0) + 1,
+            }))
+          }
+          return
+        }
+        if (
+          trail.purpose === 'status-proc' &&
+          trail.target === 'player' &&
+          trail.procFacet === 'block'
+        ) {
+          const proc = pendingPlayerProcRef.current
+          if (proc) {
+            pendingPlayerProcRef.current = null
+            setStagedBlue((s) => Math.max(0, s - proc.blocked))
+          }
+          return
+        }
+        if (trail.purpose === 'status-apply' && trail.target === 'player') {
+          const pending = pendingStatusApplyRef.current
+          pendingStatusApplyRef.current = null
+          if (!pending) return
+          setDisplayedStatuses((prev) =>
+            applyStatusToList(prev, pending.status),
+          )
+          if (pending.vignette) {
+            document.body.style.setProperty(
+              '--vignette-rgb',
+              STATUS_VIGNETTE_RGB[pending.status.kind],
+            )
+            document.body.classList.add('vignette-status-apply')
+            window.setTimeout(
+              () => document.body.classList.remove('vignette-status-apply'),
+              STATUS_VIGNETTE_MS,
+            )
+          }
+          return
+        }
+        if (trail.purpose === 'spell-effect' && trail.target === 'player') {
+          if (trail.slot === 'hp') {
+            const amount = pendingHealRef.current
+            if (amount != null) {
+              pendingHealRef.current = null
+              setDisplayedHp((h) =>
+                Math.min(
+                  useGameStore.getState().fight.player.maxHp,
+                  h + amount,
+                ),
+              )
+              setHpGlow(true)
+              window.setTimeout(() => setHpGlow(false), 500)
+            }
+          } else if (trail.slot === 'block') {
+            const amount = pendingBlockRef.current
+            if (amount != null) {
+              pendingBlockRef.current = null
+              setStagedBlue(amount)
+              setBlockCommitted(true)
+              setBlockPulse(true)
+              window.setTimeout(() => setBlockPulse(false), 500)
+            }
+          } else if (trail.slot === 'status') {
+            const pending = pendingStatusApplyRef.current
+            pendingStatusApplyRef.current = null
+            if (!pending) return
+            setDisplayedStatuses((prev) =>
+              applyStatusToList(prev, pending.status),
+            )
+            if (pending.vignette) {
+              document.body.style.setProperty(
+                '--vignette-rgb',
+                STATUS_VIGNETTE_RGB[pending.status.kind],
+              )
+              document.body.classList.add('vignette-status-apply')
+              window.setTimeout(
+                () => document.body.classList.remove('vignette-status-apply'),
+                STATUS_VIGNETTE_MS,
+              )
+            }
+          }
+        }
+      }
+      scheduleAfterMs(run, trail.arrivalMs)
+    })
+
+    const unsub = subscribeGameEvents((event) => {
+      if (event.kind === 'block-gained') {
+        if (readSpellVisualBeat(event)) {
+          pendingBlockRef.current = event.amount
+        } else {
+          const delay = eventHudDelayMs(event, 0)
+          const apply = () => {
+            setStagedBlue(event.amount)
+            setBlockCommitted(true)
+          }
+          if (delay > 0) window.setTimeout(apply, delay)
+          else apply()
+        }
       } else if (event.kind === 'healed') {
         const amount = event.amount
-        const delay = eventHudDelayMs(event, TRAIL_ARRIVAL_MS)
-        window.setTimeout(() => {
-          setDisplayedHp((h) =>
-            Math.min(
-              useGameStore.getState().fight.player.maxHp,
-              h + amount,
-            ),
-          )
-        }, delay)
+        if (readSpellVisualBeat(event)) {
+          pendingHealRef.current = amount
+        } else {
+          window.setTimeout(() => {
+            setDisplayedHp((h) =>
+              Math.min(
+                useGameStore.getState().fight.player.maxHp,
+                h + amount,
+              ),
+            )
+          }, TRAIL_ARRIVAL_MS)
+        }
       } else if (event.kind === 'damage-taken') {
         const proc = statusKindFromDamageSource(event.source)
         const isProc = proc !== null
@@ -175,41 +359,30 @@ export function useHudEventChannel(): HudEventChannel {
             [procKind]: (prev[procKind] ?? 0) + 1,
           }))
         }
-        const delay =
-          isProc && (event.amount > 0 || event.blocked > 0)
-            ? TRAIL_ARRIVAL_MS
-            : 0
-        const amount = event.amount
-        const blocked = event.blocked
-        const apply = () => {
+        if (isProc && (event.amount > 0 || event.blocked > 0)) {
+          pendingPlayerProcRef.current = {
+            amount: event.amount,
+            blocked: event.blocked,
+            isProc: true,
+          }
+        } else {
+          const amount = event.amount
+          const blocked = event.blocked
           setDisplayedHp((h) => Math.max(0, h - amount))
           setStagedBlue((s) => Math.max(0, s - blocked))
           if (amount > 0) {
-            if (isProc) {
-              setHpBurnHit(true)
-              window.setTimeout(() => setHpBurnHit(false), 520)
-              document.body.classList.add('vignette-burn')
+            setHpHit(true)
+            window.setTimeout(() => setHpHit(false), 420)
+            triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
+            if (event.onHitRider == null) {
+              document.body.classList.add('vignette-damage')
               window.setTimeout(
-                () => document.body.classList.remove('vignette-burn'),
-                520,
+                () => document.body.classList.remove('vignette-damage'),
+                500,
               )
-            } else {
-              setHpHit(true)
-              window.setTimeout(() => setHpHit(false), 420)
-              triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
-              // Skip vignette-damage when a status rider fires its own vignette
-              if (event.onHitRider == null) {
-                document.body.classList.add('vignette-damage')
-                window.setTimeout(
-                  () => document.body.classList.remove('vignette-damage'),
-                  500,
-                )
-              }
             }
           }
         }
-        if (delay > 0) window.setTimeout(apply, delay)
-        else apply()
       } else if (event.kind === 'spell-cast') {
         const spentColors = event.spentColors
         window.setTimeout(() => {
@@ -236,49 +409,45 @@ export function useHudEventChannel(): HudEventChannel {
         const dur = 280 + Math.round(Math.min(event.magnitude, 2) * 140)
         triggerShake(event.magnitude, dur)
       }
-      if (event.kind === 'healed') {
-        const glowDelay = eventHudDelayMs(event, 0)
+      if (event.kind === 'healed' && !readSpellVisualBeat(event)) {
         window.setTimeout(() => {
           setHpGlow(true)
           window.setTimeout(() => setHpGlow(false), 500)
-        }, glowDelay)
-      } else if (event.kind === 'block-gained') {
+        }, TRAIL_ARRIVAL_MS)
+      } else if (
+        event.kind === 'block-gained' &&
+        !readSpellVisualBeat(event)
+      ) {
         const pulseDelay = eventHudDelayMs(event, 0)
         window.setTimeout(() => {
           setBlockPulse(true)
           window.setTimeout(() => setBlockPulse(false), 500)
         }, pulseDelay)
       } else if (event.kind === 'status-applied' && event.target === 'player') {
-        const defaultDelay =
-          event.source?.kind === 'board-cells' ? TRAIL_ARRIVAL_MS : 0
-        const delay = eventHudDelayMs(event, defaultDelay)
-        const apply = () => {
-          setDisplayedStatuses((prev) => applyStatusToList(prev, event.status))
-        }
-        if (delay > 0) window.setTimeout(apply, delay)
-        else apply()
         const applySource = event.source
-        if (applySource?.kind !== 'player') {
-          const fire = () => {
-            document.body.style.setProperty(
-              '--vignette-rgb',
-              STATUS_VIGNETTE_RGB[event.status.kind],
-            )
-            document.body.classList.add('vignette-status-apply')
-            window.setTimeout(
-              () => document.body.classList.remove('vignette-status-apply'),
-              STATUS_VIGNETTE_MS,
-            )
+        if (readSpellVisualBeat(event)) {
+          pendingStatusApplyRef.current = {
+            status: event.status,
+            vignette: applySource != null && applySource.kind !== 'player',
           }
-          if (applySource && applySource.kind !== 'enemy') {
-            window.setTimeout(fire, eventHudDelayMs(event, TRAIL_ARRIVAL_MS))
-          } else {
-            fire()
+        } else if (applySource?.kind === 'enemy') {
+          setDisplayedStatuses((prev) =>
+            applyStatusToList(prev, event.status),
+          )
+        } else {
+          pendingStatusApplyRef.current = {
+            status: event.status,
+            vignette: applySource != null && applySource.kind !== 'player',
           }
         }
       } else if (event.kind === 'status-ticked' && event.target === 'player') {
-        const { statusKind, remaining } = event
-        window.setTimeout(() => {
+        if (event.statusKind === 'burn') {
+          pendingPlayerTickRef.current = {
+            statusKind: event.statusKind,
+            remaining: event.remaining,
+          }
+        } else {
+          const { statusKind, remaining } = event
           setDisplayedStatuses((prev) =>
             prev.map((s) =>
               s.kind === statusKind ? { ...s, stacks: remaining } : s,
@@ -288,7 +457,7 @@ export function useHudEventChannel(): HudEventChannel {
             ...prev,
             [statusKind]: (prev[statusKind] ?? 0) + 1,
           }))
-        }, TRAIL_ARRIVAL_MS)
+        }
       } else if (event.kind === 'status-expired' && event.target === 'player') {
         const { statusKind } = event
         const FIZZLE_MS = 480
@@ -314,7 +483,11 @@ export function useHudEventChannel(): HudEventChannel {
         }, baseDelay + FIZZLE_MS)
       }
     })
-    return unsub
+
+    return () => {
+      unsubTrail()
+      unsub()
+    }
   }, [])
 
   useEffect(() => {

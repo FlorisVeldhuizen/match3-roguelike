@@ -133,6 +133,38 @@
   border-top: 1px solid rgba(154, 125, 82, 0.14);
 }
 
+.settings-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--parchment-dim);
+  opacity: 0.85;
+}
+
+.settings-hint-warn {
+  color: #f0c878;
+  opacity: 1;
+}
+
+.settings-hint-warn a {
+  color: var(--gold-1);
+}
+
+.settings-hint-warn code {
+  font-size: 0.68rem;
+  color: var(--parchment);
+}
+
+.settings-row-gem-style {
+  flex-wrap: wrap;
+}
+
+.settings-row-gem-style .settings-chips {
+  max-width: 100%;
+  margin-left: 0;
+  justify-content: flex-start;
+}
+
 .settings-title {
   font-family: 'MedievalSharp', cursive;
   font-size: 0.72rem;

@@ -12,8 +12,9 @@ import { createPortal } from 'react-dom'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
-import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
-import { eventHudDelayMs } from '../eventTiming'
+import { TRAIL_ARRIVAL_MS, scheduleAfterMs } from '../../timing'
+import { readSpellVisualBeat } from '../../core/combat/spellVisual'
+import { subscribeTrailScheduled } from '../../trails/sync'
 import type { Enemy, Intent, StatusInstance, StatusKind } from '../../types'
 import {
   applyStatusToList,
@@ -25,6 +26,9 @@ import { StatusBar } from './StatusBar'
 import { setHoveredEnemy } from '../state/hoveredEnemy'
 import { getHoveredCell, subscribeHoveredCell } from '../state/hoveredCell'
 import { shoveHueFor } from '../../core/combat/shoveHues'
+import { useTooltipFade } from '../useTooltipFade'
+import { useTooltipReveal } from '../useTooltipReveal'
+import { useTooltipTouchAnchor } from '../useTooltipTouchAnchor'
 
 const HIT_FLASH_MS = 280
 // Must match the longest .firing-* animation in index.css
@@ -88,7 +92,169 @@ export function EnemyFrame() {
   >({})
   const [intentTick, setIntentTick] = useState<Record<string, number>>({})
 
+  const pendingEnemyDamageRef = useRef<
+    Record<
+      string,
+      { amount: number; blocked: number; isProc: boolean } | undefined
+    >
+  >({})
+  const pendingEnemyTickRef = useRef<
+    Record<string, { statusKind: StatusKind; remaining: number } | undefined>
+  >({})
+  const pendingEnemyStatusApplyRef = useRef<
+    Record<string, StatusInstance | undefined>
+  >({})
+
+  const applyEnemyDamage = (id: string, amount: number, blocked: number) => {
+    setDisplayedHp((prev) => {
+      const before = prev[id] ?? 0
+      const after = Math.max(0, before - amount)
+      if (before > 0 && after === 0) {
+        setKilledPulse((p) => ({ ...p, [id]: (p[id] ?? 0) + 1 }))
+        window.setTimeout(() => {
+          setKilledPulse((p) => ({
+            ...p,
+            [id]: Math.max(0, (p[id] ?? 0) - 1),
+          }))
+        }, KILL_PULSE_MS)
+      }
+      return { ...prev, [id]: after }
+    })
+    setFlashing((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+    window.setTimeout(() => {
+      setFlashing((prev) => ({
+        ...prev,
+        [id]: Math.max(0, (prev[id] ?? 0) - 1),
+      }))
+    }, HIT_FLASH_MS)
+    if (blocked > 0) {
+      setDisplayedBlock((prev) => ({
+        ...prev,
+        [id]: Math.max(0, (prev[id] ?? 0) - blocked),
+      }))
+    }
+  }
+
   useEffect(() => {
+    const unsubTrail = subscribeTrailScheduled((trail) => {
+      if (
+        trail.purpose === 'pool-earn' &&
+        trail.color === 'red' &&
+        (trail.earnDest === 'effect' || trail.earnDest === undefined)
+      ) {
+        const id = useGameStore.getState().fight.targetEnemyId
+        if (!id) return
+        scheduleAfterMs(() => {
+          setTrailPulse((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+          window.setTimeout(() => {
+            setTrailPulse((prev) => ({
+              ...prev,
+              [id]: Math.max(0, (prev[id] ?? 0) - 1),
+            }))
+          }, 380)
+        }, trail.arrivalMs)
+        return
+      }
+      if (
+        trail.purpose === 'status-proc' &&
+        trail.target &&
+        trail.target !== 'player' &&
+        trail.procFacet === 'damage'
+      ) {
+        const id = trail.target
+        scheduleAfterMs(() => {
+          const pending = pendingEnemyDamageRef.current[id]
+          if (pending) {
+            delete pendingEnemyDamageRef.current[id]
+            applyEnemyDamage(id, pending.amount, pending.blocked)
+          }
+          const tick = pendingEnemyTickRef.current[id]
+          if (tick) {
+            delete pendingEnemyTickRef.current[id]
+            setDisplayedStatuses((prev) => ({
+              ...prev,
+              [id]: (prev[id] ?? []).map((s) =>
+                s.kind === tick.statusKind
+                  ? { ...s, stacks: tick.remaining }
+                  : s,
+              ),
+            }))
+            setStatusTickMarks((prev) => ({
+              ...prev,
+              [id]: {
+                ...(prev[id] ?? {}),
+                [tick.statusKind]: (prev[id]?.[tick.statusKind] ?? 0) + 1,
+              },
+            }))
+          }
+        }, trail.arrivalMs)
+        return
+      }
+      if (
+        trail.purpose === 'status-proc' &&
+        trail.target &&
+        trail.target !== 'player' &&
+        trail.procFacet === 'block'
+      ) {
+        const id = trail.target
+        scheduleAfterMs(() => {
+          const pending = pendingEnemyDamageRef.current[id]
+          if (pending) {
+            delete pendingEnemyDamageRef.current[id]
+            if (pending.blocked > 0) {
+              setDisplayedBlock((prev) => ({
+                ...prev,
+                [id]: Math.max(0, (prev[id] ?? 0) - pending.blocked),
+              }))
+            }
+          }
+        }, trail.arrivalMs)
+        return
+      }
+      if (
+        trail.purpose === 'status-apply' &&
+        trail.target &&
+        trail.target !== 'player'
+      ) {
+        const id = trail.target
+        scheduleAfterMs(() => {
+          const incoming = pendingEnemyStatusApplyRef.current[id]
+          delete pendingEnemyStatusApplyRef.current[id]
+          if (!incoming) return
+          setDisplayedStatuses((prev) => ({
+            ...prev,
+            [id]: applyStatusToList(prev[id] ?? [], incoming),
+          }))
+        }, trail.arrivalMs)
+        return
+      }
+      if (
+        trail.purpose === 'spell-effect' &&
+        trail.target &&
+        trail.target !== 'player'
+      ) {
+        const id = trail.target
+        scheduleAfterMs(() => {
+          if (trail.slot === 'hp' || trail.slot === undefined) {
+            const pending = pendingEnemyDamageRef.current[id]
+            if (pending) {
+              delete pendingEnemyDamageRef.current[id]
+              applyEnemyDamage(id, pending.amount, pending.blocked)
+            }
+          }
+          if (trail.slot === 'status') {
+            const incoming = pendingEnemyStatusApplyRef.current[id]
+            delete pendingEnemyStatusApplyRef.current[id]
+            if (!incoming) return
+            setDisplayedStatuses((prev) => ({
+              ...prev,
+              [id]: applyStatusToList(prev[id] ?? [], incoming),
+            }))
+          }
+        }, trail.arrivalMs)
+      }
+    })
+
     const unsub = subscribeGameEvents((event) => {
       if (event.kind === 'damage-dealt') {
         const id = event.targetId
@@ -105,51 +271,28 @@ export function EnemyFrame() {
             },
           }))
         }
-        const delay =
-          isPlayerAttack || procKind
-            ? eventHudDelayMs(event, TRAIL_ARRIVAL_MS)
-            : 0
-        window.setTimeout(() => {
-          setDisplayedHp((prev) => {
-            const before = prev[id] ?? 0
-            const after = Math.max(0, before - amount)
-            if (before > 0 && after === 0) {
-              setKilledPulse((p) => ({ ...p, [id]: (p[id] ?? 0) + 1 }))
-              window.setTimeout(() => {
-                setKilledPulse((p) => ({
-                  ...p,
-                  [id]: Math.max(0, (p[id] ?? 0) - 1),
-                }))
-              }, KILL_PULSE_MS)
-            }
-            return { ...prev, [id]: after }
-          })
-          setFlashing((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
-          window.setTimeout(() => {
-            setFlashing((prev) => ({
-              ...prev,
-              [id]: Math.max(0, (prev[id] ?? 0) - 1),
-            }))
-          }, HIT_FLASH_MS)
-          if (event.blocked > 0) {
-            setDisplayedBlock((prev) => ({
-              ...prev,
-              [id]: Math.max(0, (prev[id] ?? 0) - event.blocked),
-            }))
+        if (procKind) {
+          pendingEnemyDamageRef.current[id] = {
+            amount,
+            blocked: event.blocked,
+            isProc: true,
           }
-        }, delay)
+        } else if (isPlayerAttack && readSpellVisualBeat(event)) {
+          pendingEnemyDamageRef.current[id] = {
+            amount,
+            blocked: event.blocked,
+            isProc: false,
+          }
+        } else if (isPlayerAttack) {
+          window.setTimeout(
+            () => applyEnemyDamage(id, amount, event.blocked),
+            TRAIL_ARRIVAL_MS,
+          )
+        } else {
+          applyEnemyDamage(id, amount, event.blocked)
+        }
       } else if (event.kind === 'pool-gained' && event.color === 'red') {
-        const id = useGameStore.getState().fight.targetEnemyId
-        if (!id) return
-        scheduleAtTrailArrival(() => {
-          setTrailPulse((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
-          window.setTimeout(() => {
-            setTrailPulse((prev) => ({
-              ...prev,
-              [id]: Math.max(0, (prev[id] ?? 0) - 1),
-            }))
-          }, 380)
-        })
+        // Red pool trail pulse syncs via trail-scheduled.
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
         const id =
           event.attackerId ?? useGameStore.getState().fight.targetEnemyId
@@ -188,21 +331,25 @@ export function EnemyFrame() {
       } else if (event.kind === 'status-applied' && event.target !== 'player') {
         const enemyId = event.target
         const incoming = event.status
-        const defaultDelay =
-          event.source?.kind === 'board-cells' ? TRAIL_ARRIVAL_MS : 0
-        const delay = eventHudDelayMs(event, defaultDelay)
-        const apply = () => {
+        if (readSpellVisualBeat(event)) {
+          pendingEnemyStatusApplyRef.current[enemyId] = incoming
+        } else if (event.source?.kind === 'enemy') {
           setDisplayedStatuses((prev) => ({
             ...prev,
             [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
           }))
+        } else {
+          pendingEnemyStatusApplyRef.current[enemyId] = incoming
         }
-        if (delay > 0) window.setTimeout(apply, delay)
-        else apply()
       } else if (event.kind === 'status-ticked' && event.target !== 'player') {
         const enemyId = event.target
-        const { statusKind, remaining } = event
-        window.setTimeout(() => {
+        if (event.statusKind === 'burn') {
+          pendingEnemyTickRef.current[enemyId] = {
+            statusKind: event.statusKind,
+            remaining: event.remaining,
+          }
+        } else {
+          const { statusKind, remaining } = event
           setDisplayedStatuses((prev) => ({
             ...prev,
             [enemyId]: (prev[enemyId] ?? []).map((s) =>
@@ -216,7 +363,7 @@ export function EnemyFrame() {
               [statusKind]: (prev[enemyId]?.[statusKind] ?? 0) + 1,
             },
           }))
-        }, TRAIL_ARRIVAL_MS)
+        }
       } else if (event.kind === 'status-expired' && event.target !== 'player') {
         const enemyId = event.target
         const { statusKind } = event
@@ -247,7 +394,11 @@ export function EnemyFrame() {
         }, TRAIL_ARRIVAL_MS + FIZZLE_MS)
       }
     })
-    return unsub
+
+    return () => {
+      unsubTrail()
+      unsub()
+    }
   }, [])
 
   const [trackedFightCounter, setTrackedFightCounter] = useState(fightCounter)
@@ -383,7 +534,9 @@ export function EnemyFrame() {
                 <span>{shownBlock}</span>
               </div>
               <StatusBar
-                statuses={dead ? [] : (displayedStatuses[enemy.id] ?? enemy.statuses)}
+                statuses={
+                  dead ? [] : (displayedStatuses[enemy.id] ?? enemy.statuses)
+                }
                 tickMarks={statusTickMarks[enemy.id]}
                 cueMarks={statusCueMarks[enemy.id]}
                 expiringKinds={expiringStatusKinds[enemy.id]}
@@ -419,10 +572,18 @@ function IntentBadge({
   const anchorRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
   const [hovered, setHovered] = useState(false)
+  const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(hovered)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const tipRevealed = useTooltipReveal(pos !== null, tipVisible)
+
+  useTooltipTouchAnchor(hovered, setHovered, anchorRef, tipRef)
+
+  useEffect(() => {
+    if (!tipMounted) setPos(null)
+  }, [tipMounted])
 
   useLayoutEffect(() => {
-    if (!hovered) return
+    if (!tipMounted) return
     const compute = () => {
       const a = anchorRef.current?.getBoundingClientRect()
       const t = tipRef.current?.getBoundingClientRect()
@@ -440,7 +601,7 @@ function IntentBadge({
     compute()
     window.addEventListener('resize', compute)
     return () => window.removeEventListener('resize', compute)
-  }, [hovered])
+  }, [tipMounted])
 
   const allyTargetId =
     intent.kind === 'heal-ally' || intent.kind === 'buff-ally' || intent.kind === 'shield-ally'
@@ -495,16 +656,15 @@ function IntentBadge({
           </>
         )}
       </div>
-      {hovered &&
+      {tipMounted &&
         createPortal(
           <div
             ref={tipRef}
-            className={`intent-tooltip intent-${intent.kind}`}
+            className={`intent-tooltip intent-${intent.kind}${tipRevealed ? ' is-visible' : ''}`}
             role="tooltip"
             style={{
               left: pos?.left ?? 0,
               top: pos?.top ?? 0,
-              opacity: pos ? 1 : 0,
             }}
           >
             <div className="intent-tooltip-title">{display.label}</div>

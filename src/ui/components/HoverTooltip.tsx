@@ -6,6 +6,22 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useTooltipFade } from '../useTooltipFade'
+import { useTooltipReveal } from '../useTooltipReveal'
+import { useTooltipTouchAnchor } from '../useTooltipTouchAnchor'
+import {
+  getTriggerAvoidRects,
+  placeNestedTooltip,
+  rectFromBox,
+} from '../tooltipPosition'
+import { useCoarsePointer } from '../useCoarsePointer'
+import { useIgnoreMouseAfterTouch } from '../useIgnoreMouseAfterTouch'
+import { useParentTooltipOpen } from '../useParentTooltipOpen'
+
+/** Nested keyword tooltips inside an open parent (Hearthstone-like). */
+export const KEYWORD_SUBTOOLTIP_DELAY_MS = 400
+/** Brief pause after casting before the spell tooltip fades out. */
+export const CAST_TOOLTIP_CLOSE_DELAY_MS = 280
 
 export function HoverTooltip({
   children,
@@ -15,6 +31,9 @@ export function HoverTooltip({
   className,
   ariaLabel,
   autoShow,
+  autoShowDelayMs = 0,
+  queued,
+  closeTick = 0,
 }: {
   children: ReactNode
   title: string
@@ -23,36 +42,101 @@ export function HoverTooltip({
   className?: string
   ariaLabel?: string
   autoShow?: boolean
+  /** When set with `autoShow`, wait before showing (keywords inside a parent tooltip). */
+  autoShowDelayMs?: number
+  /** When this flips false→true, dismiss an open tooltip (spell was just cast / armed). */
+  queued?: boolean
+  /** Increment to force-dismiss (e.g. spell cast onClick, before synthetic mouse events). */
+  closeTick?: number
 }) {
   const anchorRef = useRef<HTMLSpanElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
   const [anchorHovered, setAnchorHovered] = useState(false)
-  const hovered = autoShow || anchorHovered
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const [autoShown, setAutoShown] = useState(
+    () => Boolean(autoShow) && autoShowDelayMs <= 0,
+  )
+
+  const wasQueuedRef = useRef(queued ?? false)
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const coarsePointer = useCoarsePointer()
+  const ignoreMouseAfterTouch = useIgnoreMouseAfterTouch()
+
+  const dismiss = () => {
+    setAnchorHovered(false)
+    setAutoShown(false)
+  }
+
+  const scheduleDismiss = () => {
+    if (dismissTimeoutRef.current) {
+      window.clearTimeout(dismissTimeoutRef.current)
+    }
+    const delay =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        ? 0
+        : CAST_TOOLTIP_CLOSE_DELAY_MS
+    dismissTimeoutRef.current = window.setTimeout(() => {
+      dismissTimeoutRef.current = null
+      dismiss()
+    }, delay)
+  }
+
+  const canOpenFromMouse = () =>
+    !coarsePointer && !ignoreMouseAfterTouch()
 
   useEffect(() => {
-    if (!anchorHovered || autoShow) return
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node | null
-      if (!target) return
-      if (anchorRef.current?.contains(target)) return
-      if (tipRef.current?.contains(target)) return
-      setAnchorHovered(false)
-    }
-    const onScrollOrResize = () => setAnchorHovered(false)
-    // capture so we run before any handler that calls stopPropagation
-    document.addEventListener('pointerdown', onPointerDown, true)
-    window.addEventListener('scroll', onScrollOrResize, true)
-    window.addEventListener('resize', onScrollOrResize)
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      window.removeEventListener('scroll', onScrollOrResize, true)
-      window.removeEventListener('resize', onScrollOrResize)
+      if (dismissTimeoutRef.current) {
+        window.clearTimeout(dismissTimeoutRef.current)
+      }
     }
-  }, [anchorHovered, autoShow])
+  }, [])
+
+  useEffect(() => {
+    if (!closeTick) return
+    scheduleDismiss()
+  }, [closeTick])
+
+  useEffect(() => {
+    if (queued === undefined) return
+    if (!wasQueuedRef.current && queued) {
+      scheduleDismiss()
+    }
+    wasQueuedRef.current = queued
+  }, [queued])
+
+  useEffect(() => {
+    if (!autoShow) {
+      setAutoShown(false)
+      return
+    }
+    if (autoShowDelayMs <= 0) {
+      setAutoShown(true)
+      return
+    }
+    setAutoShown(false)
+    const id = window.setTimeout(() => setAutoShown(true), autoShowDelayMs)
+    return () => window.clearTimeout(id)
+  }, [autoShow, autoShowDelayMs])
+
+  const parentOpen = useParentTooltipOpen(anchorRef, Boolean(autoShow))
+  const hovered = autoShow
+    ? parentOpen && (autoShown || anchorHovered)
+    : anchorHovered
+  const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(hovered)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const tipRevealed = useTooltipReveal(pos !== null, tipVisible)
+
+  useTooltipTouchAnchor(anchorHovered, setAnchorHovered, anchorRef, tipRef, {
+    dismissOnOutside: !autoShow,
+  })
+
+  useEffect(() => {
+    if (!tipMounted) setPos(null)
+  }, [tipMounted])
 
   useLayoutEffect(() => {
-    if (!hovered) return
+    if (!tipMounted) return
     const compute = () => {
       const a = anchorRef.current?.getBoundingClientRect()
       const t = tipRef.current?.getBoundingClientRect()
@@ -65,29 +149,21 @@ export function HoverTooltip({
       ) as HTMLElement | null
       if (container) {
         const c = container.getBoundingClientRect()
-        const clampX = (x: number) =>
-          Math.max(margin, Math.min(window.innerWidth - t.width - margin, x))
-        const clampY = (y: number) =>
-          Math.max(margin, Math.min(window.innerHeight - t.height - margin, y))
-
-        if (c.right + margin + t.width + margin <= window.innerWidth) {
-          setPos({ left: c.right + margin, top: clampY(c.top) })
-          return
-        }
-        if (c.left - margin - t.width >= margin) {
-          setPos({ left: c.left - margin - t.width, top: clampY(c.top) })
-          return
-        }
-        const stackedLeft = clampX(c.left + c.width / 2 - t.width / 2)
-        if (c.bottom + margin + t.height + margin <= window.innerHeight) {
-          setPos({ left: stackedLeft, top: c.bottom + margin })
-          return
-        }
-        if (c.top - margin - t.height >= margin) {
-          setPos({ left: stackedLeft, top: c.top - margin - t.height })
-          return
-        }
-        setPos({ left: stackedLeft, top: margin })
+        const parent = rectFromBox(c.left, c.top, c.width, c.height)
+        const coarse = window.matchMedia(
+          '(pointer: coarse), (hover: none)',
+        ).matches
+        const avoid = coarse ? getTriggerAvoidRects(container) : []
+        setPos(
+          placeNestedTooltip(
+            parent,
+            { width: t.width, height: t.height },
+            avoid,
+            margin,
+            undefined,
+            { stackedBelowBeforeAbove: coarse },
+          ),
+        )
         return
       }
 
@@ -110,37 +186,38 @@ export function HoverTooltip({
       window.removeEventListener('resize', compute)
       window.removeEventListener('scroll', compute, true)
     }
-  }, [hovered])
+  }, [tipMounted])
 
   return (
     <>
       <span
         ref={anchorRef}
         className={`tooltip-anchor${className ? ` ${className}` : ''}`}
-        onMouseEnter={() => setAnchorHovered(true)}
-        onMouseLeave={() => setAnchorHovered(false)}
-        onFocus={() => setAnchorHovered(true)}
-        onBlur={() => setAnchorHovered(false)}
-        onTouchStart={(e) => {
-          if (!anchorHovered) {
-            e.preventDefault()
-            setAnchorHovered(true)
-          }
+        onMouseEnter={() => {
+          if (canOpenFromMouse()) setAnchorHovered(true)
+        }}
+        onMouseLeave={() => {
+          if (canOpenFromMouse()) setAnchorHovered(false)
+        }}
+        onFocus={() => {
+          if (canOpenFromMouse()) setAnchorHovered(true)
+        }}
+        onBlur={() => {
+          if (canOpenFromMouse()) setAnchorHovered(false)
         }}
         aria-label={ariaLabel}
       >
         {children}
       </span>
-      {hovered &&
+      {tipMounted &&
         createPortal(
           <div
             ref={tipRef}
-            className={`hover-tooltip${variant ? ` tooltip-${variant}` : ''}`}
+            className={`hover-tooltip${variant ? ` tooltip-${variant}` : ''}${tipRevealed ? ' is-visible' : ''}`}
             role="tooltip"
             style={{
               left: pos?.left ?? 0,
               top: pos?.top ?? 0,
-              opacity: pos ? 1 : 0,
             }}
           >
             <div className="hover-tooltip-title">{title}</div>

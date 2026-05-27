@@ -1,5 +1,10 @@
 /* --- Hover tooltip (shared portal-rendered) --- */
 
+:root {
+  --tooltip-fade-duration: 160ms;
+  --tooltip-fade-offset-y: 4px;
+}
+
 .tooltip-anchor {
   display: inline-flex;
   /* So the anchor's bounding rect tightly fits the button it wraps; no
@@ -143,17 +148,34 @@ body:has(.game-over-overlay) .intent-tooltip {
   font-size: 0.78rem;
   line-height: 1.35;
   /* pointer-events:none so the tooltip never traps the cursor and never
-     blocks its own anchor's mouseleave. Inline keywords are shown via
-     autoShow alongside the parent, so the cursor doesn't need to enter
-     a tooltip — it stays on the original anchor. */
+     blocks its own anchor's mouseleave. Inline keywords use autoShow with
+     a short delay after the parent opens (see KEYWORD_SUBTOOLTIP_DELAY_MS)
+     so the cursor can stay on the original anchor. */
   pointer-events: none;
-  transition: opacity 90ms ease;
+  opacity: 0;
+  transform: translateY(var(--tooltip-fade-offset-y));
+  transition:
+    opacity var(--tooltip-fade-duration) ease,
+    transform var(--tooltip-fade-duration) ease;
 }
 
-/* On touch / coarse-pointer devices we *do* want tooltips to be interactive so
-   nested Keyword anchors can be tapped to reveal their own tooltip. The
-   HoverTooltip component already closes on pointerdown outside, so letting
-   touch events hit the tooltip is safe. */
+.hover-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-tooltip,
+  .intent-tooltip,
+  .map-node-tooltip,
+  .relic-tooltip {
+    transition: none;
+  }
+}
+
+/* On touch / coarse-pointer devices tooltips need pointer-events so keyword
+   highlights remain tappable for accessibility; keyword sub-tooltips still
+   auto-show with the same delayed fade as desktop. */
 @media (pointer: coarse), (hover: none) {
   .hover-tooltip {
     pointer-events: auto;

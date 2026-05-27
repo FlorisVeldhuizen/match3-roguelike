@@ -187,6 +187,15 @@
   text-align: center;
 }
 
+.shop-section-hint {
+  margin: -0.15rem 0 0.55rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--parchment-dim);
+  text-align: center;
+  opacity: 0.85;
+}
+
 .shop-price {
   display: inline-block;
   margin-top: 0.4rem;
@@ -198,6 +207,26 @@
   letter-spacing: 0.06em;
   border: 1px solid var(--gold-1);
   border-radius: 0.2rem;
+}
+
+/* Pawn / sell — gold you receive (opposite of .shop-price “Pay”). */
+.shop-price-earn {
+  border-color: rgba(120, 180, 110, 0.55);
+  background: rgba(32, 52, 36, 0.55);
+  color: #b8e8b0;
+}
+
+.reward-relic:disabled {
+  opacity: 0.45;
+  filter: grayscale(0.35);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.reward-relic:disabled:hover {
+  background: rgba(24, 18, 12, 0.7);
+  transform: none;
+  box-shadow: none;
 }
 
 .reward-relic.sold-out {

@@ -8,7 +8,8 @@ import {
 } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
-import { TRAIL_ARRIVAL_MS } from '../../timing'
+import { scheduleAfterMs } from '../../timing'
+import { subscribeTrailScheduled } from '../../trails/sync'
 import { useFightReset } from '../hooks/useFightReset'
 import { CellAnchor } from './CellAnchor'
 
@@ -22,6 +23,11 @@ export function PetrifyOverlay() {
   const w = useGameStore(
     (s) => s.board.cells[0]?.length ?? 0,
   )
+  const pendingFireRef = useRef<{
+    row: number
+    duration: number
+    fightCounter: number
+  } | null>(null)
 
   const seedFromStore = useCallback(() => {
     const s = useGameStore.getState()
@@ -58,7 +64,28 @@ export function PetrifyOverlay() {
   )
 
   useEffect(() => {
-    return subscribeGameEvents((event) => {
+    const unsubTrail = subscribeTrailScheduled((trail) => {
+      if (trail.verb !== 'petrify') return
+      const pending = pendingFireRef.current
+      if (!pending) return
+      scheduleAfterMs(() => {
+        if (useGameStore.getState().fightCounter !== pending.fightCounter) return
+        pendingFireRef.current = null
+        const row = pending.row
+        setPending((prev) => {
+          if (!prev.has(row)) return prev
+          const next = new Set(prev)
+          next.delete(row)
+          return next
+        })
+        setActive((prev) => {
+          const next = new Map(prev)
+          next.set(row, { row, remaining: pending.duration })
+          return next
+        })
+      }, trail.arrivalMs)
+    })
+    const unsub = subscribeGameEvents((event) => {
       if (event.kind === 'petrify-placed') {
         setPending((prev) => {
           if (prev.has(event.row)) return prev
@@ -67,23 +94,11 @@ export function PetrifyOverlay() {
           return next
         })
       } else if (event.kind === 'petrify-fired') {
-        const row = event.row
-        const duration = event.duration
-        const scheduledFight = useGameStore.getState().fightCounter
-        window.setTimeout(() => {
-          if (useGameStore.getState().fightCounter !== scheduledFight) return
-          setPending((prev) => {
-            if (!prev.has(row)) return prev
-            const next = new Set(prev)
-            next.delete(row)
-            return next
-          })
-          setActive((prev) => {
-            const next = new Map(prev)
-            next.set(row, { row, remaining: duration })
-            return next
-          })
-        }, TRAIL_ARRIVAL_MS)
+        pendingFireRef.current = {
+          row: event.row,
+          duration: event.duration,
+          fightCounter: useGameStore.getState().fightCounter,
+        }
       } else if (event.kind === 'petrify-row-ticked') {
         if (event.remaining > 0) {
           setActive((prev) => {
@@ -103,6 +118,10 @@ export function PetrifyOverlay() {
         }
       }
     })
+    return () => {
+      unsubTrail()
+      unsub()
+    }
   }, [])
 
   const pendingCells: { x: number; y: number; key: string }[] = []

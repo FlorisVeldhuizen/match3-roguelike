@@ -89,6 +89,15 @@ export function SpellTray() {
   const [pickerOpen, setPickerOpen] = useState<SpellId | null>(null)
 
   const [flashKey, setFlashKey] = useState<Record<string, number>>({})
+  const [tooltipCloseTick, setTooltipCloseTick] = useState<
+    Record<string, number>
+  >({})
+  const bumpTooltipClose = (id: string) => {
+    setTooltipCloseTick((prev) => ({
+      ...prev,
+      [id]: (prev[id] ?? 0) + 1,
+    }))
+  }
   const flashCast = (id: string) => {
     setFlashKey((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
     window.setTimeout(() => {
@@ -156,6 +165,8 @@ export function SpellTray() {
           <HoverTooltip
             key={def.id}
             variant="spell"
+            queued={queued}
+            closeTick={tooltipCloseTick[def.id] ?? 0}
             title={`${def.name} — ${costSummary} mana`}
             body={
               <>
@@ -192,6 +203,7 @@ export function SpellTray() {
                 }
                 const res = castSpell(def.id)
                 if (res.ok) {
+                  bumpTooltipClose(def.id)
                   void playBoardSpellEvents(res.events)
                   flashCast(def.id)
                 }
@@ -223,6 +235,8 @@ export function SpellTray() {
           <HoverTooltip
             key={def.id}
             variant="ultimate"
+            queued={queued}
+            closeTick={tooltipCloseTick[def.id] ?? 0}
             title={`${def.name} — ${def.chargeCost} charge`}
             body={
               <>
@@ -242,6 +256,7 @@ export function SpellTray() {
                 if (blocked) return
                 const res = castUltimate(def.id)
                 if (res.ok) {
+                  bumpTooltipClose(def.id)
                   void playBoardSpellEvents(res.events)
                   flashCast(def.id)
                 }

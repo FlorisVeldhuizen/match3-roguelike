@@ -1,18 +1,10 @@
-import {
-  Application,
-  Assets,
-  Container,
-  Graphics,
-  Sprite,
-  Ticker,
-  type Texture,
-} from 'pixi.js'
+import { Application, Container, Graphics, Sprite, Ticker } from 'pixi.js'
 import { useGameStore } from '../core/state/store'
-import { type GemColor, GEM_COLORS, type Pos } from '../types'
+import { type GemColor, type Pos } from '../types'
 import { createBoardInteraction } from './input'
 import { AnimationController } from './AnimationController'
 import { BoardEffects } from './BoardEffects'
-import { emitGameEvent } from '../core/events/emitter'
+import { emitGameEvent, subscribeGameEvents } from '../core/events/emitter'
 import {
   getTimeScale,
   onDebugSwap,
@@ -22,6 +14,14 @@ import { findAllValidSwaps } from '../core/board/generation'
 import { setHoveredCell } from '../ui/state/hoveredCell'
 import { registerBoardSpellPlayback } from '../ui/state/boardSpellPlayback'
 import type { GameEvent } from '../types'
+import { subscribeGemStyle } from '../gems/settings'
+import {
+  createBoardGemSprite,
+  loadGemBoardVisuals,
+  type GemBoardSprite,
+  type GemBoardVisuals,
+} from '../gems/visuals'
+import { boardSpriteLive } from './boardSprite'
 
 const NUDGE_TRIGGER_MS = 7000
 const NUDGE_PULSE_PERIOD_MS = 1000
@@ -156,6 +156,8 @@ export class BoardScene {
   private detachTimeScale: (() => void) | null = null
   private detachDebugSwap: (() => void) | null = null
   private detachBoardSpellPlayback: (() => void) | null = null
+  private detachGemStyle: (() => void) | null = null
+  private detachBoardStructure: (() => void) | null = null
   private pendingIntroSprites: Sprite[][] | null = null
   private activePointer: PointerState | null = null
   private cachedCanvasRect: DOMRect | null = null
@@ -300,7 +302,7 @@ export class BoardScene {
     app.canvas.style.touchAction = 'none'
     this.mountEl.appendChild(app.canvas)
 
-    const textures = await this.loadGemTextures()
+    const visuals = await loadGemBoardVisuals()
     if (this.disposed) return
 
     const board = new Container()
@@ -309,7 +311,7 @@ export class BoardScene {
     app.stage.addChild(board)
 
     this.drawBoardBackground(board)
-    const sprites = this.buildSprites(board, textures)
+    const sprites = this.buildSprites(board, visuals)
     this.buildSelectionRing(board)
     this.buildHoverHalo(board)
     this.boardLayer = board
@@ -317,11 +319,12 @@ export class BoardScene {
       parent: board,
       sprites,
       geometry: { cellSize: CELL_SIZE, gemSize: GEM_SIZE, cellCenter },
-      textures,
+      visuals,
       cellScreenCenter: (pos) => this.cellScreenCenter(pos),
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
     this.wireBoardSpellPlayback()
+    this.attachBoardStructureInvalidation()
     for (const row of sprites) for (const s of row) s.alpha = 0
     this.pendingIntroSprites = sprites
     this.playPendingIntro()
@@ -331,6 +334,7 @@ export class BoardScene {
     this.attachRectInvalidation()
     this.attachVisibilityPause(app)
     this.attachDevControls(app)
+    this.detachGemStyle = subscribeGemStyle(() => void this.applyGemStyle())
     this.boardEffects = new BoardEffects(app.stage, (pos) =>
       this.cellToStage(pos),
     )
@@ -370,6 +374,10 @@ export class BoardScene {
     this.detachDebugSwap = null
     this.detachBoardSpellPlayback?.()
     this.detachBoardSpellPlayback = null
+    this.detachGemStyle?.()
+    this.detachGemStyle = null
+    this.detachBoardStructure?.()
+    this.detachBoardStructure = null
     this.cachedCanvasRect = null
     if (this.effectsTickerCb) Ticker.shared.remove(this.effectsTickerCb)
     this.effectsTickerCb = null
@@ -419,12 +427,13 @@ export class BoardScene {
     this.nudgeAttackElapsedMs = 0
     this.nudgePulseElapsedMs = 0
     this.nudgeIsReleasing = false
+    this.invalidateNudgeSwapCache()
 
-    const textures = await this.loadGemTextures()
+    const visuals = await loadGemBoardVisuals()
     if (this.disposed) return
 
     this.drawBoardBackground(layer)
-    const sprites = this.buildSprites(layer, textures)
+    const sprites = this.buildSprites(layer, visuals)
     this.buildSelectionRing(layer)
     this.buildHoverHalo(layer)
 
@@ -432,7 +441,7 @@ export class BoardScene {
       parent: layer,
       sprites,
       geometry: { cellSize: CELL_SIZE, gemSize: GEM_SIZE, cellCenter },
-      textures,
+      visuals,
       cellScreenCenter: (pos) => this.cellScreenCenter(pos),
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
@@ -461,14 +470,12 @@ export class BoardScene {
     emitGameEvent({ kind: 'gameplay-settled' })
   }
 
-  private async loadGemTextures(): Promise<Record<GemColor, Texture>> {
-    const entries = await Promise.all(
-      GEM_COLORS.map(async (color) => {
-        const texture = await Assets.load<Texture>(`/gems/${color}.svg`)
-        return [color, texture] as const
-      }),
-    )
-    return Object.fromEntries(entries) as Record<GemColor, Texture>
+  private async applyGemStyle(): Promise<void> {
+    if (!this.animator) return
+    const visuals = await loadGemBoardVisuals()
+    if (this.disposed) return
+    this.purgeBoardEffectsForSpriteSwap()
+    this.animator.setGemVisuals(visuals)
   }
 
   private drawBoardBackground(parent: Container): void {
@@ -485,19 +492,16 @@ export class BoardScene {
 
   private buildSprites(
     parent: Container,
-    textures: Record<GemColor, Texture>,
-  ): Sprite[][] {
+    visuals: GemBoardVisuals,
+  ): GemBoardSprite[][] {
     const cells = useGameStore.getState().board.cells
-    const sprites: Sprite[][] = []
+    const sprites: GemBoardSprite[][] = []
     for (let y = 0; y < BOARD_DIM; y++) {
-      const row: Sprite[] = []
+      const row: GemBoardSprite[] = []
       for (let x = 0; x < BOARD_DIM; x++) {
         const cell = cells[y]?.[x]
         if (!cell) throw new Error(`missing cell ${x},${y}`)
-        const sprite = new Sprite(textures[cell.gemColor])
-        sprite.anchor.set(0.5)
-        sprite.width = GEM_SIZE
-        sprite.height = GEM_SIZE
+        const sprite = createBoardGemSprite(cell.gemColor, visuals, GEM_SIZE)
         const { x: px, y: py } = cellCenter(x, y)
         sprite.x = px
         sprite.y = py
@@ -941,7 +945,7 @@ export class BoardScene {
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const sprite = animator.peekSprite({ x, y })
-        if (!sprite) continue
+        if (!boardSpriteLive(sprite)) continue
         const center = cellCenter(x, y)
         const dx = localX - center.x
         const dy = localY - center.y
@@ -1000,6 +1004,7 @@ export class BoardScene {
   }
 
   private setHoverTarget(sprite: Sprite, scaleMul: number): void {
+    if (!boardSpriteLive(sprite)) return
     let anim = this.hoverAnims.get(sprite)
     if (!anim) {
       anim = {
@@ -1030,12 +1035,7 @@ export class BoardScene {
     const animating = this.animator?.isAnimating ?? false
     this.updateCursor(animating)
     if (animating) {
-      if (this.hoverAnims.size > 0) {
-        for (const anim of this.hoverAnims.values()) {
-          anim.sprite.scale.set(anim.baseScale)
-        }
-        this.hoverAnims.clear()
-      }
+      this.resetHoverAnims()
       if (this.hoveredCell) {
         this.hoveredCell = null
         this.hoverHaloTargetAlpha = 0
@@ -1050,6 +1050,10 @@ export class BoardScene {
       const damp = 2 * HOVER_SPRING_ZETA * omega
       const toRemove: Sprite[] = []
       for (const anim of this.hoverAnims.values()) {
+        if (!boardSpriteLive(anim.sprite)) {
+          toRemove.push(anim.sprite)
+          continue
+        }
         const aScale =
           -damp * anim.velScaleMul -
           omegaSq * (anim.currentScaleMul - anim.targetScaleMul)
@@ -1082,19 +1086,74 @@ export class BoardScene {
     this.boardEffects?.tick(dtMs)
   }
 
+  private nudgeSpritesStale(): boolean {
+    return this.nudgePulsingSprites.some((e) => !boardSpriteLive(e.sprite))
+  }
+
+  private invalidateNudgeSwapCache(): void {
+    this.nudgeSwapCache = null
+    this.nudgeSwapCacheCells = null
+    this.nudgeSwapCachePetrified = null
+  }
+
+  private resetHoverAnims(): void {
+    for (const anim of this.hoverAnims.values()) {
+      if (boardSpriteLive(anim.sprite)) {
+        anim.sprite.scale.set(anim.baseScale)
+      }
+    }
+    this.hoverAnims.clear()
+  }
+
+  private attachBoardStructureInvalidation(): void {
+    this.detachBoardStructure?.()
+    this.detachBoardStructure = subscribeGameEvents((event) => {
+      switch (event.kind) {
+        case 'gems-cleared':
+        case 'gems-transmuted':
+        case 'board-shuffled':
+        case 'board-swept':
+        case 'petrify-placed':
+        case 'petrify-fired':
+        case 'petrify-row-ticked':
+        case 'trick-swapped':
+          this.invalidateNudgeSwapCache()
+          break
+      }
+    })
+  }
+
+  private purgeBoardEffectsForSpriteSwap(): void {
+    this.clearNudgeHint()
+    this.invalidateNudgeSwapCache()
+    this.resetHoverAnims()
+    if (this.activeShimmers.length > 0) {
+      for (const s of this.activeShimmers) this.disposeShimmer(s)
+      this.activeShimmers = []
+    }
+  }
+
+  private clearNudgeHint(): void {
+    this.restoreNudgeSprites()
+    this.nudgePair = null
+    this.nudgeIsReleasing = false
+    this.nudgeAttackElapsedMs = 0
+  }
+
   private tickNudge(dtMs: number, animating: boolean): void {
     const phase = useGameStore.getState().fight.phase
     const canHint =
       !animating && phase === 'player-acting'
     if (!canHint) {
       this.nudgeIdleMs = 0
-      this.nudgeAttackElapsedMs = 0
-      this.nudgeIsReleasing = false
-      this.restoreNudgeSprites()
-      this.nudgePair = null
+      this.clearNudgeHint()
       return
     }
     if (this.nudgePulsingSprites.length > 0) {
+      if (this.nudgeSpritesStale()) {
+        this.clearNudgeHint()
+        return
+      }
       this.nudgePulseElapsedMs += dtMs
       if (!this.nudgeIsReleasing) {
         this.nudgeCycleMs -= dtMs
@@ -1107,10 +1166,7 @@ export class BoardScene {
         const t =
           (this.nudgePulseElapsedMs - this.nudgeReleaseStartElapsedMs) / span
         if (t >= 1) {
-          this.restoreNudgeSprites()
-          this.nudgePair = null
-          this.nudgeIsReleasing = false
-          this.nudgeAttackElapsedMs = 0
+          this.clearNudgeHint()
           return
         }
         env = 1 - easeInOutCubic(t)
@@ -1126,6 +1182,7 @@ export class BoardScene {
         (this.nudgePulseElapsedMs / NUDGE_PULSE_PERIOD_MS) * Math.PI * 2
       const mul = 1 + NUDGE_SCALE_AMPLITUDE * env * Math.sin(phaseRad)
       for (const entry of this.nudgePulsingSprites) {
+        if (!boardSpriteLive(entry.sprite)) continue
         entry.sprite.scale.set(entry.baseScale * mul)
       }
       return
@@ -1175,7 +1232,7 @@ export class BoardScene {
     if (!pick) return
     const fromSprite = animator.peekSprite(pick.from)
     const toSprite = animator.peekSprite(pick.to)
-    if (!fromSprite || !toSprite) return
+    if (!boardSpriteLive(fromSprite) || !boardSpriteLive(toSprite)) return
     this.restoreNudgeSprites()
     this.nudgePair = pick
     this.nudgeLastPairKey = pairKey(pick.from, pick.to)
@@ -1191,6 +1248,7 @@ export class BoardScene {
 
   private restoreNudgeSprites(): void {
     for (const entry of this.nudgePulsingSprites) {
+      if (!boardSpriteLive(entry.sprite)) continue
       entry.sprite.scale.set(entry.baseScale)
     }
     this.nudgePulsingSprites = []
@@ -1222,7 +1280,7 @@ export class BoardScene {
     for (let y = 0; y < BOARD_DIM; y++) {
       for (let x = 0; x < BOARD_DIM; x++) {
         const sprite = animator.peekSprite({ x, y })
-        if (!sprite) continue
+        if (!boardSpriteLive(sprite)) continue
         const center = cellCenter(x, y)
         let phases = this.floatPhases.get(sprite)
         if (!phases) {
@@ -1267,6 +1325,10 @@ export class BoardScene {
     if (this.activeShimmers.length > 0) {
       const survivors: ShimmerInstance[] = []
       for (const s of this.activeShimmers) {
+        if (s.maskClone.destroyed) {
+          this.disposeShimmer(s)
+          continue
+        }
         s.elapsed += dtMs
         if (s.elapsed >= SHIMMER_DURATION_MS) {
           this.disposeShimmer(s)
@@ -1314,7 +1376,7 @@ export class BoardScene {
     const cx = Math.floor(Math.random() * BOARD_DIM)
     const cy = Math.floor(Math.random() * BOARD_DIM)
     const sprite = animator.peekSprite({ x: cx, y: cy })
-    if (!sprite) return
+    if (!boardSpriteLive(sprite)) return
     const len = GEM_SIZE * SHIMMER_LEN_RATIO
     const width = SHIMMER_WIDTH_PX
     const streak = new Graphics()

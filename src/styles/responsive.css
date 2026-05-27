@@ -73,7 +73,7 @@
        letter-spacing. Without a floor, flex would squeeze "36/40" down
        to "36/4" with the last digit cut off the right edge. */
     min-width: 96px;
-    flex: 0 1 160px;
+    flex: 0 1 220px;
   }
 
   .enemy-row {
@@ -102,7 +102,6 @@
     font-size: 0.64rem;
     line-height: 12px;
   }
-
   .spell-tray {
     gap: 0.4rem;
   }
@@ -146,8 +145,17 @@
     gap: 0.5rem;
   }
   .hud-stat-cluster {
-    gap: 0.35rem;
+    gap: 0.4rem;
     min-width: 0;
+    justify-content: center;
+    /* Shrink-wrap HP + block so the bar cannot stretch away from the shield. */
+    width: fit-content;
+    max-width: 100%;
+  }
+  .tooltip-anchor-hp {
+    flex: 0 0 auto;
+    min-width: 96px;
+    max-width: 240px;
   }
   .hud-divider {
     height: 14px;
@@ -245,7 +253,20 @@
   }
   .hud-stat-cluster {
     justify-content: center;
-    flex: 1 1 100%;
+    flex: 0 1 auto;
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+  /* Mana wraps below on narrow phones — use the full HUD width for HP. */
+  .tooltip-anchor-hp {
+    width: min(280px, calc(100vw - 5.5rem));
+    max-width: none;
+    min-width: 110px;
+  }
+  .hp-bar {
+    flex: none;
+    width: 100%;
   }
   .hud-resource-cluster {
     flex-wrap: wrap;

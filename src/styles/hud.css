@@ -219,19 +219,28 @@
     drop-shadow(0 0 4px rgba(154, 125, 82, 0.25));
 }
 .mana-dot[data-color='red'] {
-  background-image: url('/gems/red.svg');
+  background-image: var(--gem-red-url, url('/gems/pack-melle/red.png'));
 }
 .mana-dot[data-color='blue'] {
-  background-image: url('/gems/blue.svg');
+  background-image: var(--gem-blue-url, url('/gems/pack-melle/blue.png'));
 }
 .mana-dot[data-color='green'] {
-  background-image: url('/gems/green.svg');
+  background-image: var(--gem-green-url, url('/gems/pack-melle/green.png'));
 }
 .mana-dot[data-color='yellow'] {
-  background-image: url('/gems/yellow.svg');
+  background-image: var(--gem-yellow-url, url('/gems/pack-melle/yellow.png'));
 }
 .mana-dot[data-color='gold'] {
-  background-image: url('/gems/gold.svg');
+  background-image: var(--gem-gold-url, url('/gems/pack-melle/gold.png'));
+}
+
+[data-gem-style^='pack-'] .mana-dot {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+[data-gem-style='pack-birthstones'] .mana-dot {
+  transform: scale(1.12);
 }
 /* Gold chip: same pip shape as mana, but a warmer halo so the eye
    reads it as currency, not a 5th colour mana. The dot already carries
@@ -381,7 +390,7 @@
   width: 18px;
   height: 18px;
   display: inline-block;
-  background-image: url('/gems/purple.svg');
+  background-image: var(--gem-purple-url, url('/gems/pack-melle/purple.png'));
   background-position: center;
   background-size: contain;
   background-repeat: no-repeat;
@@ -466,19 +475,25 @@
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
 }
 .spell-cost-dot[data-color='red'] {
-  background-image: url('/gems/red.svg');
+  background-image: var(--gem-red-url, url('/gems/pack-melle/red.png'));
 }
 .spell-cost-dot[data-color='blue'] {
-  background-image: url('/gems/blue.svg');
+  background-image: var(--gem-blue-url, url('/gems/pack-melle/blue.png'));
 }
 .spell-cost-dot[data-color='green'] {
-  background-image: url('/gems/green.svg');
+  background-image: var(--gem-green-url, url('/gems/pack-melle/green.png'));
 }
 .spell-cost-dot[data-color='yellow'] {
-  background-image: url('/gems/yellow.svg');
+  background-image: var(--gem-yellow-url, url('/gems/pack-melle/yellow.png'));
 }
 .spell-cost-dot[data-color='purple'] {
-  background-image: url('/gems/purple.svg');
+  background-image: var(--gem-purple-url, url('/gems/pack-melle/purple.png'));
+}
+
+[data-gem-style^='pack-'] .spell-cost-dot,
+[data-gem-style^='pack-'] .charge-icon {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 .spell-cost-amount {
   color: var(--gold-2);

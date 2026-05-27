@@ -1,7 +1,8 @@
 import { acquireRelic as engineAcquireRelic } from '../../relics/engine'
 import { tryGetRelic } from '../../relics/registry'
 import { getSpell } from '../../combat/spellRegistry'
-import { rollShopOffer } from '../../shop/offer'
+import { relicPawnGold, rollShopOffer } from '../../shop/offer'
+import type { RelicRarity } from '../../../types'
 import type { SpellId } from '../../../types'
 import type { StoreSet, StoreGet } from './types'
 
@@ -93,31 +94,32 @@ export function makeShopBuyHeal(set: StoreSet, get: StoreGet) {
   }
 }
 
-export function makeShopRemoveRelic(set: StoreSet, get: StoreGet) {
-  return (relicId: string): { ok: boolean } => {
+export function makeShopPawnRelic(set: StoreSet, get: StoreGet) {
+  return (relicId: string): { ok: boolean; gold?: number } => {
     const current = get()
     if (current.runPhase !== 'shop') return { ok: false }
     const offer = current.currentShopOffer
-    if (!offer || !offer.removeOffer || offer.removeOffer.used) {
+    if (!offer?.pawnOffer || offer.pawnOffer.used) {
       return { ok: false }
     }
-    if (current.fight.player.gold < offer.removeOffer.cost) {
-      return { ok: false }
-    }
-    if (!current.fight.player.relics.some((r) => r.id === relicId)) {
-      return { ok: false }
-    }
-    const cost = offer.removeOffer.cost
+    const inst = current.fight.player.relics.find((r) => r.id === relicId)
+    if (!inst) return { ok: false }
+    const def = tryGetRelic(relicId)
+    if (!def) return { ok: false }
+    const payout = relicPawnGold(
+      def.rarity as RelicRarity,
+      inst.upgraded === true,
+    )
     set((s) => {
-      s.fight.player.gold -= cost
+      s.fight.player.gold += payout
       s.fight.player.relics = s.fight.player.relics.filter(
         (r) => r.id !== relicId,
       )
-      if (s.currentShopOffer?.removeOffer) {
-        s.currentShopOffer.removeOffer.used = true
+      if (s.currentShopOffer?.pawnOffer) {
+        s.currentShopOffer.pawnOffer.used = true
       }
     })
-    return { ok: true }
+    return { ok: true, gold: payout }
   }
 }
 

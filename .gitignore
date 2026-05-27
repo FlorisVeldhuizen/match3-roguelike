@@ -21,6 +21,9 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+
+# Downloaded OpenGameArt archives (curated PNGs live in pack-* folders)
+public/gems/_sources/
 *.suo
 *.ntvs*
 *.njsproj

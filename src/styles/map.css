@@ -342,7 +342,7 @@
 
 .map-node-tooltip {
   position: absolute;
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, calc(-100% + var(--tooltip-fade-offset-y)));
   background: var(--ink-1);
   border: 1px solid var(--gold-1);
   color: var(--gold-2);
@@ -354,6 +354,15 @@
   pointer-events: none;
   border-radius: 0.25rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition:
+    opacity var(--tooltip-fade-duration) ease,
+    transform var(--tooltip-fade-duration) ease;
+}
+
+.map-node-tooltip.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -100%);
 }
 
 /* Hide the fight chrome behind the map without unmounting Pixi. The

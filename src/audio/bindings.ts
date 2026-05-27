@@ -1,6 +1,8 @@
 import { subscribeGameEvents } from '../core/events/emitter'
-import { scheduleAtTrailArrival } from '../timing'
+import { readSpellVisualBeat } from '../core/combat/spellVisual'
 import { statusKindFromDamageSource } from '../core/combat/statuses'
+import { scheduleAfterMs, scheduleAtTrailArrival } from '../timing'
+import { subscribeTrailScheduled } from '../trails/sync'
 import type { StatusKind } from '../types'
 import { playDropSfx } from './synths/drop'
 import { playClackSfx } from './synths/match'
@@ -48,28 +50,93 @@ let installed = false
 export function installSfxBindings(): void {
   if (installed) return
   installed = true
-  // Stash blocked/unblocked per side so block-absorbed/broken can scale correctly.
   let lastPlayerBlocked = 1
   let lastPlayerUnblocked = 1
   let lastEnemyBlocked = 1
   let lastEnemyUnblocked = 1
-  // -Infinity so the first player-turn cue is never suppressed.
   let lastEnemyTurnCueAt = -Infinity
-  // When a proc has a block component, defer shield SFX to trail-arrival.
-  let pendingProcBlockSfx = false
+  let lastPoolBlueAmount = 0
+  let lastTileBurnCellCount = 0
+  let playerProcBlockPending = false
+  let playerProcBlockSfx: 'absorbed' | 'broken' | null = null
+
   const FALL_MIN_MS = 150
   const FALL_PER_CELL_MS = 80
   const scheduleDrop = (maxDist: number) => {
     const fallMs = Math.max(FALL_MIN_MS, FALL_PER_CELL_MS * maxDist)
     window.setTimeout(playDropSfx, fallMs)
   }
+
+  subscribeTrailScheduled((trail) => {
+    const { arrivalMs, purpose } = trail
+    switch (purpose) {
+      case 'status-proc': {
+        if (trail.statusKind === 'burn' && trail.procFacet === 'damage') {
+          const amt =
+            trail.target === 'player' ? lastPlayerUnblocked : lastEnemyUnblocked
+          if (amt > 0) {
+            scheduleAfterMs(() => playBurnImpactSfx(amt), arrivalMs)
+          }
+        }
+        if (trail.procFacet === 'block') {
+          if (trail.target === 'player') {
+            const kind = playerProcBlockSfx
+            playerProcBlockSfx = null
+            scheduleAfterMs(() => {
+              if (kind === 'absorbed') playShieldThumpSfx(lastPlayerBlocked)
+              else if (kind === 'broken') {
+                playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
+              }
+            }, arrivalMs)
+          } else {
+            scheduleAfterMs(
+              () => playShieldThumpSfx(lastEnemyBlocked),
+              arrivalMs,
+            )
+          }
+        }
+        return
+      }
+      case 'pool-earn': {
+        if (trail.earnDest === 'mana') return
+        const blueAmt =
+          trail.color === 'blue' ? (trail.amount ?? lastPoolBlueAmount) : 0
+        if (blueAmt > 0) {
+          scheduleAfterMs(() => playShieldParticleTickSfx(blueAmt), arrivalMs)
+        }
+        return
+      }
+      case 'status-apply': {
+        const sfx =
+          trail.statusKind != null
+            ? STATUS_APPLY_SFX[trail.statusKind]
+            : undefined
+        if (sfx) scheduleAfterMs(sfx, arrivalMs)
+        return
+      }
+      case 'verb-to-board':
+        if (trail.verb === 'tile-burn' && lastTileBurnCellCount > 0) {
+          scheduleAfterMs(
+            () => playBurnIgniteSfx(lastTileBurnCellCount),
+            arrivalMs,
+          )
+        } else if (trail.verb === 'color-hex') {
+          scheduleAfterMs(playHexApplySfx, arrivalMs)
+        } else if (trail.verb === 'petrify') {
+          scheduleAfterMs(() => playShieldThumpSfx(6), arrivalMs)
+        }
+        return
+      default:
+        return
+    }
+  })
+
   subscribeGameEvents((event) => {
     switch (event.kind) {
       case 'gems-cleared':
         if (event.cells.length > 0) playClackSfx(event.cells.length)
         return
       case 'gems-fell':
-        // Delay so the thump lands when gems visibly hit the board.
         if (event.movements.length > 0) {
           let maxDist = 0
           for (const m of event.movements) {
@@ -93,30 +160,33 @@ export function installSfxBindings(): void {
         }
         return
       case 'cascade-start':
-        // Skip level 0 — the clear SFX already covers the initial match.
         if (event.level >= 1) playCascadeChimeSfx(event.level)
         return
       case 'cascade-complete':
-        // Threshold 3 = at least two chained cascades on top of the initial match.
         if (event.levels >= 3) {
           const lv = event.levels
           window.setTimeout(() => playCascadeCelebrationSfx(lv), 220)
         }
         return
       case 'damage-dealt': {
-        // Delay player-attack SFX to trail arrival to match visual hit timing.
         const amt = event.amount
         const procKind = statusKindFromDamageSource(event.source)
-        if (procKind && amt > 0) {
-          if (procKind === 'burn') {
-            scheduleAtTrailArrival(() => playBurnImpactSfx(amt))
-          }
+        if (procKind) {
+          lastEnemyBlocked = event.blocked
+          lastEnemyUnblocked = event.amount
           return
         }
         if (event.source === 'player-attack') {
           lastEnemyBlocked = event.blocked
           lastEnemyUnblocked = event.amount
-          if (amt > 0) scheduleAtTrailArrival(() => playAttackSfx(amt))
+          const beat = readSpellVisualBeat(event)
+          if (amt > 0) {
+            if (beat) {
+              scheduleAfterMs(() => playAttackSfx(amt), beat.arriveMs)
+            } else {
+              scheduleAtTrailArrival(() => playAttackSfx(amt))
+            }
+          }
         } else if (amt > 0) {
           playAttackSfx(amt)
         }
@@ -124,64 +194,50 @@ export function installSfxBindings(): void {
       }
       case 'healed': {
         const amt = event.amount
-        scheduleAtTrailArrival(() => playHealSfx(amt))
+        const beat = readSpellVisualBeat(event)
+        const delay = beat?.arriveMs ?? undefined
+        if (delay != null) scheduleAfterMs(() => playHealSfx(amt), delay)
+        else scheduleAtTrailArrival(() => playHealSfx(amt))
         return
       }
-      case 'pool-gained': {
-        if (event.color === 'blue') {
-          const amt = event.amount
-          scheduleAtTrailArrival(() => playShieldParticleTickSfx(amt))
-        }
+      case 'pool-gained':
+        if (event.color === 'blue') lastPoolBlueAmount = event.amount
         return
-      }
       case 'damage-taken': {
         const procKind = statusKindFromDamageSource(event.source)
-        if (procKind && (event.amount > 0 || event.blocked > 0)) {
-          if (procKind === 'burn' && event.amount > 0) {
-            scheduleAtTrailArrival(() => playBurnImpactSfx(event.amount))
-          }
-          lastPlayerBlocked = event.blocked
-          lastPlayerUnblocked = event.amount
-          if (event.blocked > 0) pendingProcBlockSfx = true
-          return
-        }
         lastPlayerBlocked = event.blocked
         lastPlayerUnblocked = event.amount
-        if (event.amount > 0) {
-          playAttackSfx(event.amount)
+        if (procKind) {
+          if (event.blocked > 0) playerProcBlockPending = true
+          return
         }
+        if (event.amount > 0) playAttackSfx(event.amount)
         return
       }
-      case 'block-absorbed': {
+      case 'block-absorbed':
         if (event.targetId === 'player') {
-          const amt = lastPlayerBlocked
-          if (pendingProcBlockSfx) {
-            pendingProcBlockSfx = false
-            scheduleAtTrailArrival(() => playShieldThumpSfx(amt))
-          } else {
-            playShieldThumpSfx(amt)
+          if (playerProcBlockPending) {
+            playerProcBlockSfx = 'absorbed'
+            playerProcBlockPending = false
           }
         } else {
-          const amt = lastEnemyBlocked
-          scheduleAtTrailArrival(() => playShieldThumpSfx(amt))
+          scheduleAtTrailArrival(() => playShieldThumpSfx(lastEnemyBlocked))
         }
         return
-      }
-      case 'block-broken': {
+      case 'block-broken':
         if (event.targetId === 'player') {
-          const amt = lastPlayerBlocked + lastPlayerUnblocked
-          if (pendingProcBlockSfx) {
-            pendingProcBlockSfx = false
-            scheduleAtTrailArrival(() => playShieldCrackSfx(amt))
-          } else {
-            playShieldCrackSfx(amt)
+          if (playerProcBlockPending) {
+            playerProcBlockSfx = 'broken'
+            playerProcBlockPending = false
+          } else if (playerProcBlockSfx == null) {
+            playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
           }
         } else {
-          const amt = lastEnemyBlocked + lastEnemyUnblocked
-          scheduleAtTrailArrival(() => playShieldCrackSfx(amt))
+          scheduleAtTrailArrival(() =>
+            playShieldCrackSfx(lastEnemyBlocked + lastEnemyUnblocked),
+          )
         }
         return
-      }
       case 'enemy-staggered':
         playStaggeredSfx()
         return
@@ -193,12 +249,6 @@ export function installSfxBindings(): void {
         return
       case 'column-smash-resolved':
         if (event.cells.length > 0) playSmashSfx()
-        return
-      case 'petrify-fired':
-        scheduleAtTrailArrival(() => playShieldThumpSfx(6))
-        return
-      case 'color-hex-fired':
-        scheduleAtTrailArrival(() => playHexApplySfx())
         return
       case 'hex-triggered':
         playHexTriggerSfx(event.stacks)
@@ -212,11 +262,9 @@ export function installSfxBindings(): void {
       case 'petrify-row-ticked':
         if (event.remaining === 0) playShieldCrackSfx(1)
         return
-      case 'tile-burn-placed': {
-        const ct = event.cells.length
-        scheduleAtTrailArrival(() => playBurnIgniteSfx(ct))
+      case 'tile-burn-placed':
+        lastTileBurnCellCount = event.cells.length
         return
-      }
       case 'tile-burn-triggered':
         playBurnBurstSfx(event.cells.length)
         return
@@ -226,13 +274,9 @@ export function installSfxBindings(): void {
         }
         return
       case 'status-applied': {
-        // Enemy-source applies play immediately (no trail); others ride trail-arrival.
-        const sfx = STATUS_APPLY_SFX[event.status.kind]
-        if (!sfx) return
-        if (event.source && event.source.kind !== 'enemy') {
-          scheduleAtTrailArrival(sfx)
-        } else {
-          sfx()
+        if (event.source?.kind === 'enemy') {
+          const sfx = STATUS_APPLY_SFX[event.status.kind]
+          sfx?.()
         }
         return
       }
@@ -244,9 +288,7 @@ export function installSfxBindings(): void {
         else if (event.phase === 'enemy-acting') {
           playEnemyTurnSfx()
           lastEnemyTurnCueAt = performance.now()
-        }
-        // Suppress when enemy cue just fired (<700ms) to avoid doubled cues on stagger.
-        else if (event.phase === 'player-acting') {
+        } else if (event.phase === 'player-acting') {
           const sinceEnemy = performance.now() - lastEnemyTurnCueAt
           if (sinceEnemy > 700) playTurnStartSfx()
         }

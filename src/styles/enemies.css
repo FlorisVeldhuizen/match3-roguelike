@@ -150,13 +150,27 @@
   line-height: 1.45;
   letter-spacing: 0;
   text-align: left;
-  /* pointer-events:none so the cursor never traps inside the tooltip
-     and never blocks its badge's mouseleave. Inline <Keyword> uses
-     autoShow to appear alongside the parent — the user doesn't need
-     to traverse into the tooltip. */
+  /* pointer-events:none on desktop so the cursor never traps inside the
+     tooltip. Inline <Keyword> auto-shows with delay + fade after parent opens;
+     on touch, intent tooltips enable pointer-events (see media query below). */
   pointer-events: none;
-  transition: opacity 120ms ease;
+  opacity: 0;
+  transform: translateY(var(--tooltip-fade-offset-y));
+  transition:
+    opacity var(--tooltip-fade-duration) ease,
+    transform var(--tooltip-fade-duration) ease;
   z-index: 100;
+}
+
+.intent-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (pointer: coarse), (hover: none) {
+  .intent-tooltip {
+    pointer-events: auto;
+  }
 }
 
 .intent-tooltip-title {
@@ -259,9 +273,9 @@
   box-shadow: 0 0 10px rgba(58, 107, 159, 0.18);
 }
 
-/* The row itself reserves vertical space via .enemy-effects-row min-height,
-   so we can collapse the empty badge out of horizontal flow — otherwise a
-   lone status chip (e.g. Burn applied by Riposte) sits off-center. */
+/* Collapse the empty badge out of horizontal flow; .enemy-effects-row still
+   reserves min-height so the HP bar does not jump when block or statuses
+   appear. Status chips share the row and stay centered when block is empty. */
 .enemy-block-badge.empty {
   display: none;
 }

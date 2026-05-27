@@ -2,12 +2,14 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
-import { TRAIL_ARRIVAL_MS } from '../../timing'
+import { scheduleAfterMs } from '../../timing'
+import { subscribeTrailScheduled } from '../../trails/sync'
 import { useFightReset } from '../hooks/useFightReset'
 import { BOARD_HEIGHT, BOARD_WIDTH } from '../../types'
 import type { GemColor } from '../../types'
@@ -19,6 +21,11 @@ const FIZZLE_MS = 1200
 
 export function ColorHexOverlay() {
   const [hexStates, setHexStates] = useState<Map<GemColor, HexState>>(new Map())
+  const pendingHexRef = useRef<{
+    color: GemColor
+    turnsLeft: number
+    fightCounter: number
+  } | null>(null)
   const cells = useGameStore((s) => s.board.cells)
 
   const seedFromStore = useCallback(() => {
@@ -42,19 +49,30 @@ export function ColorHexOverlay() {
   )
 
   useEffect(() => {
-    return subscribeGameEvents((event) => {
-      if (event.kind === 'color-hex-fired') {
-        const color = event.color
-        const turnsLeft = event.turnsLeft
-        const scheduledFight = useGameStore.getState().fightCounter
-        window.setTimeout(() => {
-          if (useGameStore.getState().fightCounter !== scheduledFight) return
-          setHexStates((prev) => {
-            const next = new Map(prev)
-            next.set(color, { turnsLeft, expiring: false })
-            return next
+    const unsubTrail = subscribeTrailScheduled((trail) => {
+      if (trail.verb !== 'color-hex') return
+      const pending = pendingHexRef.current
+      if (!pending) return
+      scheduleAfterMs(() => {
+        if (useGameStore.getState().fightCounter !== pending.fightCounter) return
+        pendingHexRef.current = null
+        setHexStates((prev) => {
+          const next = new Map(prev)
+          next.set(pending.color, {
+            turnsLeft: pending.turnsLeft,
+            expiring: false,
           })
-        }, TRAIL_ARRIVAL_MS)
+          return next
+        })
+      }, trail.arrivalMs)
+    })
+    const unsub = subscribeGameEvents((event) => {
+      if (event.kind === 'color-hex-fired') {
+        pendingHexRef.current = {
+          color: event.color,
+          turnsLeft: event.turnsLeft,
+          fightCounter: useGameStore.getState().fightCounter,
+        }
       } else if (event.kind === 'color-hex-ticked') {
         const color = event.color
         const remaining = event.remaining
@@ -87,6 +105,10 @@ export function ColorHexOverlay() {
         }
       }
     })
+    return () => {
+      unsubTrail()
+      unsub()
+    }
   }, [])
 
   if (hexStates.size === 0) return null

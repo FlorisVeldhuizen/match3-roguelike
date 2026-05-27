@@ -1,4 +1,4 @@
-import type { RelicInstance, ShopOffer, SpellId } from '../../types'
+import type { RelicInstance, RelicRarity, ShopOffer, SpellId } from '../../types'
 import { listSpells } from '../combat/spellRegistry'
 import { listRelics } from '../relics/registry'
 import { nextInt, type RngState } from '../rng/mulberry32'
@@ -13,7 +13,21 @@ const HEAL_SMALL_COST = 25
 const HEAL_SMALL_AMOUNT = 15
 const HEAL_BIG_COST = 50
 const HEAL_BIG_AMOUNT = 35
-const RELIC_REMOVE_COST = 75
+/** ~50% of shop buy price — merchant buys back, not full retail. */
+const RELIC_PAWN_PAYOUT: Record<RelicRarity, number> = {
+  common: 30,
+  uncommon: 50,
+  rare: 75,
+}
+const RELIC_PAWN_UPGRADED_BONUS = 15
+
+export function relicPawnGold(
+  rarity: RelicRarity,
+  upgraded = false,
+): number {
+  const base = RELIC_PAWN_PAYOUT[rarity]
+  return upgraded ? base + RELIC_PAWN_UPGRADED_BONUS : base
+}
 
 export function rollShopOffer(args: {
   ownedRelics: readonly RelicInstance[]
@@ -93,7 +107,7 @@ export function rollShopOffer(args: {
         { kind: 'small', cost: HEAL_SMALL_COST, amount: HEAL_SMALL_AMOUNT, purchased: false },
         { kind: 'big', cost: HEAL_BIG_COST, amount: HEAL_BIG_AMOUNT, purchased: false },
       ],
-      removeOffer: { cost: RELIC_REMOVE_COST, used: false },
+      pawnOffer: { used: false },
     },
     rng,
   }
@@ -104,5 +118,6 @@ export const SHOP_PRICES = {
   spell: SPELL_COST,
   healSmall: { cost: HEAL_SMALL_COST, amount: HEAL_SMALL_AMOUNT },
   healBig: { cost: HEAL_BIG_COST, amount: HEAL_BIG_AMOUNT },
-  relicRemove: RELIC_REMOVE_COST,
+  relicPawn: RELIC_PAWN_PAYOUT,
+  relicPawnUpgradedBonus: RELIC_PAWN_UPGRADED_BONUS,
 } as const

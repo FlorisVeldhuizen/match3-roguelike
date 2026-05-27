@@ -38,7 +38,7 @@ import {
   makeShopBuyHeal,
   makeShopBuyRelic,
   makeShopBuySpell,
-  makeShopRemoveRelic,
+  makeShopPawnRelic,
 } from './actions/shop'
 import { makeEnterNode, makeRestart } from './actions/nodes'
 import { freshBoardState, freshPlayer } from './actions/helpers'
@@ -108,7 +108,7 @@ export type GameStore = {
   shopBuyRelic: (relicId: string) => { ok: boolean }
   shopBuySpell: (spellId: SpellId) => { ok: boolean }
   shopBuyHeal: (kind: 'small' | 'big') => { ok: boolean }
-  shopRemoveRelic: (relicId: string) => { ok: boolean }
+  shopPawnRelic: (relicId: string) => { ok: boolean; gold?: number }
   leaveShop: () => void
   skipReward: () => void
   enterNode: (nodeId: string) => void
@@ -223,7 +223,7 @@ export const useGameStore = create<GameStore>()(
     shopBuyRelic: makeShopBuyRelic(set, get),
     shopBuySpell: makeShopBuySpell(set, get),
     shopBuyHeal: makeShopBuyHeal(set, get),
-    shopRemoveRelic: makeShopRemoveRelic(set, get),
+    shopPawnRelic: makeShopPawnRelic(set, get),
     leaveShop: makeLeaveShop(set, get),
     skipReward: makeSkipReward(set, get),
     enterNode: makeEnterNode(set, get),

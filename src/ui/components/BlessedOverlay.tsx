@@ -4,6 +4,7 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
 import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
+import { removeAnchorsAt } from '../cellAnchors'
 import { CellAnchor } from './CellAnchor'
 
 type SparkConfig = {
@@ -99,6 +100,14 @@ export function BlessedOverlay() {
         setSparks((prev) => {
           const next = new Map(prev)
           for (const p of placed) next.set(p.id, p.sparks)
+          return next
+        })
+      } else if (event.kind === 'gems-cleared') {
+        const removed = removeAnchorsAt(positions, event.cells)
+        if (removed.length === 0) return
+        setSparks((prev) => {
+          const next = new Map(prev)
+          for (const r of removed) next.delete(r.id)
           return next
         })
       } else if (event.kind === 'blessed-match-triggered') {

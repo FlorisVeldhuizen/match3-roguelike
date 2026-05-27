@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
-import { TRAIL_ARRIVAL_MS } from '../../timing'
+import { scheduleAfterMs } from '../../timing'
+import { subscribeTrailScheduled } from '../../trails/sync'
 import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
 import { useTransientCellFx } from '../hooks/useTransientCellFx'
 import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import { useHoveredCellKey } from '../hooks/useHoveredCellKey'
+import { removeAnchorsAt } from '../cellAnchors'
 import { CellAnchor } from './CellAnchor'
 import type { Pos } from '../../types'
 
@@ -28,6 +30,11 @@ export function BurningOverlay() {
   const fizzles = useTransientCellFx(FIZZLE_MS)
   const hoveredKey = useHoveredCellKey()
   const flameIdRef = useRef(0)
+  const pendingPlaceRef = useRef<{
+    cells: Pos[]
+    duration: number
+    fightCounter: number
+  } | null>(null)
 
   useLayoutEffect(() => {
     setMeta(seedMetaFromStore(positions.set, flameIdRef))
@@ -51,26 +58,43 @@ export function BurningOverlay() {
   useBoardWipe(wipeAll)
 
   useEffect(() => {
-    return subscribeGameEvents((event) => {
+    const unsubTrail = subscribeTrailScheduled((trail) => {
+      if (trail.verb !== 'tile-burn') return
+      const pending = pendingPlaceRef.current
+      if (!pending) return
+      scheduleAfterMs(() => {
+        if (useGameStore.getState().fightCounter !== pending.fightCounter) return
+        pendingPlaceRef.current = null
+        const placed: { id: string; remaining: number }[] = []
+        for (const c of pending.cells) {
+          const id = `flame-${++flameIdRef.current}`
+          positions.set(id, c.x, c.y)
+          placed.push({ id, remaining: pending.duration })
+        }
+        if (placed.length === 0) return
+        setMeta((prev) => {
+          const next = new Map(prev)
+          for (const p of placed) next.set(p.id, { remaining: p.remaining })
+          return next
+        })
+      }, trail.arrivalMs)
+    })
+    const unsub = subscribeGameEvents((event) => {
       if (event.kind === 'tile-burn-placed') {
-        const cells = event.cells
-        const duration = event.duration
-        const scheduledFight = useGameStore.getState().fightCounter
-        window.setTimeout(() => {
-          if (useGameStore.getState().fightCounter !== scheduledFight) return
-          const placed: { id: string; remaining: number }[] = []
-          for (const c of cells) {
-            const id = `flame-${++flameIdRef.current}`
-            positions.set(id, c.x, c.y)
-            placed.push({ id, remaining: duration })
-          }
-          if (placed.length === 0) return
-          setMeta((prev) => {
-            const next = new Map(prev)
-            for (const p of placed) next.set(p.id, { remaining: p.remaining })
-            return next
-          })
-        }, TRAIL_ARRIVAL_MS)
+        pendingPlaceRef.current = {
+          cells: event.cells,
+          duration: event.duration,
+          fightCounter: useGameStore.getState().fightCounter,
+        }
+      } else if (event.kind === 'gems-cleared') {
+        const removed = removeAnchorsAt(positions, event.cells)
+        if (removed.length === 0) return
+        fizzles.spawn(removed.map((r) => r.at))
+        setMeta((prev) => {
+          const next = new Map(prev)
+          for (const r of removed) next.delete(r.id)
+          return next
+        })
       } else if (event.kind === 'tile-burn-triggered') {
         bursts.spawn(event.cells.map((c) => ({ x: c.x, y: c.y })))
         const removedIds: string[] = []
@@ -120,6 +144,10 @@ export function BurningOverlay() {
         })
       }
     })
+    return () => {
+      unsubTrail()
+      unsub()
+    }
   }, [positions, bursts, fizzles])
 
   return (

@@ -521,10 +521,13 @@
   font-size: 0.85rem;
 }
 
+/* Lives in .enemy-effects-row beside the block badge — inline flow keeps
+   multiple chips from stacking on top of each other and avoids fighting
+   the block row for the same vertical band above the HP bar. */
 .enemy-statuses {
-  /* No margin/min-height: the chips ride in the always-reserved
-     .enemy-effects-row alongside the block badge, so the slot height
-     already exists whether or not any status is active. */
+  min-height: 0;
+  flex: 0 1 auto;
+  justify-content: center;
 }
 
 /* Player-side equivalent: the chips sit in .hud-row alongside the phase
@@ -582,10 +585,16 @@
   justify-content: center;
   gap: 0.35rem;
   flex-wrap: wrap;
-  /* Reserve one badge's worth of height even when row is empty, so the
-     HP bar doesn't shift up/down based on whether block or statuses exist.
-     Matches the rendered block-badge height (~0.78rem font + padding + border). */
-  min-height: 1.4rem;
+  /* Reserve chip/badge height so block + statuses never shove the HP bar. */
+  min-height: 1.6rem;
+  width: 100%;
+}
+
+.enemy-effects-row .status-chip {
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  box-shadow:
+    0 1px 0 rgba(154, 125, 82, 0.45),
+    0 3px 8px rgba(0, 0, 0, 0.55);
 }
 
 

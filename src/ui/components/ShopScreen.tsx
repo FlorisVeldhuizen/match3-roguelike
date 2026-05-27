@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { tryGetRelic } from '../../core/relics/registry'
+import { relicPawnGold } from '../../core/shop/offer'
 import { getSpell } from '../../core/combat/spellRegistry'
 import type { SpellId } from '../../types'
 
@@ -17,28 +18,62 @@ export function ShopScreen() {
   const shopBuyRelic = useGameStore((s) => s.shopBuyRelic)
   const shopBuySpell = useGameStore((s) => s.shopBuySpell)
   const shopBuyHeal = useGameStore((s) => s.shopBuyHeal)
-  const shopRemoveRelic = useGameStore((s) => s.shopRemoveRelic)
+  const shopPawnRelic = useGameStore((s) => s.shopPawnRelic)
   const leaveShop = useGameStore((s) => s.leaveShop)
-  const [removeMode, setRemoveMode] = useState(false)
+  const [pawnMode, setPawnMode] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (runPhase === 'shop') rollShopOfferIfNeeded()
   }, [runPhase, rollShopOfferIfNeeded])
+
+  useEffect(() => {
+    if (!pawnMode) return
+    const el = overlayRef.current
+    if (el) el.scrollTop = 0
+  }, [pawnMode])
 
   if (runPhase !== 'shop') return null
   if (!offer) return null
 
   const isFullHp = playerHp >= playerMaxHp
 
+  const pawnBlocked =
+    offer.pawnOffer?.used === true
+      ? 'Already pawned a relic this visit.'
+      : relics.length === 0
+        ? 'You need at least one relic to sell.'
+        : null
+
+  const pawnPayoutRange = (() => {
+    if (relics.length === 0) return null
+    let min = Infinity
+    let max = 0
+    for (const inst of relics) {
+      const def = tryGetRelic(inst.id)
+      if (!def) continue
+      const payout = relicPawnGold(def.rarity, inst.upgraded === true)
+      min = Math.min(min, payout)
+      max = Math.max(max, payout)
+    }
+    if (!Number.isFinite(min)) return null
+    return min === max ? `${min} g` : `${min}–${max} g`
+  })()
+
   return (
-    <div className="reward-overlay" role="dialog" aria-label="Shop">
+    <div
+      ref={overlayRef}
+      className="reward-overlay"
+      role="dialog"
+      aria-label="Shop"
+    >
       <div className="reward-card shop-card">
         <h1 className="reward-title">A roadside merchant.</h1>
         <p className="reward-sub">
           Gold: <strong>{gold}</strong>
         </p>
 
-        {!removeMode && (
+        {!pawnMode && (
           <>
             <h2 className="shop-section-title">Relics</h2>
             <div className="reward-grid">
@@ -69,9 +104,7 @@ export function ShopScreen() {
                     <span className="reward-relic-name">{def.name}</span>
                     <span className="reward-relic-rarity">{def.rarity}</span>
                     <span className="reward-relic-desc">{def.description}</span>
-                    <span className="shop-price">
-                      {item.purchased ? 'Sold' : `${item.cost} g`}
-                    </span>
+                    <ShopPrice cost={item.cost} purchased={item.purchased} />
                   </button>
                 )
               })}
@@ -124,73 +157,85 @@ export function ShopScreen() {
                     <span className="reward-relic-desc">
                       Restore {item.amount} HP.
                     </span>
-                    <span className="shop-price">
-                      {item.purchased ? 'Sold' : `${item.cost} g`}
-                    </span>
+                    <ShopPrice cost={item.cost} purchased={item.purchased} />
                   </button>
                 )
               })}
-              {offer.removeOffer && (
+              {offer.pawnOffer && (
                 <button
                   type="button"
-                  className={`reward-relic rarity-uncommon${offer.removeOffer.used ? ' sold-out' : ''}`}
-                  disabled={
-                    offer.removeOffer.used ||
-                    gold < offer.removeOffer.cost ||
-                    relics.length === 0
-                  }
-                  onClick={() => setRemoveMode(true)}
+                  className={`reward-relic rarity-uncommon${offer.pawnOffer.used ? ' sold-out' : ''}`}
+                  disabled={offer.pawnOffer.used || relics.length === 0}
+                  onClick={() => setPawnMode(true)}
                   title={
-                    offer.removeOffer.used
+                    offer.pawnOffer.used
                       ? 'Already used'
                       : relics.length === 0
-                        ? 'No relics to remove'
-                        : gold < offer.removeOffer.cost
-                          ? `Need ${offer.removeOffer.cost - gold} more gold`
+                        ? 'No relics to sell'
+                        : pawnPayoutRange
+                          ? `Earn ${pawnPayoutRange} depending on relic`
                           : ''
                   }
                 >
-                  <span className="reward-relic-icon" aria-hidden>🪓</span>
+                  <span className="reward-relic-icon" aria-hidden>⚖️</span>
                   <span className="reward-relic-name">Pawn relic</span>
-                  <span className="reward-relic-rarity">service</span>
+                  <span className="reward-relic-rarity">sell</span>
                   <span className="reward-relic-desc">
-                    Permanently discard one of your relics.
+                    Trade one relic for gold (payout by rarity
+                    {pawnPayoutRange ? `: ${pawnPayoutRange}` : ''}). Tap here,
+                    then choose which relic to sell.
                   </span>
-                  <span className="shop-price">
-                    {offer.removeOffer.used
-                      ? 'Used'
-                      : `${offer.removeOffer.cost} g`}
-                  </span>
+                  {pawnBlocked && (
+                    <span className="reward-relic-hint">{pawnBlocked}</span>
+                  )}
+                  {pawnPayoutRange && !offer.pawnOffer.used && (
+                    <ShopPayout
+                      amountLabel={pawnPayoutRange}
+                      purchased={false}
+                    />
+                  )}
+                  {offer.pawnOffer.used && (
+                    <span className="shop-price">Used</span>
+                  )}
                 </button>
               )}
             </div>
           </>
         )}
 
-        {removeMode && (
+        {pawnMode && (
           <>
             <h2 className="shop-section-title">Pick a relic to pawn</h2>
+            <p className="reward-sub">
+              You earn gold and lose that relic for the rest of the run. Payout
+              depends on rarity (upgraded relics pay a little more).
+            </p>
             <div className="reward-grid">
               {relics.length === 0 && (
-                <p className="reward-empty">No relics to remove.</p>
+                <p className="reward-empty">No relics to sell.</p>
               )}
               {relics.map((inst) => {
                 const def = tryGetRelic(inst.id)
                 if (!def) return null
+                const payout = relicPawnGold(
+                  def.rarity,
+                  inst.upgraded === true,
+                )
                 return (
                   <button
                     key={inst.id}
                     type="button"
                     className={`reward-relic rarity-${def.rarity}`}
                     onClick={() => {
-                      const result = shopRemoveRelic(inst.id)
-                      if (result.ok) setRemoveMode(false)
+                      const result = shopPawnRelic(inst.id)
+                      if (result.ok) setPawnMode(false)
                     }}
                   >
                     <span className="reward-relic-icon" aria-hidden>{def.icon}</span>
                     <span className="reward-relic-name">{def.name}</span>
                     <span className="reward-relic-rarity">{def.rarity}</span>
                     <span className="reward-relic-desc">{def.description}</span>
+                    <ShopPayout amount={payout} />
                   </button>
                 )
               })}
@@ -201,9 +246,9 @@ export function ShopScreen() {
         <button
           type="button"
           className="reward-skip"
-          onClick={() => (removeMode ? setRemoveMode(false) : leaveShop())}
+          onClick={() => (pawnMode ? setPawnMode(false) : leaveShop())}
         >
-          {removeMode ? 'Back' : 'Leave'}
+          {pawnMode ? 'Back' : 'Leave'}
         </button>
       </div>
     </div>
@@ -245,7 +290,46 @@ function ShopSpellRow({
       <span className="reward-relic-name">{def.name}</span>
       <span className="reward-relic-rarity">spell</span>
       <span className="reward-relic-desc">{def.description}</span>
-      <span className="shop-price">{purchased ? 'Sold' : `${cost} g`}</span>
+      <ShopPrice cost={cost} purchased={purchased} />
     </button>
+  )
+}
+
+function ShopPrice({
+  cost,
+  purchased = false,
+  soldLabel = 'Sold',
+}: {
+  cost: number
+  purchased?: boolean
+  soldLabel?: string
+}) {
+  if (purchased) {
+    return <span className="shop-price">{soldLabel}</span>
+  }
+  return (
+    <span className="shop-price" aria-label={`Pay ${cost} gold`}>
+      Pay {cost} g
+    </span>
+  )
+}
+
+function ShopPayout({
+  amount,
+  amountLabel,
+  purchased = false,
+}: {
+  amount?: number
+  amountLabel?: string
+  purchased?: boolean
+}) {
+  if (purchased) {
+    return <span className="shop-price">Used</span>
+  }
+  const label = amountLabel ?? (amount != null ? `+${amount} g` : '')
+  return (
+    <span className="shop-price shop-price-earn" aria-label={`Earn ${label}`}>
+      {label}
+    </span>
   )
 }

@@ -6,8 +6,14 @@ import {
   type Ticker,
 } from 'pixi.js'
 import { RGBSplitFilter } from 'pixi-filters'
-import type { GemColor } from '../types'
+import type { GemColor, TrailPurpose } from '../types'
 import { getFXSettings, subscribeFXSettings } from '../fx/settings'
+import {
+  TRAIL_ARRIVAL_MS,
+  TRAIL_PARTICLE_STAGGER_MS,
+  trailBurstArrivalMs,
+  trailDurationBetween,
+} from '../timing'
 
 const COLOR_HEX: Record<GemColor, number> = {
   red: 0xee5e57,
@@ -237,13 +243,13 @@ export class OverlayScene {
     colorOrHex: GemColor | number | readonly number[],
     count = 5,
     innerHex = 0xffffff,
-    opts?: { lifeBase?: number; lifeStep?: number },
-  ): void {
-    if (reducedMotion) return
+    opts?: { durationMs?: number; purpose?: TrailPurpose },
+  ): number {
+    if (reducedMotion) return TRAIL_ARRIVAL_MS
     const layer = this.layer
-    if (!layer) return
+    if (!layer) return TRAIL_ARRIVAL_MS
     const initialEnd = attractor()
-    if (!initialEnd) return
+    if (!initialEnd) return TRAIL_ARRIVAL_MS
     const palette: readonly number[] = Array.isArray(colorOrHex)
       ? colorOrHex
       : [
@@ -255,6 +261,10 @@ export class OverlayScene {
       const idx = Math.floor(Math.random() * palette.length)
       return palette[idx] ?? palette[0] ?? 0xffffff
     }
+    const lifeBase =
+      opts?.durationMs ??
+      trailDurationBetween(from, initialEnd, opts?.purpose)
+    const arrivalMs = trailBurstArrivalMs(lifeBase, count)
     for (let i = 0; i < count; i++) {
       const start = jitterPoint(from, 5)
       const control = randomBezierControl(start, initialEnd)
@@ -269,9 +279,7 @@ export class OverlayScene {
       head.y = start.y
       head.alpha = 0
       layer.addChild(head)
-      const lifeBase = opts?.lifeBase ?? 620
-      const lifeStep = opts?.lifeStep ?? 55
-      const life = lifeBase + i * lifeStep
+      const life = lifeBase + i * TRAIL_PARTICLE_STAGGER_MS
       this.effects.push({
         kind: 'bezier',
         view: head,
@@ -285,6 +293,7 @@ export class OverlayScene {
         colorHex: hex,
       })
     }
+    return arrivalMs
   }
 
   spawnSparkle(at: ScreenPoint, count = 5): void {
@@ -596,8 +605,8 @@ export class OverlayScene {
     for (let readIdx = 0; readIdx < effects.length; readIdx++) {
       const e = effects[readIdx]
       if (!e) continue
-      e.life -= dtMs
-      if (e.life <= 0) {
+      const nextLife = e.life - dtMs
+      if (nextLife <= 0) {
         layer.removeChild(e.view)
         e.view.destroy()
         if (e.kind === 'bezier') {
@@ -607,6 +616,7 @@ export class OverlayScene {
         continue
       }
       if (e.kind === 'physics') {
+        e.life = nextLife
         e.vy += e.gravity * dt
         const dragFactor = Math.max(0, 1 - e.drag * dt)
         e.vx *= dragFactor
@@ -632,7 +642,7 @@ export class OverlayScene {
         }
       } else {
         const end = e.attractor()
-        const progress = 1 - e.life / e.maxLife
+        const progress = Math.min(1, 1 - Math.max(0, nextLife) / e.maxLife)
         let curX = e.view.x
         let curY = e.view.y
         if (end) {
@@ -649,7 +659,7 @@ export class OverlayScene {
           e.view.y = curY
         }
         const fadeIn = 0.15
-        const fadeOut = 0.9
+        const fadeOut = 0.98
         const alpha =
           progress < fadeIn
             ? progress / fadeIn
@@ -682,6 +692,7 @@ export class OverlayScene {
           }
           e.tail.alpha = 1
         }
+        e.life = nextLife
       }
       if (writeIdx !== readIdx) effects[writeIdx] = e
       writeIdx++

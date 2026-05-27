@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTooltipFade } from '../useTooltipFade'
+import { useTooltipReveal } from '../useTooltipReveal'
 import { useGameStore } from '../../core/state/store'
 import { getReachableFrom } from '../../core/map/paths'
 import { tryGetRelic } from '../../core/relics/registry'
@@ -98,6 +100,31 @@ export function MapScreen() {
     }
   }, [runPhase])
 
+  const hoveredNode = hovered ? map.nodes.find((n) => n.id === hovered) : null
+  const tooltipNodeRef = useRef<MapNode | null>(null)
+  if (hoveredNode) tooltipNodeRef.current = hoveredNode
+  const tooltipOpen = runPhase === 'map' && hoveredNode != null
+  const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(tooltipOpen)
+  const tipRevealed = useTooltipReveal(tooltipOpen, tipVisible)
+
+  useEffect(() => {
+    if (!hovered || runPhase !== 'map') return
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Element | null
+      if (target?.closest('.map-node')) return
+      setHovered(null)
+    }
+    const onScrollOrResize = () => setHovered(null)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [hovered, runPhase])
+
   if (runPhase !== 'map') return null
 
   const laneCounts = laneCountByColumn(map.nodes)
@@ -125,7 +152,7 @@ export function MapScreen() {
     })
   }
 
-  const hoveredNode = hovered ? map.nodes.find((n) => n.id === hovered) : null
+  const tipNode = hoveredNode ?? tooltipNodeRef.current
 
   return (
     <div
@@ -266,6 +293,10 @@ export function MapScreen() {
                     onMouseLeave={() =>
                       setHovered((h) => (h === node.id ? null : h))
                     }
+                    onTouchStart={(e) => {
+                      e.stopPropagation()
+                      setHovered(node.id)
+                    }}
                     role={isReachable ? 'button' : undefined}
                     aria-label={`${NODE_LABELS[node.kind]}${
                       isCurrent
@@ -311,15 +342,15 @@ export function MapScreen() {
                 </g>
               ) : null}
             </svg>
-          {hoveredNode ? (
+          {tipMounted && tipNode && nodePositions.has(tipNode.id) ? (
             <div
-              className="map-node-tooltip"
+              className={`map-node-tooltip${tipRevealed ? ' is-visible' : ''}`}
               style={{
-                left: nodePositions.get(hoveredNode.id)!.x,
-                top: nodePositions.get(hoveredNode.id)!.y - NODE_RADIUS - 12,
+                left: nodePositions.get(tipNode.id)!.x,
+                top: nodePositions.get(tipNode.id)!.y - NODE_RADIUS - 12,
               }}
             >
-              {NODE_LABELS[hoveredNode.kind]}
+              {NODE_LABELS[tipNode.kind]}
             </div>
           ) : null}
         </div>

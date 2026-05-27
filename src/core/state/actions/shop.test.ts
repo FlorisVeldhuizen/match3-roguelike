@@ -94,8 +94,8 @@ describe('shop actions', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('shopRemoveRelic preserves acquisition order of remaining relics', () => {
-    enterShop(500)
+  it('shopPawnRelic credits gold, removes relic, preserves order of rest', () => {
+    enterShop(100)
     useGameStore.setState((s) => {
       s.fight.player.relics = [
         { id: 'iron-buckler', runFlags: {}, fightFlags: {} },
@@ -103,16 +103,34 @@ describe('shop actions', () => {
         { id: 'thornmail', runFlags: {}, fightFlags: {} },
       ]
     })
-    const result = useGameStore.getState().shopRemoveRelic('sharp-edge')
+    const result = useGameStore.getState().shopPawnRelic('sharp-edge')
     expect(result.ok).toBe(true)
-    const ids = useGameStore
-      .getState()
-      .fight.player.relics.map((r) => r.id)
-    expect(ids).toEqual(['iron-buckler', 'thornmail'])
-    // Removal slot is marked used.
-    expect(
-      useGameStore.getState().currentShopOffer?.removeOffer?.used,
-    ).toBe(true)
+    expect(result.gold).toBe(30) // sharp-edge is common → 30g
+    const after = useGameStore.getState()
+    expect(after.fight.player.gold).toBe(130)
+    expect(after.fight.player.relics.map((r) => r.id)).toEqual([
+      'iron-buckler',
+      'thornmail',
+    ])
+    expect(after.currentShopOffer?.pawnOffer?.used).toBe(true)
+  })
+
+  it('shopPawnRelic pays more for upgraded relics', () => {
+    enterShop(0)
+    useGameStore.setState((s) => {
+      s.fight.player.relics = [
+        {
+          id: 'iron-buckler',
+          runFlags: {},
+          fightFlags: {},
+          upgraded: true,
+        },
+      ]
+    })
+    const result = useGameStore.getState().shopPawnRelic('iron-buckler')
+    expect(result.ok).toBe(true)
+    expect(result.gold).toBe(45) // 30 common + 15 upgraded bonus
+    expect(useGameStore.getState().fight.player.gold).toBe(45)
   })
 
   it('leaveShop returns to map and marks the node visited', () => {

@@ -14,6 +14,15 @@ import {
   type FXKey,
   type FXSettings,
 } from '../../fx/settings'
+import {
+  GEM_STYLE_VARIANTS,
+  gemStyleHint,
+  gemStyleLabel,
+  getGemStyle,
+  setGemStyle,
+  subscribeGemStyle,
+  type GemStyleVariant,
+} from '../../gems/settings'
 import { useGameStore } from '../../core/state/store'
 import {
   advanceStep,
@@ -52,6 +61,9 @@ export function SettingsPanel() {
 
   const [fxSettings, setFxSettingsState] = useState<FXSettings>(getFXSettings)
   useEffect(() => subscribeFXSettings(setFxSettingsState), [])
+
+  const [gemStyle, setGemStyleState] = useState<GemStyleVariant>(getGemStyle)
+  useEffect(() => subscribeGemStyle(setGemStyleState), [])
 
   const [speed, setSpeed] = useState(getTimeScale())
   const [stepOn, setStepOn] = useState(isStepMode())
@@ -160,6 +172,26 @@ export function SettingsPanel() {
               />
               <span className="settings-value">{Math.round(volume * 100)}%</span>
             </label>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-title">Gem style</div>
+            <p className="settings-hint">
+              Board and HUD gems — see public/gems/CREDITS.md. Saved locally.
+            </p>
+            <div className="settings-row settings-row-chips settings-row-gem-style">
+              {GEM_STYLE_VARIANTS.map((variant) => (
+                <button
+                  key={variant}
+                  type="button"
+                  className={`settings-chip ${gemStyle === variant ? 'is-active' : ''}`}
+                  title={gemStyleHint(variant)}
+                  onClick={() => setGemStyle(variant)}
+                >
+                  {gemStyleLabel(variant)}
+                </button>
+              ))}
+            </div>
           </section>
 
           <section className="settings-section">

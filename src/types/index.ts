@@ -107,6 +107,36 @@ export type SpellEffectLeg = {
   staggerMs?: number
 }
 
+/** Why a trail was spawned — drives HUD / SFX / overlay sync. */
+export type TrailPurpose =
+  | 'pool-earn'
+  | 'mana-spend'
+  | 'spell-effect'
+  | 'status-apply'
+  | 'status-proc'
+  | 'player-attack'
+  | 'verb-to-board'
+
+export type TrailScheduledEvent = {
+  kind: 'trail-scheduled'
+  purpose: TrailPurpose
+  /** Ms from now until the last particle arrives. */
+  arrivalMs: number
+  target?: 'player' | string
+  color?: GemColor
+  /** pool-earn: mana/pool increment shown when this trail lands */
+  amount?: number
+  /** pool-earn: shield/HP target vs mana chip (split trails) */
+  earnDest?: 'effect' | 'mana'
+  statusKind?: StatusKind
+  /** status-proc: damage chip→HP vs chip→block */
+  procFacet?: 'damage' | 'block'
+  spellId?: PendingSpellId
+  /** spell-effect: which HUD slot the trail homed to */
+  slot?: 'hp' | 'block' | 'status'
+  verb?: 'tile-burn' | 'color-hex' | 'petrify'
+}
+
 export type GameEvent =
   | { kind: 'swap'; from: Pos; to: Pos }
   | { kind: 'swap-reverted'; from: Pos; to: Pos }
@@ -270,6 +300,7 @@ export type GameEvent =
       telegraphed: IntentKind
       actual: IntentKind
     }
+  | TrailScheduledEvent
 
 export type CombatPhase =
   | 'player-acting'
@@ -417,7 +448,7 @@ export type ShopOffer = {
     amount: number
     purchased: boolean
   }[]
-  removeOffer: { cost: number; used: boolean } | null
+  pawnOffer: { used: boolean } | null
 }
 
 export type Enemy = {

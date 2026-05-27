@@ -1,4 +1,10 @@
-import { Sprite, type Container, type Texture } from 'pixi.js'
+import { Sprite, type Container } from 'pixi.js'
+import {
+  applyBoardGemColor,
+  createBoardGemSprite,
+  type GemBoardSprite,
+  type GemBoardVisuals,
+} from '../gems/visuals'
 import type {
   GameEvent,
   GemColor,
@@ -24,10 +30,14 @@ import { shoveHueAtIndex, shoveHueFor } from '../core/combat/shoveHues'
 import {
   TRAIL_ARRIVAL_MS,
   scheduleAtTrailArrival,
+  trailDurationBetween,
+  type TrailPoint,
   SWAP_MS,
   DROP_PER_CELL_MS,
   DROP_MIN_FALL_MS,
 } from '../timing'
+import { emitTrailScheduled, scheduleAtTrailSpawn } from '../trails/sync'
+import type { TrailScheduledEvent } from '../types'
 import {
   elementCenter,
   type Attractor,
@@ -277,17 +287,18 @@ export class AnimationController {
   private sprites: (Sprite | null)[][]
   private readonly geometry: BoardGeometry
   private readonly parent: Container
-  private readonly textures: Record<GemColor, Texture>
+  private visuals: GemBoardVisuals
   private readonly cellScreenCenter: (pos: Pos) => { x: number; y: number } | null
   private overlay: OverlayScene | null = null
   private playing: Promise<void> = Promise.resolve()
   private busy = false
   // Game-over after a proc DoT needs to wait for the delayed HP drain
   // to finish before the defeat overlay covers the bar.
+  private pendingSpellAttackPopups = new Map<string, number>()
   private pendingProcDelay = false
-  // Proc damage particles take TRAIL_ARRIVAL_MS to reach block badge;
-  // the shield effect should land WITH them, not at t=0.
+  // Proc block trails schedule shield FX on trail-scheduled arrival.
   private pendingProcBlockDelay = false
+  private pendingProcShieldFx: 'absorbed' | 'broken' | null = null
 
   private cellColor = new Map<string, GemColor>()
   private lastMatchCells = new Map<GemColor, Pos[]>()
@@ -309,14 +320,38 @@ export class AnimationController {
     parent: Container
     sprites: Sprite[][]
     geometry: BoardGeometry
-    textures: Record<GemColor, Texture>
+    visuals: GemBoardVisuals
     cellScreenCenter: (pos: Pos) => { x: number; y: number } | null
   }) {
     this.parent = opts.parent
-    this.sprites = opts.sprites.map((row) => row.slice() as (Sprite | null)[])
+    this.sprites = opts.sprites.map((row) => row.slice() as (GemBoardSprite | null)[])
     this.geometry = opts.geometry
-    this.textures = opts.textures
+    this.visuals = opts.visuals
     this.cellScreenCenter = opts.cellScreenCenter
+  }
+
+  setGemVisuals(visuals: GemBoardVisuals): void {
+    this.visuals = visuals
+    const cells = useGameStore.getState().board.cells
+    for (let y = 0; y < this.sprites.length; y++) {
+      const row = this.sprites[y]
+      if (!row) continue
+      for (let x = 0; x < row.length; x++) {
+        const old = row[x]
+        const cell = cells[y]?.[x]
+        if (!old || !cell) continue
+        const parent = old.parent
+        if (!parent) continue
+        const { x: px, y: py, alpha } = old
+        parent.removeChild(old)
+        old.destroy()
+        const neu = createBoardGemSprite(cell.gemColor, visuals, this.geometry.gemSize)
+        neu.position.set(px, py)
+        neu.alpha = alpha
+        parent.addChild(neu)
+        row[x] = neu
+      }
+    }
   }
 
   setOverlay(overlay: OverlayScene): void {
@@ -328,7 +363,7 @@ export class AnimationController {
       } else if (event.kind === 'spell-effect-trail') {
         this.scheduleSpellEffectTrails(event)
       } else if (event.kind === 'status-applied') {
-        this.scheduleStatusApplyImpact(event)
+        this.scheduleSpellStatusApplyImpact(event)
       }
     })
   }
@@ -562,10 +597,11 @@ export class AnimationController {
         await this.animateShuffle(event.cells)
         return
       case 'pool-gained':
-        this.spawnPoolTrail(event.color, this.currentMatchBlessed)
-        if (event.color !== 'red' && event.color !== 'green') {
-          this.spawnPoolArrivalPopup(event.color, event.amount)
-        }
+        this.spawnPoolTrail(
+          event.color,
+          this.currentMatchBlessed,
+          event.amount,
+        )
         return
       case 'damage-dealt': {
         const procKind = statusKindFromDamageSource(event.source)
@@ -577,11 +613,7 @@ export class AnimationController {
               event.amount,
               'hp',
             )
-            this.scheduleDelayedDamagePopup(
-              event.targetId,
-              event.amount,
-              procPopupTint(procKind),
-            )
+            // Popup fires on trail-scheduled in spawnStatusProcTrail.
           }
           if (event.blocked > 0) {
             this.spawnStatusProcTrail(
@@ -591,8 +623,13 @@ export class AnimationController {
               'block',
             )
           }
-        } else if (event.source === 'player-attack') {
+        } else if (
+          event.source === 'player-attack' &&
+          !readSpellVisualBeat(event)
+        ) {
           this.scheduleDelayedDamagePopup(event.targetId, event.amount)
+        } else if (event.source === 'player-attack') {
+          this.pendingSpellAttackPopups.set(event.targetId, event.amount)
         } else {
           this.spawnDamagePopup(event.targetId, event.amount)
         }
@@ -608,10 +645,7 @@ export class AnimationController {
         if (procKind && (event.amount > 0 || event.blocked > 0)) {
           if (event.amount > 0) {
             this.spawnStatusProcTrail('player', procKind, event.amount, 'hp')
-            this.scheduleDelayedPlayerDamagePopup(
-              event.amount,
-              procPopupTint(procKind),
-            )
+            // Popup fires on trail-scheduled in spawnStatusProcTrail.
             this.pendingProcDelay = true
           }
           if (event.blocked > 0) {
@@ -668,6 +702,8 @@ export class AnimationController {
         // Enemy-sourced riders skip the trail — the burn impact burst already
         // carries the visual. The chip drops in via HUD at TRAIL_ARRIVAL_MS.
         if (event.source?.kind === 'enemy') return
+        // Immediate spells already fly spell → target via spell-effect-trail.
+        if (readSpellVisualBeat(event)) return
         this.spawnStatusTrail(event)
         return
       }
@@ -686,6 +722,7 @@ export class AnimationController {
           event.cells,
           FLAME_PALETTE,
           FLAME_CORE_HEX,
+          'tile-burn',
         )
         return
       case 'color-hex-fired': {
@@ -705,6 +742,7 @@ export class AnimationController {
             cells,
             HEX_PALETTE,
             HEX_CORE_HEX,
+            'color-hex',
           )
         }
         return
@@ -719,6 +757,7 @@ export class AnimationController {
           cells,
           STONE_PALETTE,
           STONE_CORE_HEX,
+          'petrify',
         )
         return
       }
@@ -740,9 +779,7 @@ export class AnimationController {
         if (event.targetId === 'player') {
           if (this.pendingProcBlockDelay) {
             this.pendingProcBlockDelay = false
-            scheduleAtTrailArrival(() =>
-              this.spawnShieldEffect('player', 'absorbed'),
-            )
+            this.pendingProcShieldFx = 'absorbed'
           } else {
             this.spawnShieldEffect(event.targetId, 'absorbed')
           }
@@ -757,9 +794,7 @@ export class AnimationController {
         if (event.targetId === 'player') {
           if (this.pendingProcBlockDelay) {
             this.pendingProcBlockDelay = false
-            scheduleAtTrailArrival(() =>
-              this.spawnShieldEffect('player', 'broken'),
-            )
+            this.pendingProcShieldFx = 'broken'
           } else {
             this.spawnShieldEffect(event.targetId, 'broken')
           }
@@ -786,6 +821,15 @@ export class AnimationController {
     this.heatLastTimestamp = now
     this.heat = Math.min(6, this.heat + 1)
     return this.heat
+  }
+
+  private publishTrail(
+    meta: Omit<TrailScheduledEvent, 'kind' | 'arrivalMs'>,
+    spawn: () => number,
+  ): number {
+    const arrivalMs = spawn()
+    emitTrailScheduled({ ...meta, arrivalMs })
+    return arrivalMs
   }
 
   private findEl(selector: string): HTMLElement | null {
@@ -929,7 +973,7 @@ export class AnimationController {
     for (const { at, color } of cells) {
       const sprite = this.getSprite(at)
       if (!sprite) continue
-      sprite.texture = this.textures[color]
+      applyBoardGemColor(sprite, color, this.visuals, this.geometry.gemSize)
     }
     await wait(240)
   }
@@ -994,10 +1038,11 @@ export class AnimationController {
     const promises: Promise<void>[] = []
     const created: { sprite: Sprite; pos: Pos }[] = []
     for (const { at, color } of spawns) {
-      const sprite = new Sprite(this.textures[color])
-      sprite.anchor.set(0.5)
-      sprite.width = this.geometry.gemSize
-      sprite.height = this.geometry.gemSize
+      const sprite = createBoardGemSprite(
+        color,
+        this.visuals,
+        this.geometry.gemSize,
+      )
       const target = this.geometry.cellCenter(at.x, at.y)
       sprite.x = target.x
       sprite.y = target.y - this.geometry.cellSize * (at.y + 1)
@@ -1240,42 +1285,44 @@ export class AnimationController {
 
   private spawnPoolArrivalPopup(color: GemColor, amount: number): void {
     if (amount <= 0) return
-    scheduleAtTrailArrival(() => {
-      const overlay = this.overlay
-      if (!overlay) return
-      const el = this.findEl(`[data-pool-target="${color}"]`)
-      if (!el) return
-      const center = elementCenter(el)
-      if (!center) return
-      const isDamage = color === 'red'
-      const text = isDamage ? `-${amount}` : `+${amount}`
-      const popupColor = STORED_HEX[color]
-      overlay.spawnFloatingText(
-        { x: center.x, y: center.y - 18 },
-        text,
-        {
-          color: popupColor,
-          fontSize: damagePopupFontSize(amount),
-          lifeMs: 720,
-          driftY: -52,
-          growBy: 0.25,
-        },
-      )
-    })
+    const overlay = this.overlay
+    if (!overlay) return
+    const el = this.findEl(`[data-pool-target="${color}"]`)
+    if (!el) return
+    const center = elementCenter(el)
+    if (!center) return
+    const isDamage = color === 'red'
+    const text = isDamage ? `-${amount}` : `+${amount}`
+    const popupColor = STORED_HEX[color]
+    overlay.spawnFloatingText(
+      { x: center.x, y: center.y - 18 },
+      text,
+      {
+        color: popupColor,
+        fontSize: damagePopupFontSize(amount),
+        lifeMs: 720,
+        driftY: -52,
+        growBy: 0.25,
+      },
+    )
   }
 
   private scheduleDelayedDamagePopup(
     enemyId: string,
     amount: number,
     color?: number,
+    arrivalMs: number = TRAIL_ARRIVAL_MS,
   ): void {
     if (amount <= 0) return
     scheduleAtTrailArrival(() => {
       this.spawnDamagePopup(enemyId, amount, color)
-    })
+    }, arrivalMs)
   }
 
-  private scheduleDelayedHealPopup(amount: number): void {
+  private scheduleDelayedHealPopup(
+    amount: number,
+    arrivalMs: number = TRAIL_ARRIVAL_MS,
+  ): void {
     if (amount <= 0) return
     scheduleAtTrailArrival(() => {
       const overlay = this.overlay
@@ -1295,7 +1342,7 @@ export class AnimationController {
           growBy: 0.25,
         },
       )
-    })
+    }, arrivalMs)
   }
 
   private scheduleSpellEffectTrails(
@@ -1382,10 +1429,30 @@ export class AnimationController {
         const attractor = this.attractorForSpellLeg(leg)
         if (!attractor || !attractor()) return
         const { colors, core } = this.paletteForSpellEffect(leg.palette)
-        overlay.spawnTrail(from, attractor, colors, 4, core, {
-          lifeBase: 340,
-          lifeStep: 40,
-        })
+        const target =
+          leg.dest.kind === 'player'
+            ? 'player'
+            : leg.dest.kind === 'enemy'
+              ? leg.dest.enemyId
+              : undefined
+        const slot = leg.dest.kind === 'board' ? undefined : leg.dest.slot
+        const arrivalMs = this.publishTrail(
+          { purpose: 'spell-effect', spellId, target, slot },
+          () =>
+            overlay.spawnTrail(from, attractor, colors, 4, core, {
+              purpose: 'spell-effect',
+            }),
+        )
+        if (leg.palette === 'attack' && leg.dest.kind === 'enemy') {
+          const enemyId = leg.dest.enemyId
+          const amount = this.pendingSpellAttackPopups.get(enemyId)
+          if (amount != null) {
+            this.pendingSpellAttackPopups.delete(enemyId)
+            scheduleAtTrailSpawn(arrivalMs, () =>
+              this.spawnDamagePopup(enemyId, amount),
+            )
+          }
+        }
       }
       const stagger = leg.staggerMs ?? 0
       if (stagger > 0) window.setTimeout(run, stagger)
@@ -1415,14 +1482,19 @@ export class AnimationController {
       const from = sourceEl ? elementCenter(sourceEl) : null
       if (!from) continue
       const trailColor: GemColor = color === 'purple' ? 'purple' : color
-      overlay.spawnTrail(from, spellAttractor, trailColor, 3, 0xffffff, {
-        lifeBase: 360,
-        lifeStep: 42,
-      })
+      this.publishTrail({ purpose: 'mana-spend', spellId, color: trailColor }, () =>
+        overlay.spawnTrail(from, spellAttractor, trailColor, 3, 0xffffff, {
+          purpose: 'mana-spend',
+        }),
+      )
     }
   }
 
-  private spawnPoolTrail(color: GemColor, blessed = false): void {
+  private spawnPoolTrail(
+    color: GemColor,
+    blessed = false,
+    poolAmount = 0,
+  ): void {
     const overlay = this.overlay
     if (!overlay) return
     const cells = this.lastMatchCells.get(color)
@@ -1431,7 +1503,6 @@ export class AnimationController {
     if (!source) return
     const from = this.cellScreenCenter(source)
     if (!from) return
-
     // Primary trail → effect target; secondary trail → mana chip.
     const effectAttractor: Attractor = () => {
       const el = this.findEl(`[data-pool-target="${color}"]:not(.dead)`)
@@ -1446,6 +1517,20 @@ export class AnimationController {
         }
       : null
 
+    const poolOpts = { purpose: 'pool-earn' as const }
+    const emitPoolEarn = (
+      earnDest: 'effect' | 'mana',
+      arrivalMs: number,
+    ): void => {
+      emitTrailScheduled({
+        purpose: 'pool-earn',
+        color,
+        amount: poolAmount,
+        earnDest,
+        arrivalMs,
+      })
+    }
+
     if (blessed) {
       const palette: number[] = [
         POOL_TRAIL_HEX[color],
@@ -1453,16 +1538,61 @@ export class AnimationController {
         POOL_TRAIL_HEX[color],
         0xfacc15,
       ]
-      overlay.spawnTrail(from, effectAttractor, palette, 5, BLESSED_CORE_HEX)
+      const effectArrival = overlay.spawnTrail(
+        from,
+        effectAttractor,
+        palette,
+        5,
+        BLESSED_CORE_HEX,
+        poolOpts,
+      )
+      emitPoolEarn('effect', effectArrival)
+      this.schedulePoolArrivalPopup(color, poolAmount, effectArrival)
       if (manaAttractor) {
-        overlay.spawnTrail(from, manaAttractor, palette, 3, BLESSED_CORE_HEX)
+        const manaArrival = overlay.spawnTrail(
+          from,
+          manaAttractor,
+          palette,
+          3,
+          BLESSED_CORE_HEX,
+          poolOpts,
+        )
+        emitPoolEarn('mana', manaArrival)
       }
     } else {
-      overlay.spawnTrail(from, effectAttractor, color, 5)
+      const effectArrival = overlay.spawnTrail(
+        from,
+        effectAttractor,
+        color,
+        5,
+        0xffffff,
+        poolOpts,
+      )
+      emitPoolEarn('effect', effectArrival)
+      this.schedulePoolArrivalPopup(color, poolAmount, effectArrival)
       if (manaAttractor) {
-        overlay.spawnTrail(from, manaAttractor, color, 3)
+        const manaArrival = overlay.spawnTrail(
+          from,
+          manaAttractor,
+          color,
+          3,
+          0xffffff,
+          poolOpts,
+        )
+        emitPoolEarn('mana', manaArrival)
       }
     }
+  }
+
+  private schedulePoolArrivalPopup(
+    color: GemColor,
+    amount: number,
+    arrivalMs: number,
+  ): void {
+    if (amount <= 0 || color === 'red' || color === 'green') return
+    scheduleAtTrailSpawn(arrivalMs, () =>
+      this.spawnPoolArrivalPopup(color, amount),
+    )
   }
 
   private spawnBlessedSourceBurst(cells: Pos[]): void {
@@ -1526,18 +1656,40 @@ export class AnimationController {
         ? elementCenter(parentEl)
         : null
     if (!lockedTarget) return
+    const facet = destination === 'block' ? 'block' : 'damage'
     const attractor: Attractor = () => lockedTarget
     const look = STATUS_TRAIL[kind]!
     const count = particleCountForImpact(amount)
-    overlay.spawnTrail(from, attractor, look.palette, count, look.core)
-  }
-
-  private scheduleDelayedPlayerDamagePopup(
-    amount: number,
-    color?: number,
-  ): void {
-    if (amount <= 0) return
-    scheduleAtTrailArrival(() => this.spawnPlayerDamagePopup(amount, color))
+    const arrivalMs = this.publishTrail(
+      {
+        purpose: 'status-proc',
+        target,
+        statusKind: kind,
+        procFacet: facet,
+      },
+      () =>
+        overlay.spawnTrail(from, attractor, look.palette, count, look.core, {
+          purpose: 'status-proc',
+        }),
+    )
+    if (facet === 'damage' && amount > 0) {
+      scheduleAtTrailSpawn(arrivalMs, () => {
+        if (target === 'player') {
+          this.spawnPlayerDamagePopup(amount, procPopupTint(kind))
+        } else {
+          this.spawnDamagePopup(target, amount, procPopupTint(kind))
+        }
+      })
+    }
+    if (facet === 'block' && target === 'player' && this.pendingProcBlockDelay) {
+      scheduleAtTrailSpawn(arrivalMs, () => {
+        if (!this.pendingProcBlockDelay) return
+        this.pendingProcBlockDelay = false
+        const fx = this.pendingProcShieldFx
+        this.pendingProcShieldFx = null
+        if (fx) this.spawnShieldEffect('player', fx)
+      })
+    }
   }
 
   private spawnBurnImpactBurst(target: 'player' | string): void {
@@ -1604,27 +1756,62 @@ export class AnimationController {
     cells: readonly Pos[],
     palette: number | readonly number[],
     innerHex?: number,
+    verb?: TrailScheduledEvent['verb'],
   ): void {
     const overlay = this.overlay
     if (!overlay) return
     const el = this.findEl(`[data-enemy-id="${enemyId}"]`)
     const from = el ? elementCenter(el) : null
     if (!from) return
+    let maxArrival = 0
     for (const cell of cells) {
       const dest = this.cellScreenCenter(cell)
       if (!dest) continue
       const attractor: Attractor = () => dest
-      overlay.spawnTrail(from, attractor, palette, 5, innerHex)
+      const arrivalMs = overlay.spawnTrail(from, attractor, palette, 5, innerHex, {
+        purpose: 'verb-to-board',
+      })
+      if (arrivalMs > maxArrival) maxArrival = arrivalMs
+    }
+    if (verb && maxArrival > 0) {
+      emitTrailScheduled({
+        purpose: 'verb-to-board',
+        arrivalMs: maxArrival,
+        target: enemyId,
+        verb,
+      })
     }
   }
 
-  private statusApplyImpactDelay(
+  private statusTrailEndpoints(
     event: GameEvent & { kind: 'status-applied' },
-  ): number {
-    const beat = readSpellVisualBeat(event)
-    if (beat) return beat.arriveMs
-    if (event.source?.kind === 'enemy') return 0
-    return TRAIL_ARRIVAL_MS
+  ): { from: TrailPoint; to: TrailPoint } | null {
+    const source = event.source
+    if (!source) return null
+
+    let from: ScreenPoint | null = null
+    if (source.kind === 'enemy') {
+      const el = this.findEl(`[data-enemy-id="${source.enemyId}"]`)
+      from = el ? elementCenter(el) : null
+    } else if (source.kind === 'board-cells') {
+      let sx = 0
+      let sy = 0
+      let n = 0
+      for (const cell of source.cells) {
+        const c = this.cellScreenCenter(cell)
+        if (!c) continue
+        sx += c.x
+        sy += c.y
+        n++
+      }
+      if (n > 0) from = { x: sx / n, y: sy / n }
+    } else if (source.kind === 'player') {
+      const el = this.findEl('[data-player-hud]')
+      from = el ? elementCenter(el) : null
+    }
+    const to = this.statusApplyAnchor(event.target, event.status.kind)
+    if (!from || !to) return null
+    return { from, to }
   }
 
   private statusApplyAnchor(
@@ -1645,17 +1832,27 @@ export class AnimationController {
     )
   }
 
-  private scheduleStatusApplyImpact(
+  /** Spell / enemy riders — immediate spells use choreographed beat timing. */
+  private scheduleSpellStatusApplyImpact(
     event: GameEvent & { kind: 'status-applied' },
   ): void {
-    const delay = this.statusApplyImpactDelay(event)
+    if (event.source?.kind === 'enemy') {
+      this.spawnStatusApplyImpact(
+        event.target,
+        event.status.kind,
+        event.status.stacks,
+      )
+      return
+    }
+    const beat = readSpellVisualBeat(event)
+    if (!beat) return
     window.setTimeout(() => {
       this.spawnStatusApplyImpact(
         event.target,
         event.status.kind,
         event.status.stacks,
       )
-    }, delay)
+    }, beat.arriveMs)
   }
 
   /** Impact pop when a status lands (spells, hex, enemy riders, etc.). */
@@ -1708,38 +1905,32 @@ export class AnimationController {
   private spawnStatusTrail(event: GameEvent & { kind: 'status-applied' }): void {
     const overlay = this.overlay
     if (!overlay) return
-    const source = event.source
-    if (!source) return
+    const endpoints = this.statusTrailEndpoints(event)
+    if (!endpoints) return
 
-    let from: ScreenPoint | null = null
-    if (source.kind === 'enemy') {
-      const el = this.findEl(`[data-enemy-id="${source.enemyId}"]`)
-      from = el ? elementCenter(el) : null
-    } else if (source.kind === 'board-cells') {
-      let sx = 0
-      let sy = 0
-      let n = 0
-      for (const cell of source.cells) {
-        const c = this.cellScreenCenter(cell)
-        if (!c) continue
-        sx += c.x
-        sy += c.y
-        n++
-      }
-      if (n > 0) from = { x: sx / n, y: sy / n }
-    } else if (source.kind === 'player') {
-      const el = this.findEl('[data-player-hud]')
-      from = el ? elementCenter(el) : null
-    }
-    if (!from) return
-
+    const { from, to } = endpoints
     const statusKind = event.status.kind
-    const lockedTarget = this.statusApplyAnchor(event.target, statusKind)
-    if (!lockedTarget) return
-    const attractor: Attractor = () => lockedTarget
+    const attractor: Attractor = () => to
     const look = STATUS_TRAIL[statusKind]!
     const trailCount = particleCountForImpact(event.status.stacks)
-    overlay.spawnTrail(from, attractor, look.palette, trailCount, look.core)
+    const arrivalMs = this.publishTrail(
+      {
+        purpose: 'status-apply',
+        target: event.target,
+        statusKind,
+      },
+      () =>
+        overlay.spawnTrail(from, attractor, look.palette, trailCount, look.core, {
+          purpose: 'status-apply',
+        }),
+    )
+    scheduleAtTrailSpawn(arrivalMs, () =>
+      this.spawnStatusApplyImpact(
+        event.target,
+        event.status.kind,
+        event.status.stacks,
+      ),
+    )
   }
 
   private spawnDamagePopup(
