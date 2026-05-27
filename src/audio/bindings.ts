@@ -9,11 +9,7 @@ import { playClackSfx } from './synths/match'
 import { playCascadeChimeSfx, playCascadeCelebrationSfx } from './synths/cascade'
 import { playAttackSfx } from './synths/attack'
 import { playHealSfx } from './synths/heal'
-import {
-  playShieldThumpSfx,
-  playShieldCrackSfx,
-  playShieldParticleTickSfx,
-} from './synths/shield'
+import { playShieldThumpSfx, playShieldCrackSfx, playShieldParticleTickSfx } from './synths/shield'
 import { playStaggeredSfx } from './synths/staggered'
 import { playShuffleSfx } from './synths/shuffle'
 import { playVictorySfx } from './synths/victory'
@@ -24,16 +20,8 @@ import {
   playBurnFizzleSfx,
   playBurnImpactSfx,
 } from './synths/burn'
-import {
-  playEnemyTurnSfx,
-  playExtraTurnSfx,
-  playTurnStartSfx,
-} from './synths/turn'
-import {
-  playHexApplySfx,
-  playHexExpireSfx,
-  playHexTriggerSfx,
-} from './synths/hex'
+import { playEnemyTurnSfx, playExtraTurnSfx, playTurnStartSfx } from './synths/turn'
+import { playHexApplySfx, playHexExpireSfx, playHexTriggerSfx } from './synths/hex'
 import { playShoveSfx } from './synths/shove'
 import { playSmashSfx } from './synths/smash'
 
@@ -72,8 +60,7 @@ export function installSfxBindings(): void {
     switch (purpose) {
       case 'status-proc': {
         if (trail.statusKind === 'burn' && trail.procFacet === 'damage') {
-          const amt =
-            trail.target === 'player' ? lastPlayerUnblocked : lastEnemyUnblocked
+          const amt = trail.target === 'player' ? lastPlayerUnblocked : lastEnemyUnblocked
           if (amt > 0) {
             scheduleAfterMs(() => playBurnImpactSfx(amt), arrivalMs)
           }
@@ -89,37 +76,27 @@ export function installSfxBindings(): void {
               }
             }, arrivalMs)
           } else {
-            scheduleAfterMs(
-              () => playShieldThumpSfx(lastEnemyBlocked),
-              arrivalMs,
-            )
+            scheduleAfterMs(() => playShieldThumpSfx(lastEnemyBlocked), arrivalMs)
           }
         }
         return
       }
       case 'pool-earn': {
         if (trail.earnDest === 'mana') return
-        const blueAmt =
-          trail.color === 'blue' ? (trail.amount ?? lastPoolBlueAmount) : 0
+        const blueAmt = trail.color === 'blue' ? (trail.amount ?? lastPoolBlueAmount) : 0
         if (blueAmt > 0) {
           scheduleAfterMs(() => playShieldParticleTickSfx(blueAmt), arrivalMs)
         }
         return
       }
       case 'status-apply': {
-        const sfx =
-          trail.statusKind != null
-            ? STATUS_APPLY_SFX[trail.statusKind]
-            : undefined
+        const sfx = trail.statusKind != null ? STATUS_APPLY_SFX[trail.statusKind] : undefined
         if (sfx) scheduleAfterMs(sfx, arrivalMs)
         return
       }
       case 'verb-to-board':
         if (trail.verb === 'tile-burn' && lastTileBurnCellCount > 0) {
-          scheduleAfterMs(
-            () => playBurnIgniteSfx(lastTileBurnCellCount),
-            arrivalMs,
-          )
+          scheduleAfterMs(() => playBurnIgniteSfx(lastTileBurnCellCount), arrivalMs)
         } else if (trail.verb === 'color-hex') {
           scheduleAfterMs(playHexApplySfx, arrivalMs)
         } else if (trail.verb === 'petrify') {
@@ -233,9 +210,7 @@ export function installSfxBindings(): void {
             playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
           }
         } else {
-          scheduleAtTrailArrival(() =>
-            playShieldCrackSfx(lastEnemyBlocked + lastEnemyUnblocked),
-          )
+          scheduleAtTrailArrival(() => playShieldCrackSfx(lastEnemyBlocked + lastEnemyUnblocked))
         }
         return
       case 'enemy-staggered':

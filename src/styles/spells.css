@@ -44,7 +44,10 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-align: center;
-  transition: filter 120ms ease, transform 80ms ease, box-shadow 120ms ease,
+  transition:
+    filter 120ms ease,
+    transform 80ms ease,
+    box-shadow 120ms ease,
     border-color 120ms ease;
 }
 
@@ -596,7 +599,6 @@
     0 1px 0 rgba(154, 125, 82, 0.45),
     0 3px 8px rgba(0, 0, 0, 0.55);
 }
-
 
 /* --- H4a spell picker modals (Cleanse / Focus / Volley) --- */
 

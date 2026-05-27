@@ -80,7 +80,10 @@
   font-size: 0.85rem;
   border-radius: 0.3rem;
   cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .victory-restart:hover {
@@ -171,7 +174,10 @@
   font-size: 0.85rem;
   border-radius: 0.3rem;
   cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .game-over-restart:hover {
@@ -206,9 +212,17 @@
 }
 
 @keyframes phase-banner-streak {
-  0% { transform: translateX(-110%); opacity: 0; }
-  20% { opacity: 1; }
-  100% { transform: translateX(110%); opacity: 0; }
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
 }
 
 /* Anchor wraps the banner in a fixed-position flex container so the banner
@@ -241,7 +255,9 @@
   max-width: calc(100vw - 1rem);
   white-space: nowrap;
   color: var(--parchment);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65), 0 0 22px rgba(0, 0, 0, 0.7);
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.65),
+    0 0 22px rgba(0, 0, 0, 0.7);
   background: rgba(8, 6, 4, 0.6);
   border: 1px solid rgba(154, 125, 82, 0.4);
   box-shadow:
@@ -329,4 +345,3 @@
   position: relative;
   z-index: 1;
 }
-

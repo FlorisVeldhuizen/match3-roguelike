@@ -12,13 +12,10 @@ describe('tooltipPosition', () => {
   it('placeNestedTooltip avoids trigger anchors below parent', () => {
     const parent = rectFromBox(100, 200, 180, 80)
     const button = rectFromBox(120, 320, 64, 64)
-    const pos = placeNestedTooltip(
-      parent,
-      { width: 160, height: 60 },
-      [button],
-      8,
-      { width: 400, height: 800 },
-    )
+    const pos = placeNestedTooltip(parent, { width: 160, height: 60 }, [button], 8, {
+      width: 400,
+      height: 800,
+    })
     const placed = rectFromBox(pos.left, pos.top, 160, 60)
     expect(rectsOverlap(placed, button, 8)).toBe(false)
     expect(pos.top).toBeLessThan(parent.top)
@@ -36,5 +33,4 @@ describe('tooltipPosition', () => {
     )
     expect(pos.left).toBe(parent.right + 8)
   })
-
 })

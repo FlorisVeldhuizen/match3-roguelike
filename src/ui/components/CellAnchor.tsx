@@ -14,23 +14,24 @@ export type CellAnchorProps = {
     children?: ReactNode
   }
 
-export const CellAnchor = forwardRef<HTMLSpanElement, CellAnchorProps>(
-  function CellAnchor({ x, y, transition, style, children, ...rest }, ref) {
-    const merged: CSSProperties = {
-      left: `${x * CELL_STEP_PCT}%`,
-      top: `${y * CELL_STEP_PCT}%`,
-      ...(transition !== undefined && {
-        transition:
-          transition === null
-            ? 'none'
-            : `left ${transition.durationMs}ms ${transition.bezier}, top ${transition.durationMs}ms ${transition.bezier}`,
-      }),
-      ...style,
-    }
-    return (
-      <span ref={ref} style={merged} {...rest}>
-        {children}
-      </span>
-    )
-  },
-)
+export const CellAnchor = forwardRef<HTMLSpanElement, CellAnchorProps>(function CellAnchor(
+  { x, y, transition, style, children, ...rest },
+  ref,
+) {
+  const merged: CSSProperties = {
+    left: `${x * CELL_STEP_PCT}%`,
+    top: `${y * CELL_STEP_PCT}%`,
+    ...(transition !== undefined && {
+      transition:
+        transition === null
+          ? 'none'
+          : `left ${transition.durationMs}ms ${transition.bezier}, top ${transition.durationMs}ms ${transition.bezier}`,
+    }),
+    ...style,
+  }
+  return (
+    <span ref={ref} style={merged} {...rest}>
+      {children}
+    </span>
+  )
+})

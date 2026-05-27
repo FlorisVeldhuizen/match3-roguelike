@@ -23,7 +23,10 @@
   color: var(--parchment);
   outline: none;
   cursor: default;
-  transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
+  transition:
+    box-shadow 200ms ease,
+    transform 200ms ease,
+    border-color 200ms ease;
 }
 
 .relic-slot:hover,
@@ -226,4 +229,3 @@
   color: var(--parchment-dim);
   font-size: 0.72rem;
 }
-

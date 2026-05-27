@@ -114,10 +114,7 @@ describe('applyMatchRedDamage', () => {
 
 describe('pickNextTarget', () => {
   it('returns the current target when it is still alive', () => {
-    const enemies = [
-      makeEnemy({ id: 'a', hp: 10 }),
-      makeEnemy({ id: 'b', hp: 10 }),
-    ]
+    const enemies = [makeEnemy({ id: 'a', hp: 10 }), makeEnemy({ id: 'b', hp: 10 })]
     expect(pickNextTarget(enemies, 'b')).toBe('b')
   })
 
@@ -140,10 +137,7 @@ describe('pickNextTarget', () => {
   })
 
   it('returns null when no living enemies remain', () => {
-    const enemies = [
-      makeEnemy({ id: 'a', hp: 0 }),
-      makeEnemy({ id: 'b', hp: 0 }),
-    ]
+    const enemies = [makeEnemy({ id: 'a', hp: 0 }), makeEnemy({ id: 'b', hp: 0 })]
     expect(pickNextTarget(enemies, 'a')).toBe(null)
   })
 

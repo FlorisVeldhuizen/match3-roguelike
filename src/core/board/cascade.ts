@@ -1,10 +1,4 @@
-import {
-  type Cell,
-  type GameEvent,
-  type GemColor,
-  type Match,
-  type Pos,
-} from '../../types'
+import { type Cell, type GameEvent, type GemColor, type Match, type Pos } from '../../types'
 import { detectMatches } from './detectMatches'
 import { applyFlagToCells, hasFlag } from './flags'
 import { pickGemColorWeighted } from './gemSpawn'
@@ -19,8 +13,7 @@ export type SwapResolution = {
 }
 
 // Shallow clone — flag helpers always return new Cells, so row.slice() suffices.
-const cloneBoard = (board: Cell[][]): Cell[][] =>
-  board.map((row) => row.slice())
+const cloneBoard = (board: Cell[][]): Cell[][] => board.map((row) => row.slice())
 
 const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
   const rowA = board[a.y]
@@ -35,10 +28,7 @@ const swapInPlace = (board: Cell[][], a: Pos, b: Pos) => {
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
-function expandClears(
-  board: Cell[][],
-  matches: ReturnType<typeof detectMatches>,
-): Set<string> {
+function expandClears(board: Cell[][], matches: ReturnType<typeof detectMatches>): Set<string> {
   const out = new Set<string>()
   const h = board.length
   const firstRow = board[0]
@@ -52,10 +42,8 @@ function expandClears(
       const has = (p: Pos) => set.has(keyOf(p))
       let intersection: Pos | null = null
       for (const c of m.cells) {
-        const horizNeighbor =
-          has({ x: c.x - 1, y: c.y }) || has({ x: c.x + 1, y: c.y })
-        const vertNeighbor =
-          has({ x: c.x, y: c.y - 1 }) || has({ x: c.x, y: c.y + 1 })
+        const horizNeighbor = has({ x: c.x - 1, y: c.y }) || has({ x: c.x + 1, y: c.y })
+        const vertNeighbor = has({ x: c.x, y: c.y - 1 }) || has({ x: c.x, y: c.y + 1 })
         if (horizNeighbor && vertNeighbor) {
           intersection = c
           break
@@ -102,10 +90,7 @@ export function resolveSwap(
   petrifiedRows: Readonly<Record<number, number>> = {},
 ): SwapResolution {
   const events: GameEvent[] = [{ kind: 'swap', from, to }]
-  if (
-    (petrifiedRows[from.y] ?? 0) > 0 ||
-    (petrifiedRows[to.y] ?? 0) > 0
-  ) {
+  if ((petrifiedRows[from.y] ?? 0) > 0 || (petrifiedRows[to.y] ?? 0) > 0) {
     events.push({ kind: 'swap-reverted', from, to })
     return { valid: false, board: startBoard, rng, events }
   }

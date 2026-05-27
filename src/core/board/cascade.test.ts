@@ -35,9 +35,7 @@ function findValidSwap(board: Cell[][]): { from: Pos; to: Pos } | null {
 }
 
 function boardSignature(board: Cell[][]): string {
-  return board
-    .map((row) => row.map((c) => c.gemColor[0]).join(''))
-    .join('|')
+  return board.map((row) => row.map((c) => c.gemColor[0]).join('')).join('|')
 }
 
 describe('cascade.resolveSwap', () => {
@@ -51,12 +49,7 @@ describe('cascade.resolveSwap', () => {
     let triedInvalid = false
     for (let y = 0; y < board.length && !triedInvalid; y++) {
       for (let x = 0; x < w - 1 && !triedInvalid; x++) {
-        const r = resolveSwap(
-          board,
-          { seed: 1 },
-          { x, y },
-          { x: x + 1, y },
-        )
+        const r = resolveSwap(board, { seed: 1 }, { x, y }, { x: x + 1, y })
         if (!r.valid) {
           triedInvalid = true
           expect(boardSignature(r.board)).toBe(before)
@@ -104,10 +97,7 @@ describe('cascade.resolveSwap', () => {
   const buildSafeBoard = (): Cell[][] => {
     const palette: GemColor[] = ['red', 'green', 'yellow']
     return Array.from({ length: 8 }, (_, y) =>
-      Array.from(
-        { length: 8 },
-        (_, x): Cell => ({ gemColor: palette[(x + y) % 3] ?? 'red' }),
-      ),
+      Array.from({ length: 8 }, (_, x): Cell => ({ gemColor: palette[(x + y) % 3] ?? 'red' })),
     )
   }
 
@@ -137,12 +127,7 @@ describe('cascade.resolveSwap', () => {
     expect(board[3]?.[3]?.gemColor).not.toBe('blue')
     expect(detectMatches(board).length).toBe(0)
 
-    const result = resolveSwap(
-      board,
-      { seed: 1 },
-      FIVE_LINE_SWAP.from,
-      FIVE_LINE_SWAP.to,
-    )
+    const result = resolveSwap(board, { seed: 1 }, FIVE_LINE_SWAP.from, FIVE_LINE_SWAP.to)
     expect(result.valid).toBe(true)
 
     // Cleared set is exactly the 5 line cells — no row extension anymore.
@@ -182,12 +167,7 @@ describe('cascade.resolveSwap', () => {
     if (topCell) topCell.flags = { blessed: true }
     expect(detectMatches(board).length).toBe(0)
 
-    const result = resolveSwap(
-      board,
-      { seed: 1 },
-      FIVE_LINE_SWAP.from,
-      FIVE_LINE_SWAP.to,
-    )
+    const result = resolveSwap(board, { seed: 1 }, FIVE_LINE_SWAP.from, FIVE_LINE_SWAP.to)
     expect(result.valid).toBe(true)
     // The original (4, 0) gem is now at (4, 1) and still carries its flag.
     expect(result.board[1]?.[4]?.flags?.blessed).toBe(true)
@@ -227,9 +207,7 @@ describe('cascade.resolveSwap', () => {
       expect(matchFound.color).toBe('red')
     }
 
-    const blessedFired = result.events.find(
-      (e) => e.kind === 'blessed-match-triggered',
-    )
+    const blessedFired = result.events.find((e) => e.kind === 'blessed-match-triggered')
     expect(blessedFired?.kind).toBe('blessed-match-triggered')
     if (blessedFired?.kind === 'blessed-match-triggered') {
       expect(blessedFired.count).toBe(1)
@@ -248,12 +226,7 @@ describe('cascade.resolveSwap', () => {
     if (target) target.flags = { blessed: true }
     expect(detectMatches(board).length).toBe(0)
 
-    const result = resolveSwap(
-      board,
-      { seed: 1 },
-      FIVE_LINE_SWAP.from,
-      FIVE_LINE_SWAP.to,
-    )
+    const result = resolveSwap(board, { seed: 1 }, FIVE_LINE_SWAP.from, FIVE_LINE_SWAP.to)
     expect(result.valid).toBe(true)
     expect(result.board[3]?.[3]?.flags?.blessed).toBe(true)
   })

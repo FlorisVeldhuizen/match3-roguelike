@@ -80,11 +80,7 @@ export function VolleyTargetModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="spell-picker-actions">
           {allocation.length > 0 && (
-            <button
-              type="button"
-              className="spell-picker-back"
-              onClick={undo}
-            >
+            <button type="button" className="spell-picker-back" onClick={undo}>
               Undo
             </button>
           )}
@@ -97,11 +93,7 @@ export function VolleyTargetModal({ onClose }: { onClose: () => void }) {
           >
             Cast
           </button>
-          <button
-            type="button"
-            className="spell-picker-cancel"
-            onClick={onClose}
-          >
+          <button type="button" className="spell-picker-cancel" onClick={onClose}>
             Cancel
           </button>
         </div>

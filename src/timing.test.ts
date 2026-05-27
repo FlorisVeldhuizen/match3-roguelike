@@ -42,8 +42,6 @@ describe('trailDurationMs', () => {
 
 describe('trailDurationBetween', () => {
   it('matches straight-line distance', () => {
-    expect(trailDurationBetween({ x: 0, y: 0 }, { x: 300, y: 400 })).toBe(
-      trailDurationMs(500),
-    )
+    expect(trailDurationBetween({ x: 0, y: 0 }, { x: 300, y: 400 })).toBe(trailDurationMs(500))
   })
 })

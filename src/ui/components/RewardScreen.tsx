@@ -26,8 +26,7 @@ export function RewardScreen() {
 
   const handleSkip = () => useGameStore.getState().skipReward()
 
-  const goldLabel =
-    pendingReward.gold > 0 ? ` (+${pendingReward.gold} gold)` : ''
+  const goldLabel = pendingReward.gold > 0 ? ` (+${pendingReward.gold} gold)` : ''
 
   if (pendingReward.kind === 'spell') {
     return (
@@ -39,9 +38,7 @@ export function RewardScreen() {
             {pendingReward.offeredSpellIds.length === 0 ? (
               <p className="reward-empty">No new spells available — skip for now.</p>
             ) : (
-              pendingReward.offeredSpellIds.map((id) => (
-                <SpellRewardRow key={id} id={id} />
-              ))
+              pendingReward.offeredSpellIds.map((id) => <SpellRewardRow key={id} id={id} />)
             )}
           </div>
           <button type="button" className="reward-skip" onClick={handleSkip}>
@@ -108,12 +105,7 @@ function SpellRewardRow({ id }: { id: SpellId }) {
     useGameStore.getState().acquireSpellReward(id)
   }
   return (
-    <button
-      key={id}
-      type="button"
-      className="reward-relic rarity-uncommon"
-      onClick={handlePick}
-    >
+    <button key={id} type="button" className="reward-relic rarity-uncommon" onClick={handlePick}>
       <span className="reward-relic-icon" aria-hidden>
         {def.icon}
       </span>

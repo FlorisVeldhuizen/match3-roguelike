@@ -45,9 +45,7 @@ export function PurifyPickerModal({ onClose }: { onClose: () => void }) {
     >
       <div className="spell-picker-card" onClick={(e) => e.stopPropagation()}>
         <h2 className="spell-picker-title">Purify</h2>
-        <p className="spell-picker-sub">
-          Strip a curse off you. Removing burn also heals 3 HP.
-        </p>
+        <p className="spell-picker-sub">Strip a curse off you. Removing burn also heals 3 HP.</p>
         <div className="spell-picker-options">
           {removable.map((s) => (
             <button
@@ -56,23 +54,15 @@ export function PurifyPickerModal({ onClose }: { onClose: () => void }) {
               className={`spell-picker-option status-${s.kind}`}
               onClick={() => pick(s.kind)}
             >
-              <span className="spell-picker-option-name">
-                {STATUS_LABELS[s.kind]}
-              </span>
+              <span className="spell-picker-option-name">{STATUS_LABELS[s.kind]}</span>
               <span className="spell-picker-option-meta">
                 {s.stacks} stack{s.stacks !== 1 ? 's' : ''}
               </span>
-              {s.kind === 'burn' && (
-                <span className="spell-picker-option-bonus">+3 HP</span>
-              )}
+              {s.kind === 'burn' && <span className="spell-picker-option-bonus">+3 HP</span>}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="spell-picker-cancel"
-          onClick={onClose}
-        >
+        <button type="button" className="spell-picker-cancel" onClick={onClose}>
           Cancel
         </button>
       </div>

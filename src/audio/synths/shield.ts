@@ -7,7 +7,7 @@ function synthShieldThump(amount: number): void {
   const now = c.currentTime
   const I = intensity(amount)
 
-  const subJ = jitter(0.12) * (1 - 0.15 * (I - 1) / 0.7)
+  const subJ = jitter(0.12) * (1 - (0.15 * (I - 1)) / 0.7)
   const subVel = jitter(0.2) * I
   const sub = c.createOscillator()
   sub.type = 'sine'
@@ -93,11 +93,7 @@ function synthShieldCrack(amount: number): void {
   snapGain.gain.setValueAtTime(0.0001, now)
   snapGain.gain.exponentialRampToValueAtTime(0.34 * jitter(0.18) * I, now + 0.004)
   snapGain.gain.exponentialRampToValueAtTime(0.0001, now + snapDur)
-  snap
-    .connect(snapBp)
-    .connect(snapLp)
-    .connect(snapGain)
-    .connect(out(c))
+  snap.connect(snapBp).connect(snapLp).connect(snapGain).connect(out(c))
   snap.start(now)
   snap.stop(now + snapDur + 0.02)
 

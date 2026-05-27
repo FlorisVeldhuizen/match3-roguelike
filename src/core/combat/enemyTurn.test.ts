@@ -99,8 +99,7 @@ describe('executeEnemyTurn', () => {
     const result = executeEnemyTurn(makePlayer(), [e], [], { seed: 1 })
     const updated = result.enemies[0]
     expect(updated?.currentIntent.kind).toBe('block')
-    const blockAmount =
-      updated?.currentIntent.kind === 'block' ? updated.currentIntent.amount : 0
+    const blockAmount = updated?.currentIntent.kind === 'block' ? updated.currentIntent.amount : 0
     expect(updated?.block).toBe(blockAmount)
     const gained = result.events.find((ev) => ev.kind === 'enemy-block-gained')
     expect(gained).toMatchObject({ enemyId: 'enemy-1', amount: blockAmount })
@@ -265,14 +264,10 @@ describe('executeEnemyTurn', () => {
     const e = result.enemies.find((x) => x.id === 'enemy-1')
     expect(e?.hp).toBe(20)
     expect(e?.block).toBe(1)
-    const dd = result.events.find(
-      (ev) => ev.kind === 'damage-dealt' && ev.source === 'burn',
-    )
+    const dd = result.events.find((ev) => ev.kind === 'damage-dealt' && ev.source === 'burn')
     expect(dd).toMatchObject({ amount: 0, blocked: 3 })
     expect(
-      result.events.some(
-        (ev) => ev.kind === 'block-absorbed' && ev.targetId === 'enemy-1',
-      ),
+      result.events.some((ev) => ev.kind === 'block-absorbed' && ev.targetId === 'enemy-1'),
     ).toBe(true)
   })
 })

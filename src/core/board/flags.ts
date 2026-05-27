@@ -43,10 +43,7 @@ export function clearFlag<K extends FlagKey>(cell: Cell, flag: K): Cell {
   return cellWithoutFlags
 }
 
-export function findFlaggedCells(
-  board: readonly Cell[][],
-  flag: FlagKey,
-): Pos[] {
+export function findFlaggedCells(board: readonly Cell[][], flag: FlagKey): Pos[] {
   const out: Pos[] = []
   for (let y = 0; y < board.length; y++) {
     const row = board[y]
@@ -63,10 +60,7 @@ export type TickFlagResult = {
   events: GameEvent[]
 }
 
-export function tickFlagDuration(
-  board: readonly Cell[][],
-  flag: FlagKey,
-): TickFlagResult {
+export function tickFlagDuration(board: readonly Cell[][], flag: FlagKey): TickFlagResult {
   const touched: Pos[] = []
   const expired: Pos[] = []
   let anyChange = false
@@ -96,9 +90,7 @@ export function tickFlagDuration(
   return { board: anyChange ? out : (board as Cell[][]), events }
 }
 
-export function tickPetrifiedRows(
-  petrifiedRows: PetrifiedRows,
-): {
+export function tickPetrifiedRows(petrifiedRows: PetrifiedRows): {
   petrifiedRows: PetrifiedRows
   expired: number[]
   events: GameEvent[]
@@ -116,9 +108,7 @@ export function tickPetrifiedRows(
   return { petrifiedRows: next, expired, events }
 }
 
-export function tickHexedColors(
-  hexedColors: readonly HexedColor[],
-): {
+export function tickHexedColors(hexedColors: readonly HexedColor[]): {
   hexedColors: HexedColor[]
   events: GameEvent[]
 } {
@@ -136,9 +126,7 @@ export function tickHexedColors(
   return { hexedColors: next, events }
 }
 
-export function tickDrainedColors(
-  drainedColors: readonly DrainedColor[],
-): {
+export function tickDrainedColors(drainedColors: readonly DrainedColor[]): {
   drainedColors: DrainedColor[]
   events: GameEvent[]
 } {

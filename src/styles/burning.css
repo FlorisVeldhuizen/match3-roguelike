@@ -71,7 +71,8 @@
 }
 
 @keyframes burning-cell-glow {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.55;
     transform: scale(0.94);
   }
@@ -101,7 +102,8 @@
 }
 
 @keyframes burning-pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0) scale(1);
     filter: drop-shadow(0 0 4px var(--ember-glow));
   }
@@ -149,7 +151,8 @@
 }
 
 @keyframes burning-cell-glow-fizzle {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.8;
     transform: scale(1);
   }
@@ -168,7 +171,8 @@
 }
 
 @keyframes burning-fizzle {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0) scale(1);
     opacity: 1;
     filter: drop-shadow(0 0 4px var(--ember-glow));
@@ -261,24 +265,56 @@
 }
 
 @keyframes burst-spark-up {
-  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
-  18% { opacity: 1; }
-  100% { transform: translate(-32%, -95%) scale(1.15) rotate(-22deg); opacity: 0; }
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-32%, -95%) scale(1.15) rotate(-22deg);
+    opacity: 0;
+  }
 }
 @keyframes burst-spark-right {
-  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
-  18% { opacity: 1; }
-  100% { transform: translate(100%, -28%) scale(1.15) rotate(38deg); opacity: 0; }
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(100%, -28%) scale(1.15) rotate(38deg);
+    opacity: 0;
+  }
 }
 @keyframes burst-spark-down {
-  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
-  18% { opacity: 1; }
-  100% { transform: translate(38%, 90%) scale(1.15) rotate(14deg); opacity: 0; }
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(38%, 90%) scale(1.15) rotate(14deg);
+    opacity: 0;
+  }
 }
 @keyframes burst-spark-left {
-  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
-  18% { opacity: 1; }
-  100% { transform: translate(-100%, 32%) scale(1.15) rotate(-52deg); opacity: 0; }
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-100%, 32%) scale(1.15) rotate(-52deg);
+    opacity: 0;
+  }
 }
 
 /* Smoke-puff "fizzle" overlay — plays when a burning tile's countdown
@@ -416,7 +452,8 @@
 }
 
 @keyframes blessed-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.55;
     transform: scale(0.94);
   }
@@ -568,4 +605,3 @@
 .intent-rider.rider-weak {
   filter: drop-shadow(0 0 5px rgba(201, 184, 150, 0.45));
 }
-

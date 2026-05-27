@@ -109,14 +109,7 @@ export function SettingsPanel() {
   }
 
   const forceFight = (
-    archetype:
-      | 'skirmisher'
-      | 'brute'
-      | 'smolder'
-      | 'defender'
-      | 'rallier'
-      | 'caster'
-      | 'swarmer',
+    archetype: 'skirmisher' | 'brute' | 'smolder' | 'defender' | 'rallier' | 'caster' | 'swarmer',
   ) => {
     useGameStore.getState().debugForceFight(archetype)
     setOpen(false)
@@ -149,11 +142,7 @@ export function SettingsPanel() {
           <section className="settings-section">
             <div className="settings-title">Sound</div>
             <label className="settings-row" aria-label="Mute sound effects">
-              <input
-                type="checkbox"
-                checked={muted}
-                onChange={(e) => setMuted(e.target.checked)}
-              />
+              <input type="checkbox" checked={muted} onChange={(e) => setMuted(e.target.checked)} />
               <span className="settings-label">Mute</span>
             </label>
             <label
@@ -214,25 +203,13 @@ export function SettingsPanel() {
               <div className="settings-row settings-row-chips">
                 <span className="settings-label">Force match</span>
                 <div className="settings-chips">
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={forceMatch5}
-                  >
+                  <button type="button" className="settings-chip" onClick={forceMatch5}>
                     Line-5
                   </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={forceMatchT}
-                  >
+                  <button type="button" className="settings-chip" onClick={forceMatchT}>
                     T
                   </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={forceMatchL}
-                  >
+                  <button type="button" className="settings-chip" onClick={forceMatchL}>
                     L
                   </button>
                 </div>
@@ -289,18 +266,10 @@ export function SettingsPanel() {
                   >
                     Swarmer
                   </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={forceTrio}
-                  >
+                  <button type="button" className="settings-chip" onClick={forceTrio}>
                     Trio
                   </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={forceSwarm}
-                  >
+                  <button type="button" className="settings-chip" onClick={forceSwarm}>
                     Swarm×3
                   </button>
                 </div>

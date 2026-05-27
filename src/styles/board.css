@@ -75,7 +75,8 @@
   animation: board-targeting-pulse 1.4s ease-in-out infinite;
 }
 @keyframes board-targeting-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.5;
     box-shadow: 0 0 12px rgba(255, 215, 110, 0.25);
   }

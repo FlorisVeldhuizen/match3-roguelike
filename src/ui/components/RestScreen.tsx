@@ -20,20 +20,13 @@ export function RestScreen() {
 
   const upgradableRelics = relics
     .map((inst) => ({ inst, def: tryGetRelic(inst.id) }))
-    .filter(
-      (x) =>
-        x.def !== undefined &&
-        x.def.upgradable === true &&
-        x.inst.upgraded !== true,
-    )
+    .filter((x) => x.def !== undefined && x.def.upgradable === true && x.inst.upgraded !== true)
 
   return (
     <div className="reward-overlay" role="dialog" aria-label="Rest site">
       <div className="reward-card">
         <h1 className="reward-title">A quiet hollow.</h1>
-        <p className="reward-sub">
-          Catch your breath, or hone a relic. You can only pick one.
-        </p>
+        <p className="reward-sub">Catch your breath, or hone a relic. You can only pick one.</p>
 
         {!showUpgrade && (
           <div className="reward-grid">
@@ -43,12 +36,12 @@ export function RestScreen() {
               onClick={() => restHeal()}
               disabled={healPreview === 0}
               title={
-                healPreview === 0
-                  ? "You're already at full health."
-                  : `Restore ${healAmount} HP.`
+                healPreview === 0 ? "You're already at full health." : `Restore ${healAmount} HP.`
               }
             >
-              <span className="reward-relic-icon" aria-hidden>🔥</span>
+              <span className="reward-relic-icon" aria-hidden>
+                🔥
+              </span>
               <span className="reward-relic-name">Rest</span>
               <span className="reward-relic-rarity">heal</span>
               <span className="reward-relic-desc">
@@ -68,7 +61,9 @@ export function RestScreen() {
                   : 'Pick a relic to permanently strengthen.'
               }
             >
-              <span className="reward-relic-icon" aria-hidden>⚒</span>
+              <span className="reward-relic-icon" aria-hidden>
+                ⚒
+              </span>
               <span className="reward-relic-name">Hone</span>
               <span className="reward-relic-rarity">upgrade</span>
               <span className="reward-relic-desc">
@@ -92,7 +87,9 @@ export function RestScreen() {
                   className={`reward-relic rarity-${def.rarity}`}
                   onClick={() => restUpgrade(inst.id)}
                 >
-                  <span className="reward-relic-icon" aria-hidden>{def.icon}</span>
+                  <span className="reward-relic-icon" aria-hidden>
+                    {def.icon}
+                  </span>
                   <span className="reward-relic-name">{def.name}</span>
                   <span className="reward-relic-rarity">+upgrade</span>
                   <span className="reward-relic-desc">

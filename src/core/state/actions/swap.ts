@@ -55,10 +55,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
   return (a: Pos, b: Pos): { valid: boolean; events: GameEvent[] } => {
     const current = get()
 
-    if (
-      current.fight.phase === 'victory' ||
-      current.fight.phase === 'game-over'
-    ) {
+    if (current.fight.phase === 'victory' || current.fight.phase === 'game-over') {
       return { valid: false, events: [] }
     }
 
@@ -103,12 +100,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
     let finalBoardRng = swap.rng
     const shuffleEvents: GameEvent[] = []
     if (!hasValidSwap(finalBoard, current.board.petrifiedRows)) {
-      const regen = generateBoard(
-        finalBoardRng,
-        undefined,
-        undefined,
-        current.board.petrifiedRows,
-      )
+      const regen = generateBoard(finalBoardRng, undefined, undefined, current.board.petrifiedRows)
       finalBoard = regen.board
       finalBoardRng = regen.rng
       const cells: { at: Pos; color: GemColor }[] = []
@@ -156,20 +148,13 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         snapshotOf(player, enemies, targetEnemyId, 0),
       )
       tailEvents.push(...phaseEndEvents)
-      const phaseEndApplied = applyCombatEvents(
-        phaseEndEvents,
-        player,
-        enemies,
-        targetEnemyId,
-      )
+      const phaseEndApplied = applyCombatEvents(phaseEndEvents, player, enemies, targetEnemyId)
       player = phaseEndApplied.player
       enemies = phaseEndApplied.enemies
       targetEnemyId = phaseEndApplied.targetEnemyId
       tailEvents.push(...phaseEndApplied.derived)
 
-      const playerBlockGained = resolved.events.find(
-        (e) => e.kind === 'block-gained',
-      )
+      const playerBlockGained = resolved.events.find((e) => e.kind === 'block-gained')
       if (playerBlockGained && playerBlockGained.kind === 'block-gained') {
         const blockEvents = runOnBlockGained(
           { amount: playerBlockGained.amount, target: 'player' },
@@ -177,12 +162,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
           snapshotOf(player, enemies, targetEnemyId, 0),
         )
         tailEvents.push(...blockEvents)
-        const blockApplied = applyCombatEvents(
-          blockEvents,
-          player,
-          enemies,
-          targetEnemyId,
-        )
+        const blockApplied = applyCombatEvents(blockEvents, player, enemies, targetEnemyId)
         player = blockApplied.player
         enemies = blockApplied.enemies
         targetEnemyId = blockApplied.targetEnemyId
@@ -241,12 +221,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
               snapshotOf(player, enemies, targetEnemyId, 0),
             )
             tailEvents.push(...startEvents)
-            const startApplied = applyCombatEvents(
-              startEvents,
-              player,
-              enemies,
-              targetEnemyId,
-            )
+            const startApplied = applyCombatEvents(startEvents, player, enemies, targetEnemyId)
             player = startApplied.player
             enemies = startApplied.enemies
             targetEnemyId = startApplied.targetEnemyId
@@ -271,9 +246,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         player = { ...player, hp: player.maxHp }
         nextRunPhase = 'victory'
       } else if (pendingReward == null) {
-        const clearedNode = current.map.nodes.find(
-          (n) => n.id === current.map.currentNodeId,
-        )
+        const clearedNode = current.map.nodes.find((n) => n.id === current.map.currentNodeId)
         let goldDrop = 0
         if (clearedNode) {
           const goldRoll = rollGoldDrop(clearedNode, nextLootRng)
@@ -293,10 +266,8 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         tailEvents.push({
           kind: 'reward-offered',
           offerKind: rolled.reward.kind,
-          offeredRelicIds:
-            rolled.reward.kind === 'relic' ? rolled.reward.offeredRelicIds : [],
-          offeredSpellIds:
-            rolled.reward.kind === 'spell' ? rolled.reward.offeredSpellIds : [],
+          offeredRelicIds: rolled.reward.kind === 'relic' ? rolled.reward.offeredRelicIds : [],
+          offeredSpellIds: rolled.reward.kind === 'spell' ? rolled.reward.offeredSpellIds : [],
           gold: rolled.reward.gold,
         })
         nextRunPhase = 'reward'

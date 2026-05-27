@@ -16,14 +16,8 @@ function readSettings(): FXSettings {
     if (!raw) return { ...DEFAULTS }
     const parsed = JSON.parse(raw) as Partial<FXSettings>
     return {
-      rgbSplit:
-        typeof parsed.rgbSplit === 'boolean'
-          ? parsed.rgbSplit
-          : DEFAULTS.rgbSplit,
-      shockwave:
-        typeof parsed.shockwave === 'boolean'
-          ? parsed.shockwave
-          : DEFAULTS.shockwave,
+      rgbSplit: typeof parsed.rgbSplit === 'boolean' ? parsed.rgbSplit : DEFAULTS.rgbSplit,
+      shockwave: typeof parsed.shockwave === 'boolean' ? parsed.shockwave : DEFAULTS.shockwave,
       crt: typeof parsed.crt === 'boolean' ? parsed.crt : DEFAULTS.crt,
     }
   } catch {
@@ -49,9 +43,7 @@ export function setFX(key: FXKey, value: boolean): void {
   for (const l of listeners) l(settings)
 }
 
-export function subscribeFXSettings(
-  listener: (s: FXSettings) => void,
-): () => void {
+export function subscribeFXSettings(listener: (s: FXSettings) => void): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)

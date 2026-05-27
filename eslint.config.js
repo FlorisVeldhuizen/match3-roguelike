@@ -104,11 +104,7 @@ export default defineConfig([
             },
             {
               from: { type: 'fx' },
-              allow: [
-                { to: { type: 'fx' } },
-                { to: { type: 'core' } },
-                { to: { type: 'types' } },
-              ],
+              allow: [{ to: { type: 'fx' } }, { to: { type: 'core' } }, { to: { type: 'types' } }],
             },
             {
               from: { type: 'types' },

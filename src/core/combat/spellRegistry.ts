@@ -1,11 +1,5 @@
 import type { ReactNode } from 'react'
-import type {
-  ManaCost,
-  PendingSpellId,
-  SpellId,
-  SpellResolution,
-  UltimateId,
-} from '../../types'
+import type { ManaCost, PendingSpellId, SpellId, SpellResolution, UltimateId } from '../../types'
 
 export type SpellDef = {
   id: SpellId
@@ -56,10 +50,7 @@ export function listSpells(): SpellDef[] {
   return [...spellRegistry.values()]
 }
 
-export function listSpellsForTray(
-  ownedIds: readonly string[],
-  unlockAll: boolean,
-): SpellDef[] {
+export function listSpellsForTray(ownedIds: readonly string[], unlockAll: boolean): SpellDef[] {
   if (unlockAll) return listSpells()
   const owned = new Set(ownedIds)
   return [...spellRegistry.values()].filter((s) => owned.has(s.id))

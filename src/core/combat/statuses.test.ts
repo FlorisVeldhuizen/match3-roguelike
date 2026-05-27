@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyStatusToList,
-  composeDamage,
-  hasStatus,
-  tickStatuses,
-} from './statuses'
+import { applyStatusToList, composeDamage, hasStatus, tickStatuses } from './statuses'
 import type { StatusInstance } from '../../types'
 
 const burn = (stacks: number): StatusInstance => ({ kind: 'burn', stacks })

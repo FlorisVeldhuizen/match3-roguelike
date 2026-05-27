@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type {
-  Enemy,
-  Match,
-  Player,
-  RelicInstance,
-} from '../../types'
+import type { Enemy, Match, Player, RelicInstance } from '../../types'
 import {
   cloneRelicsForHooks,
   runOnBlockGained,
@@ -70,18 +65,11 @@ const baseDeltas = {
   gold: 0,
 }
 
-const snap = (player: Player) =>
-  snapshotOf(player, [makeEnemy()], 'enemy-1', 0)
+const snap = (player: Player) => snapshotOf(player, [makeEnemy()], 'enemy-1', 0)
 
 describe('relic registry & content bootstrap', () => {
   it('content/relics.ts has registered all five', () => {
-    for (const id of [
-      'iron-buckler',
-      'sharp-edge',
-      'thornmail',
-      'cascade-crystal',
-      'stoneheart',
-    ]) {
+    for (const id of ['iron-buckler', 'sharp-edge', 'thornmail', 'cascade-crystal', 'stoneheart']) {
       expect(tryGetRelic(id)).toBeDefined()
     }
   })
@@ -101,9 +89,7 @@ describe('Iron Buckler', () => {
     )
     expect(result.payload.deltas.blue).toBe(4)
     expect(
-      result.events.some(
-        (e) => e.kind === 'relic-triggered' && e.relicId === 'iron-buckler',
-      ),
+      result.events.some((e) => e.kind === 'relic-triggered' && e.relicId === 'iron-buckler'),
     ).toBe(true)
   })
   it('does nothing on non-blue matches', () => {
@@ -137,10 +123,7 @@ describe('Sharp Edge', () => {
     expect(result.payload.deltas.red).toBe(5)
     expect(
       result.events.some(
-        (e) =>
-          e.kind === 'relic-triggered' &&
-          e.relicId === 'sharp-edge' &&
-          e.effect === '+1 red',
+        (e) => e.kind === 'relic-triggered' && e.relicId === 'sharp-edge' && e.effect === '+1 red',
       ),
     ).toBe(true)
   })
@@ -159,13 +142,9 @@ describe('Thornmail', () => {
       player.relics,
       snap(player),
     )
-    const reflectMarker = events.find(
-      (e) => e.kind === 'damage-dealt' && e.source === 'thornmail',
-    )
+    const reflectMarker = events.find((e) => e.kind === 'damage-dealt' && e.source === 'thornmail')
     expect(reflectMarker).toBeDefined()
-    const triggered = events.find(
-      (e) => e.kind === 'relic-triggered' && e.relicId === 'thornmail',
-    )
+    const triggered = events.find((e) => e.kind === 'relic-triggered' && e.relicId === 'thornmail')
     expect(triggered).toBeDefined()
   })
   it('does not reflect on burn source', () => {
@@ -206,9 +185,7 @@ describe('Cascade Crystal', () => {
     )
     expect(result.payload.deltas.red).toBe(7) // floor(5 * 1.5) = 7
     expect(
-      result.events.some(
-        (e) => e.kind === 'relic-triggered' && e.relicId === 'cascade-crystal',
-      ),
+      result.events.some((e) => e.kind === 'relic-triggered' && e.relicId === 'cascade-crystal'),
     ).toBe(true)
   })
 })
@@ -293,11 +270,7 @@ describe('Fortified', () => {
       writable,
       snap({ ...player, relics: writable }),
     )
-    expect(
-      events.some(
-        (e) => e.kind === 'relic-triggered' && e.relicId === 'fortified',
-      ),
-    ).toBe(true)
+    expect(events.some((e) => e.kind === 'relic-triggered' && e.relicId === 'fortified')).toBe(true)
     expect(writable[0]!.fightFlags['fired-this-phase']).toBe(true)
   })
 })

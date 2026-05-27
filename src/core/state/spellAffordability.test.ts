@@ -158,13 +158,9 @@ describe('cast gates: insufficient mana refuses the cast', () => {
       .fight.enemies.slice(0, 1)
       .map((e) => e.id)
     if (targets.length === 0) return
-    const res = useGameStore
-      .getState()
-      .castVolley([targets[0]!, targets[0]!, targets[0]!])
+    const res = useGameStore.getState().castVolley([targets[0]!, targets[0]!, targets[0]!])
     expect(res.ok).toBe(false)
-    expect(useGameStore.getState().fight.player.pendingSpells).not.toContain(
-      'volley',
-    )
+    expect(useGameStore.getState().fight.player.pendingSpells).not.toContain('volley')
   })
 
   it('castShatter fails with 3 yellow (needs 4)', () => {

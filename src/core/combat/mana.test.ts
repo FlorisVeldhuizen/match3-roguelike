@@ -70,20 +70,14 @@ describe('consumeSpellCost', () => {
   it('pays multi-colour cost with mixed exact + wild', () => {
     // Cost { red: 2, blue: 1 }, mana { red: 1, blue: 0, yellow: 3 }
     // red needs 1 more, blue needs 1 more → 2 wild from yellow.
-    const after = consumeSpellCost(
-      pools({ red: 1, blue: 0, yellow: 3 }),
-      { red: 2, blue: 1 },
-    )
+    const after = consumeSpellCost(pools({ red: 1, blue: 0, yellow: 3 }), { red: 2, blue: 1 })
     expect(after).toEqual(pools({ red: 0, blue: 0, yellow: 1 }))
   })
 
   it('pays explicit yellow + colour cost together', () => {
     // Cost { yellow: 1, blue: 2 }, mana { blue: 5, yellow: 4 }
     // → 2 blue + 1 yellow consumed.
-    const after = consumeSpellCost(
-      pools({ blue: 5, yellow: 4 }),
-      { yellow: 1, blue: 2 },
-    )
+    const after = consumeSpellCost(pools({ blue: 5, yellow: 4 }), { yellow: 1, blue: 2 })
     expect(after).toEqual(pools({ blue: 3, yellow: 3 }))
   })
 
@@ -96,20 +90,17 @@ describe('consumeSpellCost', () => {
 
 describe('manaColorsSpentOnCast', () => {
   it('includes yellow when wild covers a shortfall', () => {
-    expect(
-      manaColorsSpentOnCast(pools({ red: 0, yellow: 2 }), { red: 2 }),
-    ).toEqual(['red', 'yellow'])
+    expect(manaColorsSpentOnCast(pools({ red: 0, yellow: 2 }), { red: 2 })).toEqual([
+      'red',
+      'yellow',
+    ])
   })
 })
 
 describe('makeSpellCastEvent', () => {
   it('tags spent colours for HUD trails', () => {
-    expect(
-      makeSpellCastEvent('ignite', pools({ red: 3 })).spentColors,
-    ).toEqual(['red'])
-    expect(makeSpellCastEvent('riposte', pools()).spentColors).toEqual([
-      'purple',
-    ])
+    expect(makeSpellCastEvent('ignite', pools({ red: 3 })).spentColors).toEqual(['red'])
+    expect(makeSpellCastEvent('riposte', pools()).spentColors).toEqual(['purple'])
   })
 })
 

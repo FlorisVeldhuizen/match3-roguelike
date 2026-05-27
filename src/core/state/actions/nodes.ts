@@ -1,18 +1,9 @@
 import { generateBoard } from '../../board/generation'
 import { getReachableFrom } from '../../map/paths'
 import { applyCombatEvents } from '../../combat/applyCombatEvents'
-import {
-  cloneRelicsForHooks,
-  runOnRoundStarted,
-  snapshotOf,
-} from '../../relics/engine'
+import { cloneRelicsForHooks, runOnRoundStarted, snapshotOf } from '../../relics/engine'
 import type { RngStreams } from '../../rng/streams'
-import type {
-  FightState,
-  MapState,
-  PendingReward,
-  RunPhase,
-} from '../../../types'
+import type { FightState, MapState, PendingReward, RunPhase } from '../../../types'
 import type { BoardState } from '../store'
 import type { StoreSet, StoreGet } from './types'
 import { freshBoardState, freshFight } from './helpers'
@@ -59,10 +50,7 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
       isBoss: node.kind === 'boss',
       isElite: node.kind === 'elite',
     })
-    enemyRoll.fight.player.hp = Math.min(
-      enemyRoll.fight.player.maxHp,
-      current.fight.player.hp,
-    )
+    enemyRoll.fight.player.hp = Math.min(enemyRoll.fight.player.maxHp, current.fight.player.hp)
     enemyRoll.fight.player.gold = current.fight.player.gold
     enemyRoll.fight.player.ownedSpellIds = current.fight.player.ownedSpellIds
     const boardRoll = generateBoard(current.rng.board)
@@ -70,12 +58,7 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     const roundEvents = runOnRoundStarted(
       { fightId: 0 },
       writeRelics,
-      snapshotOf(
-        enemyRoll.fight.player,
-        enemyRoll.fight.enemies,
-        enemyRoll.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(enemyRoll.fight.player, enemyRoll.fight.enemies, enemyRoll.fight.targetEnemyId, 0),
     )
     const roundApplied = applyCombatEvents(
       roundEvents,

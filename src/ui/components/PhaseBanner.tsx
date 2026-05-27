@@ -28,9 +28,7 @@ function bannerFor(phase: CombatPhase): { label: string; style: BannerStyle } | 
 
 export function PhaseBanner() {
   const [active, setActive] = useState<BannerEntry | null>(null)
-  const [boardCenter, setBoardCenter] = useState<{ x: number; y: number } | null>(
-    null,
-  )
+  const [boardCenter, setBoardCenter] = useState<{ x: number; y: number } | null>(null)
   const idRef = useRef(0)
   const lastStyleRef = useRef<BannerStyle | null>(null)
 

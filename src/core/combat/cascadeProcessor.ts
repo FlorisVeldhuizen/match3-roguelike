@@ -86,12 +86,7 @@ export function processCascadeEvents(
         snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
       )
       stream.push(...onCascade)
-      const cascadeApplied = applyCombatEvents(
-        onCascade,
-        player,
-        enemies,
-        targetEnemyId,
-      )
+      const cascadeApplied = applyCombatEvents(onCascade, player, enemies, targetEnemyId)
       player = cascadeApplied.player
       enemies = cascadeApplied.enemies
       targetEnemyId = cascadeApplied.targetEnemyId
@@ -177,9 +172,7 @@ export function processCascadeEvents(
       const healedHp = Math.min(drainEnemy.maxHp, drainEnemy.hp + healAmount)
       const actualHeal = healedHp - drainEnemy.hp
       if (actualHeal > 0) {
-        enemies = enemies.map((e) =>
-          e.id === drain.enemyId ? { ...e, hp: healedHp } : e,
-        )
+        enemies = enemies.map((e) => (e.id === drain.enemyId ? { ...e, hp: healedHp } : e))
         stream.push({
           kind: 'drain-triggered',
           color: drain.color,
@@ -190,8 +183,7 @@ export function processCascadeEvents(
       }
     }
 
-    const isAoe =
-      ev.shape === 'T' || ev.shape === 'L' || (ev.shape === 'line' && ev.size === 5)
+    const isAoe = ev.shape === 'T' || ev.shape === 'L' || (ev.shape === 'line' && ev.size === 5)
 
     for (const color of ['red', 'blue', 'green', 'yellow', 'purple', 'gold'] as const) {
       const amount = finalDeltas[color]
@@ -222,12 +214,7 @@ export function processCascadeEvents(
             snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
           )
           stream.push(...killEvents)
-          const killApplied = applyCombatEvents(
-            killEvents,
-            player,
-            enemies,
-            targetEnemyId,
-          )
+          const killApplied = applyCombatEvents(killEvents, player, enemies, targetEnemyId)
           player = killApplied.player
           enemies = killApplied.enemies
           targetEnemyId = killApplied.targetEnemyId

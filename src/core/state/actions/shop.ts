@@ -83,10 +83,7 @@ export function makeShopBuyHeal(set: StoreSet, get: StoreGet) {
     if (p.hp >= p.maxHp) return { ok: false }
     set((s) => {
       s.fight.player.gold -= item.cost
-      s.fight.player.hp = Math.min(
-        s.fight.player.maxHp,
-        s.fight.player.hp + item.amount,
-      )
+      s.fight.player.hp = Math.min(s.fight.player.maxHp, s.fight.player.hp + item.amount)
       const target = s.currentShopOffer?.heals.find((h) => h.kind === kind)
       if (target) target.purchased = true
     })
@@ -106,15 +103,10 @@ export function makeShopPawnRelic(set: StoreSet, get: StoreGet) {
     if (!inst) return { ok: false }
     const def = tryGetRelic(relicId)
     if (!def) return { ok: false }
-    const payout = relicPawnGold(
-      def.rarity as RelicRarity,
-      inst.upgraded === true,
-    )
+    const payout = relicPawnGold(def.rarity as RelicRarity, inst.upgraded === true)
     set((s) => {
       s.fight.player.gold += payout
-      s.fight.player.relics = s.fight.player.relics.filter(
-        (r) => r.id !== relicId,
-      )
+      s.fight.player.relics = s.fight.player.relics.filter((r) => r.id !== relicId)
       if (s.currentShopOffer?.pawnOffer) {
         s.currentShopOffer.pawnOffer.used = true
       }

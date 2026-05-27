@@ -65,9 +65,7 @@ export function RelicTray() {
               <div className="relic-tooltip-name">{def.name}</div>
               <div className="relic-tooltip-rarity">{def.rarity}</div>
               <div className="relic-tooltip-desc">{def.description}</div>
-              {def.orderHint ? (
-                <div className="relic-tooltip-hint">{def.orderHint}</div>
-              ) : null}
+              {def.orderHint ? <div className="relic-tooltip-hint">{def.orderHint}</div> : null}
             </div>
           </div>
         )

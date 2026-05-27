@@ -21,10 +21,7 @@ const RELIC_PAWN_PAYOUT: Record<RelicRarity, number> = {
 }
 const RELIC_PAWN_UPGRADED_BONUS = 15
 
-export function relicPawnGold(
-  rarity: RelicRarity,
-  upgraded = false,
-): number {
+export function relicPawnGold(rarity: RelicRarity, upgraded = false): number {
   const base = RELIC_PAWN_PAYOUT[rarity]
   return upgraded ? base + RELIC_PAWN_UPGRADED_BONUS : base
 }
@@ -63,8 +60,7 @@ export function rollShopOffer(args: {
         : desiredRarity === 'uncommon'
           ? ['uncommon', 'rare']
           : ['rare']
-    let picked: { id: string; rarity: 'common' | 'uncommon' | 'rare' } | null =
-      null
+    let picked: { id: string; rarity: 'common' | 'uncommon' | 'rare' } | null = null
     for (const tier of ladder) {
       const pool = listRelics({ rarity: tier })
         .map((r) => r.id)

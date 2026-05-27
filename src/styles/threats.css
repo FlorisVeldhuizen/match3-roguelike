@@ -60,7 +60,8 @@
 }
 
 @keyframes column-smash-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.75;
   }
   50% {
@@ -96,7 +97,8 @@
    but stays above the top row at peak (-115% → -85% leaves ~85% of
    the chevron's own height of clearance from the board edge). */
 @keyframes column-smash-chevron-bob {
-  0%, 100% {
+  0%,
+  100% {
     transform: translate(-50%, -115%);
   }
   50% {
@@ -190,11 +192,11 @@
     ),
     /* Underlying amber wash so the gem still tints warmly */
     linear-gradient(
-      135deg,
-      rgba(245, 175, 70, 0.18) 0%,
-      rgba(235, 155, 50, 0.22) 50%,
-      rgba(245, 175, 70, 0.18) 100%
-    );
+        135deg,
+        rgba(245, 175, 70, 0.18) 0%,
+        rgba(235, 155, 50, 0.22) 50%,
+        rgba(245, 175, 70, 0.18) 100%
+      );
   mix-blend-mode: screen;
   animation:
     petrify-pending-enter 520ms ease-out forwards,
@@ -213,7 +215,8 @@
 }
 
 @keyframes petrify-pending-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.7;
   }
   50% {
@@ -242,7 +245,8 @@
 }
 
 @keyframes petrify-weakening-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.85;
   }
   50% {
@@ -251,7 +255,8 @@
 }
 
 @keyframes petrify-weakening-tremble {
-  0%, 100% {
+  0%,
+  100% {
     transform: translate(0, 0);
   }
   20% {
@@ -396,8 +401,15 @@
 }
 
 @keyframes color-hex-active {
-  0%, 100% { opacity: 0.85; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.08); }
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
 }
 
 /* Weakening — the final phase of an active hex (turnsLeft === 1).
@@ -421,8 +433,15 @@
 }
 
 @keyframes color-hex-weakening {
-  0%, 100% { opacity: 0.75; transform: scale(0.98); }
-  50% { opacity: 0.95; transform: scale(1.04); }
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.04);
+  }
 }
 
 /* Expiring — the brief fade-out beat after the hex ticks to 0. Ring
@@ -448,11 +467,19 @@
 }
 
 @keyframes color-hex-expire {
-  0% { opacity: 0.8; transform: scale(1); }
-  60% { opacity: 0.45; transform: scale(1.15) translateY(-4%); }
-  100% { opacity: 0; transform: scale(1.4) translateY(-10%); }
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.45;
+    transform: scale(1.15) translateY(-4%);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4) translateY(-10%);
+  }
 }
-
 
 /* === H2c: Cluster shove (Swarmer) ===
    Source cells: corner-bracket "grabbed" frame at two diagonal corners
@@ -594,7 +621,9 @@
   background: hsl(var(--shove-hue, 170) 80% 60% / 0.16);
   box-shadow: inset 0 0 6px hsl(var(--shove-hue, 170) 80% 60% / 0.18);
   animation: cluster-shove-destination-pulse 2.4s ease-in-out infinite;
-  transition: opacity 180ms ease-out, scale 180ms ease-out;
+  transition:
+    opacity 180ms ease-out,
+    scale 180ms ease-out;
 }
 
 /* When the player is cell-hovering this threat, the bezier line gains
@@ -615,13 +644,27 @@
    so it composes cleanly with the centred markers' existing
    `transform: translate(-50%, -50%)` without overriding it. */
 @keyframes cluster-shove-source-pulse {
-  0%, 100% { opacity: 0.55; scale: 0.98; }
-  50%      { opacity: 0.7;  scale: 1.02; }
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 0.98;
+  }
+  50% {
+    opacity: 0.7;
+    scale: 1.02;
+  }
 }
 
 @keyframes cluster-shove-destination-pulse {
-  0%, 100% { opacity: 0.55; scale: 0.98; }
-  50%      { opacity: 0.7;  scale: 1.02; }
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 0.98;
+  }
+  50% {
+    opacity: 0.7;
+    scale: 1.02;
+  }
 }
 
 /* Smooth the transition into/out of the hover boost so the marker
@@ -631,11 +674,15 @@
    filter/bg/box-shadow (its mark IS the wash). */
 .cluster-shove-source::before,
 .cluster-shove-source::after {
-  transition: opacity 180ms ease-out, scale 180ms ease-out,
+  transition:
+    opacity 180ms ease-out,
+    scale 180ms ease-out,
     filter 180ms ease-out;
 }
 .cluster-shove-destination::before {
-  transition: background-color 180ms ease-out, box-shadow 180ms ease-out;
+  transition:
+    background-color 180ms ease-out,
+    box-shadow 180ms ease-out;
 }
 
 /* Hover boost — applied to source and destination when the player
@@ -694,8 +741,12 @@
 }
 
 @keyframes cluster-shove-arrow-flow {
-  from { stroke-dashoffset: 0; }
-  to { stroke-dashoffset: -3; }
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -3;
+  }
 }
 
 /* === Shared board-cell impact bursts (verb trail / resolve landings) ===
@@ -848,27 +899,67 @@
 }
 
 @keyframes board-cell-impact-chip-1 {
-  0% { transform: scale(0.45); opacity: 0; }
-  16% { opacity: 1; }
-  100% { transform: translate(-95%, -165%) scale(1.15); opacity: 0; }
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-95%, -165%) scale(1.15);
+    opacity: 0;
+  }
 }
 @keyframes board-cell-impact-chip-2 {
-  0% { transform: scale(0.45); opacity: 0; }
-  16% { opacity: 1; }
-  100% { transform: translate(175%, -45%) scale(1.12); opacity: 0; }
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(175%, -45%) scale(1.12);
+    opacity: 0;
+  }
 }
 @keyframes board-cell-impact-chip-3 {
-  0% { transform: scale(0.45); opacity: 0; }
-  16% { opacity: 1; }
-  100% { transform: translate(75%, 155%) scale(1.12); opacity: 0; }
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(75%, 155%) scale(1.12);
+    opacity: 0;
+  }
 }
 @keyframes board-cell-impact-chip-4 {
-  0% { transform: scale(0.45); opacity: 0; }
-  16% { opacity: 1; }
-  100% { transform: translate(-185%, 55%) scale(1.1); opacity: 0; }
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-185%, 55%) scale(1.1);
+    opacity: 0;
+  }
 }
 @keyframes board-cell-impact-chip-5 {
-  0% { transform: scale(0.45); opacity: 0; }
-  16% { opacity: 1; }
-  100% { transform: translate(15%, -185%) scale(1.05); opacity: 0; }
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(15%, -185%) scale(1.05);
+    opacity: 0;
+  }
 }

@@ -5,11 +5,7 @@ import { createBoardInteraction } from './input'
 import { AnimationController } from './AnimationController'
 import { BoardEffects } from './BoardEffects'
 import { emitGameEvent, subscribeGameEvents } from '../core/events/emitter'
-import {
-  getTimeScale,
-  onDebugSwap,
-  subscribeTimeScale,
-} from '../debug/devControls'
+import { getTimeScale, onDebugSwap, subscribeTimeScale } from '../debug/devControls'
 import { findAllValidSwaps } from '../core/board/generation'
 import { registerBoardSpellPlayback } from '../core/board/spellPlayback'
 import { setHoveredCell } from '../core/state/hoveredCell'
@@ -38,13 +34,11 @@ const BOARD_PADDING = 8
 const BOARD_DIM = 8
 const LOGICAL_SIZE = BOARD_PADDING * 2 + CELL_SIZE * BOARD_DIM
 
-const CELL_CENTERS: { x: number; y: number }[][] = Array.from(
-  { length: BOARD_DIM },
-  (_, y) =>
-    Array.from({ length: BOARD_DIM }, (_, x) => ({
-      x: x * CELL_SIZE + CELL_SIZE / 2,
-      y: y * CELL_SIZE + CELL_SIZE / 2,
-    })),
+const CELL_CENTERS: { x: number; y: number }[][] = Array.from({ length: BOARD_DIM }, (_, y) =>
+  Array.from({ length: BOARD_DIM }, (_, x) => ({
+    x: x * CELL_SIZE + CELL_SIZE / 2,
+    y: y * CELL_SIZE + CELL_SIZE / 2,
+  })),
 )
 const cellCenter = (x: number, y: number) =>
   CELL_CENTERS[y]?.[x] ?? {
@@ -52,8 +46,7 @@ const cellCenter = (x: number, y: number) =>
     y: y * CELL_SIZE + CELL_SIZE / 2,
   }
 
-const inBounds = (p: Pos): boolean =>
-  p.x >= 0 && p.x < BOARD_DIM && p.y >= 0 && p.y < BOARD_DIM
+const inBounds = (p: Pos): boolean => p.x >= 0 && p.x < BOARD_DIM && p.y >= 0 && p.y < BOARD_DIM
 
 const samePos = (a: Pos, b: Pos): boolean => a.x === b.x && a.y === b.y
 
@@ -127,8 +120,7 @@ type ShimmerInstance = {
 
 function randomShimmerInterval(): number {
   return (
-    SHIMMER_MIN_INTERVAL_MS +
-    Math.random() * (SHIMMER_MAX_INTERVAL_MS - SHIMMER_MIN_INTERVAL_MS)
+    SHIMMER_MIN_INTERVAL_MS + Math.random() * (SHIMMER_MAX_INTERVAL_MS - SHIMMER_MIN_INTERVAL_MS)
   )
 }
 
@@ -136,7 +128,6 @@ function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined') return false
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
-
 
 export class BoardScene {
   private readonly mountEl: HTMLElement
@@ -268,8 +259,7 @@ export class BoardScene {
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
-    this.detachVisibility = () =>
-      document.removeEventListener('visibilitychange', onVisibility)
+    this.detachVisibility = () => document.removeEventListener('visibilitychange', onVisibility)
   }
 
   private attachDevControls(app: Application): void {
@@ -335,9 +325,7 @@ export class BoardScene {
     this.attachVisibilityPause(app)
     this.attachDevControls(app)
     this.detachGemStyle = subscribeGemStyle(() => void this.applyGemStyle())
-    this.boardEffects = new BoardEffects(app.stage, (pos) =>
-      this.cellToStage(pos),
-    )
+    this.boardEffects = new BoardEffects(app.stage, (pos) => this.cellToStage(pos))
     this.startEffectsTicker()
   }
 
@@ -490,10 +478,7 @@ export class BoardScene {
     parent.addChild(bg)
   }
 
-  private buildSprites(
-    parent: Container,
-    visuals: GemBoardVisuals,
-  ): GemBoardSprite[][] {
+  private buildSprites(parent: Container, visuals: GemBoardVisuals): GemBoardSprite[][] {
     const cells = useGameStore.getState().board.cells
     const sprites: GemBoardSprite[][] = []
     for (let y = 0; y < BOARD_DIM; y++) {
@@ -606,9 +591,7 @@ export class BoardScene {
       if (logicalDrag < CELL_SIZE / 3) return null
     }
     const dir: Pos =
-      Math.abs(dx) > Math.abs(dy)
-        ? { x: dx > 0 ? 1 : -1, y: 0 }
-        : { x: 0, y: dy > 0 ? 1 : -1 }
+      Math.abs(dx) > Math.abs(dy) ? { x: dx > 0 ? 1 : -1, y: 0 } : { x: 0, y: dy > 0 ? 1 : -1 }
     const target: Pos = {
       x: active.startCell.x + dir.x,
       y: active.startCell.y + dir.y,
@@ -784,8 +767,7 @@ export class BoardScene {
       }
       this.resetNudgeIdle()
       const store = useGameStore.getState()
-      if (store.fight.phase === 'victory' || store.fight.phase === 'game-over')
-        return
+      if (store.fight.phase === 'victory' || store.fight.phase === 'game-over') return
       if (this.animator?.isAnimating) return
       const primed = store.board.selected
 
@@ -861,10 +843,7 @@ export class BoardScene {
     if (!animator || animator.isAnimating) return
     this.setHover(null)
     const petrifiedRows = useGameStore.getState().board.petrifiedRows
-    if (
-      (petrifiedRows[from.y] ?? 0) > 0 ||
-      (petrifiedRows[to.y] ?? 0) > 0
-    ) {
+    if ((petrifiedRows[from.y] ?? 0) > 0 || (petrifiedRows[to.y] ?? 0) > 0) {
       return
     }
     const result = useGameStore.getState().attemptSwap(from, to)
@@ -927,10 +906,8 @@ export class BoardScene {
     this.setHover(cell)
     const animator = this.animator
     if (!animator) return
-    const logicalX =
-      ((this.lastHoverClientX - rect.left) * LOGICAL_SIZE) / rect.width
-    const logicalY =
-      ((this.lastHoverClientY - rect.top) * LOGICAL_SIZE) / rect.height
+    const logicalX = ((this.lastHoverClientX - rect.left) * LOGICAL_SIZE) / rect.width
+    const logicalY = ((this.lastHoverClientY - rect.top) * LOGICAL_SIZE) / rect.height
     const localX = logicalX - BOARD_PADDING
     const localY = logicalY - BOARD_PADDING
     const peak = this.hoverIsPressed ? HOVER_SCALE_PRESSED : HOVER_SCALE_PEAK
@@ -996,9 +973,7 @@ export class BoardScene {
     if (this.hoverIsPressed === pressed) return
     this.hoverIsPressed = pressed
     if (this.hoveredCell) {
-      this.hoverHaloTargetAlpha = pressed
-        ? HOVER_HALO_PRESSED_ALPHA
-        : HOVER_HALO_PEAK_ALPHA
+      this.hoverHaloTargetAlpha = pressed ? HOVER_HALO_PRESSED_ALPHA : HOVER_HALO_PEAK_ALPHA
     }
     if (this.hasHoverPosition) this.applyHoverState()
   }
@@ -1055,8 +1030,7 @@ export class BoardScene {
           continue
         }
         const aScale =
-          -damp * anim.velScaleMul -
-          omegaSq * (anim.currentScaleMul - anim.targetScaleMul)
+          -damp * anim.velScaleMul - omegaSq * (anim.currentScaleMul - anim.targetScaleMul)
         anim.velScaleMul += aScale * dt
         anim.currentScaleMul += anim.velScaleMul * dt
         anim.sprite.scale.set(anim.baseScale * anim.currentScaleMul)
@@ -1142,8 +1116,7 @@ export class BoardScene {
 
   private tickNudge(dtMs: number, animating: boolean): void {
     const phase = useGameStore.getState().fight.phase
-    const canHint =
-      !animating && phase === 'player-acting'
+    const canHint = !animating && phase === 'player-acting'
     if (!canHint) {
       this.nudgeIdleMs = 0
       this.clearNudgeHint()
@@ -1161,10 +1134,8 @@ export class BoardScene {
       }
       let env: number
       if (this.nudgeIsReleasing) {
-        const span =
-          this.nudgeReleaseEndElapsedMs - this.nudgeReleaseStartElapsedMs
-        const t =
-          (this.nudgePulseElapsedMs - this.nudgeReleaseStartElapsedMs) / span
+        const span = this.nudgeReleaseEndElapsedMs - this.nudgeReleaseStartElapsedMs
+        const t = (this.nudgePulseElapsedMs - this.nudgeReleaseStartElapsedMs) / span
         if (t >= 1) {
           this.clearNudgeHint()
           return
@@ -1172,14 +1143,11 @@ export class BoardScene {
         env = 1 - easeInOutCubic(t)
       } else if (this.nudgeAttackElapsedMs < NUDGE_ATTACK_MS) {
         this.nudgeAttackElapsedMs += dtMs
-        env = easeInOutCubic(
-          Math.min(1, this.nudgeAttackElapsedMs / NUDGE_ATTACK_MS),
-        )
+        env = easeInOutCubic(Math.min(1, this.nudgeAttackElapsedMs / NUDGE_ATTACK_MS))
       } else {
         env = 1
       }
-      const phaseRad =
-        (this.nudgePulseElapsedMs / NUDGE_PULSE_PERIOD_MS) * Math.PI * 2
+      const phaseRad = (this.nudgePulseElapsedMs / NUDGE_PULSE_PERIOD_MS) * Math.PI * 2
       const mul = 1 + NUDGE_SCALE_AMPLITUDE * env * Math.sin(phaseRad)
       for (const entry of this.nudgePulsingSprites) {
         if (!boardSpriteLive(entry.sprite)) continue
@@ -1224,9 +1192,7 @@ export class BoardScene {
     if (swaps.length === 0) return
     let pool = swaps
     if (this.nudgeLastPairKey && swaps.length > 1) {
-      pool = swaps.filter(
-        (s) => pairKey(s.from, s.to) !== this.nudgeLastPairKey,
-      )
+      pool = swaps.filter((s) => pairKey(s.from, s.to) !== this.nudgeLastPairKey)
     }
     const pick = pool[Math.floor(Math.random() * pool.length)]
     if (!pick) return
@@ -1295,12 +1261,8 @@ export class BoardScene {
           }
           this.floatPhases.set(sprite, phases)
         }
-        const curDx =
-          0.6 * Math.sin(t * wx1 + phases.px1) +
-          0.4 * Math.sin(t * wx2 + phases.px2)
-        const curDy =
-          0.6 * Math.sin(t * wy1 + phases.py1) +
-          0.4 * Math.sin(t * wy2 + phases.py2)
+        const curDx = 0.6 * Math.sin(t * wx1 + phases.px1) + 0.4 * Math.sin(t * wx2 + phases.px2)
+        const curDy = 0.6 * Math.sin(t * wy1 + phases.py1) + 0.4 * Math.sin(t * wy2 + phases.py2)
         // Re-anchor when sprite is at exact cellCenter (animator just placed it)
         if (
           Math.abs(sprite.x - center.x) < CENTER_EPS &&
@@ -1381,25 +1343,13 @@ export class BoardScene {
     const width = SHIMMER_WIDTH_PX
     const streak = new Graphics()
     streak
-      .roundRect(
-        -len / 2 - 2,
-        -width / 2 - 2,
-        len + 4,
-        width + 4,
-        (width + 4) / 2,
-      )
+      .roundRect(-len / 2 - 2, -width / 2 - 2, len + 4, width + 4, (width + 4) / 2)
       .fill({ color: 0xffffff, alpha: 0.12 })
     streak
       .roundRect(-len / 2, -width / 2, len, width, width / 2)
       .fill({ color: 0xffffff, alpha: 0.5 })
     streak
-      .roundRect(
-        (-len / 2) * 0.6,
-        (-width / 2) * 0.55,
-        len * 0.6,
-        width * 0.55,
-        (width * 0.55) / 2,
-      )
+      .roundRect((-len / 2) * 0.6, (-width / 2) * 0.55, len * 0.6, width * 0.55, (width * 0.55) / 2)
       .fill({ color: 0xffffff, alpha: 0.95 })
     streak.blendMode = 'add'
     // Clone gem sprite as mask — Pixi removes the mask from normal rendering

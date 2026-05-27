@@ -5,9 +5,7 @@ export type { ManaSpendColor }
 
 export type ManaThemeColor = Exclude<ManaSpendColor, 'purple'>
 
-export function manaCostEntries(
-  cost: ManaCost,
-): { color: ManaThemeColor; amount: number }[] {
+export function manaCostEntries(cost: ManaCost): { color: ManaThemeColor; amount: number }[] {
   const entries: { color: ManaThemeColor; amount: number }[] = []
   if (cost.red) entries.push({ color: 'red', amount: cost.red })
   if (cost.blue) entries.push({ color: 'blue', amount: cost.blue })

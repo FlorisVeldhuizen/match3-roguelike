@@ -1,10 +1,4 @@
-import {
-  Application,
-  Container,
-  Graphics,
-  Text,
-  type Ticker,
-} from 'pixi.js'
+import { Application, Container, Graphics, Text, type Ticker } from 'pixi.js'
 import { RGBSplitFilter } from 'pixi-filters'
 import type { GemColor, TrailPurpose } from '../types'
 import { getFXSettings, subscribeFXSettings } from '../fx/settings'
@@ -26,7 +20,6 @@ const COLOR_HEX: Record<GemColor, number> = {
 
 export type ScreenPoint = { x: number; y: number }
 export type Attractor = () => ScreenPoint | null
-
 
 type PhysicsEffect = {
   kind: 'physics'
@@ -195,8 +188,7 @@ export class OverlayScene {
   ): void {
     const layer = this.layer
     if (!layer) return
-    const hex =
-      typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
+    const hex = typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex]
     const rawCount = opts.count ?? 10
     const count = reducedMotion ? Math.max(3, Math.floor(rawCount * 0.25)) : rawCount
     const speedMin = opts.speedMin ?? 90
@@ -252,18 +244,12 @@ export class OverlayScene {
     if (!initialEnd) return TRAIL_ARRIVAL_MS
     const palette: readonly number[] = Array.isArray(colorOrHex)
       ? colorOrHex
-      : [
-          typeof colorOrHex === 'number'
-            ? colorOrHex
-            : COLOR_HEX[colorOrHex as GemColor],
-        ]
+      : [typeof colorOrHex === 'number' ? colorOrHex : COLOR_HEX[colorOrHex as GemColor]]
     const pick = (): number => {
       const idx = Math.floor(Math.random() * palette.length)
       return palette[idx] ?? palette[0] ?? 0xffffff
     }
-    const lifeBase =
-      opts?.durationMs ??
-      trailDurationBetween(from, initialEnd, opts?.purpose)
+    const lifeBase = opts?.durationMs ?? trailDurationBetween(from, initialEnd, opts?.purpose)
     const arrivalMs = trailBurstArrivalMs(lifeBase, count)
     for (let i = 0; i < count; i++) {
       const start = jitterPoint(from, 5)
@@ -304,9 +290,7 @@ export class OverlayScene {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.65
       const speed = 60 + Math.random() * 90
       const radius = 1.3 + Math.random() * 1.4
-      const g = new Graphics()
-        .circle(0, 0, radius)
-        .fill({ color: 0xffffff, alpha: 1 })
+      const g = new Graphics().circle(0, 0, radius).fill({ color: 0xffffff, alpha: 1 })
       g.x = at.x + (Math.random() - 0.5) * 40
       g.y = at.y + (Math.random() - 0.5) * 10
       layer.addChild(g)
@@ -410,8 +394,7 @@ export class OverlayScene {
 
     const sparkCount = 5
     for (let i = 0; i < sparkCount; i++) {
-      const angle =
-        (Math.PI * 2 * i) / sparkCount + (Math.random() - 0.5) * 0.4
+      const angle = (Math.PI * 2 * i) / sparkCount + (Math.random() - 0.5) * 0.4
       const speed = 110 + Math.random() * 60
       const g = new Graphics()
         .circle(0, 0, 1.6 + Math.random() * 1.2)
@@ -488,8 +471,7 @@ export class OverlayScene {
 
     const shardCount = 10
     for (let i = 0; i < shardCount; i++) {
-      const angle =
-        (Math.PI * 2 * i) / shardCount + (Math.random() - 0.5) * 0.5
+      const angle = (Math.PI * 2 * i) / shardCount + (Math.random() - 0.5) * 0.5
       const speed = 140 + Math.random() * 110
       const len = 5 + Math.random() * 4
       const width = 1.6 + Math.random() * 0.8
@@ -539,9 +521,7 @@ export class OverlayScene {
       chromatic?: boolean
     } = {},
   ): void {
-    const layer = opts.chromatic
-      ? this.textLayerChromatic
-      : this.textLayerCrisp
+    const layer = opts.chromatic ? this.textLayerChromatic : this.textLayerCrisp
     if (!layer) return
     const t = new Text({
       text,
@@ -626,8 +606,7 @@ export class OverlayScene {
         e.view.x = e.x
         e.view.y = e.y
         const t = e.life / e.maxLife
-        const curveAlpha =
-          e.fadeMode === 'late' ? Math.min(1, t * 3) : Math.max(0, t)
+        const curveAlpha = e.fadeMode === 'late' ? Math.min(1, t * 3) : Math.max(0, t)
         e.view.alpha = curveAlpha * e.alphaScale
         if (e.scaleCurve) {
           e.view.scale.set(e.baseScale * e.scaleCurve(1 - t))
@@ -647,14 +626,8 @@ export class OverlayScene {
         let curY = e.view.y
         if (end) {
           const u = 1 - progress
-          curX =
-            u * u * e.start.x +
-            2 * u * progress * e.control.x +
-            progress * progress * end.x
-          curY =
-            u * u * e.start.y +
-            2 * u * progress * e.control.y +
-            progress * progress * end.y
+          curX = u * u * e.start.x + 2 * u * progress * e.control.x + progress * progress * end.x
+          curY = u * u * e.start.y + 2 * u * progress * e.control.y + progress * progress * end.y
           e.view.x = curX
           e.view.y = curY
         }
@@ -679,16 +652,13 @@ export class OverlayScene {
             const p0 = hist[i]
             const p1 = hist[i + 1]
             if (!p0 || !p1) continue
-            e.tail
-              .moveTo(p0.x, p0.y)
-              .lineTo(p1.x, p1.y)
-              .stroke({
-                color: e.colorHex,
-                alpha: segAlpha,
-                width,
-                cap: 'round',
-                join: 'round',
-              })
+            e.tail.moveTo(p0.x, p0.y).lineTo(p1.x, p1.y).stroke({
+              color: e.colorHex,
+              alpha: segAlpha,
+              width,
+              cap: 'round',
+              join: 'round',
+            })
           }
           e.tail.alpha = 1
         }
@@ -715,10 +685,7 @@ function jitterPoint(p: ScreenPoint, magnitude: number): ScreenPoint {
   }
 }
 
-function randomBezierControl(
-  start: ScreenPoint,
-  end: ScreenPoint,
-): ScreenPoint {
+function randomBezierControl(start: ScreenPoint, end: ScreenPoint): ScreenPoint {
   const dx = end.x - start.x
   const dy = end.y - start.y
   const len = Math.hypot(dx, dy) || 1

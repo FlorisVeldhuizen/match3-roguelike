@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { scheduleAfterMs } from '../../timing'
@@ -150,12 +144,7 @@ export function ColorHexOverlay() {
     <div className="color-hex-overlay" aria-hidden>
       {anchors}
       {impacts.items.map((hit) => (
-        <CellAnchor
-          key={`hex-impact-${hit.id}`}
-          x={hit.x}
-          y={hit.y}
-          className="board-cell-impact"
-        >
+        <CellAnchor key={`hex-impact-${hit.id}`} x={hit.x} y={hit.y} className="board-cell-impact">
           <BoardCellImpact variant="hex" />
         </CellAnchor>
       ))}

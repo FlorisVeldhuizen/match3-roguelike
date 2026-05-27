@@ -205,12 +205,7 @@ export function BurningOverlay() {
         </CellAnchor>
       ))}
       {impacts.items.map((hit) => (
-        <CellAnchor
-          key={`burn-impact-${hit.id}`}
-          x={hit.x}
-          y={hit.y}
-          className="board-cell-impact"
-        >
+        <CellAnchor key={`burn-impact-${hit.id}`} x={hit.x} y={hit.y} className="board-cell-impact">
           <BoardCellImpact variant="flame" />
         </CellAnchor>
       ))}

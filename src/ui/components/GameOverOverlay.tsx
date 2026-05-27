@@ -25,14 +25,8 @@ export function GameOverOverlay() {
     <div className="game-over-overlay" role="dialog" aria-label="Defeat">
       <div className="game-over-card">
         <h1 className="game-over-title">Defeated</h1>
-        <p className="game-over-sub">
-          Your knight fell. Try again from a fresh board.
-        </p>
-        <button
-          type="button"
-          className="game-over-restart"
-          onClick={handleRestart}
-        >
+        <p className="game-over-sub">Your knight fell. Try again from a fresh board.</p>
+        <button type="button" className="game-over-restart" onClick={handleRestart}>
           Try again
         </button>
       </div>

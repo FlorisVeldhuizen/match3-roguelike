@@ -77,11 +77,7 @@ export function executeEnemyTurn(
     const ticked = tickStatuses(enemy.id, enemy.statuses)
     let workingEnemy: Enemy = { ...enemy, statuses: ticked.statuses }
     if (ticked.burnDamage > 0 && workingEnemy.hp > 0) {
-      const res = applyDamage(
-        workingEnemy.block,
-        workingEnemy.hp,
-        ticked.burnDamage,
-      )
+      const res = applyDamage(workingEnemy.block, workingEnemy.hp, ticked.burnDamage)
       workingEnemy = {
         ...workingEnemy,
         hp: res.hpAfter,
@@ -105,9 +101,7 @@ export function executeEnemyTurn(
     }
     events.push(...ticked.events)
 
-    nextEnemies = nextEnemies.map((e) =>
-      e.id === workingEnemy.id ? workingEnemy : e,
-    )
+    nextEnemies = nextEnemies.map((e) => (e.id === workingEnemy.id ? workingEnemy : e))
 
     if (workingEnemy.hp <= 0) {
       continue
@@ -255,9 +249,7 @@ export function executeEnemyTurn(
       telegraphEvents.push(...tele.events)
     }
 
-    nextEnemies = nextEnemies.map((e) =>
-      e.id === updatedEnemy.id ? updatedEnemy : e,
-    )
+    nextEnemies = nextEnemies.map((e) => (e.id === updatedEnemy.id ? updatedEnemy : e))
   }
 
   if (nextPlayer.pendingSpells.includes('riposte')) {
@@ -288,9 +280,7 @@ export function executeEnemyTurn(
   }
 
   // Filter out telegraphs from enemies that died mid-turn
-  const livingEnemyIds = new Set(
-    nextEnemies.filter((e) => e.hp > 0).map((e) => e.id),
-  )
+  const livingEnemyIds = new Set(nextEnemies.filter((e) => e.hp > 0).map((e) => e.id))
   for (const ev of telegraphEvents) {
     if ('enemyId' in ev && !livingEnemyIds.has(ev.enemyId)) continue
     events.push(ev)

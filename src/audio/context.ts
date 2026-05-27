@@ -97,8 +97,7 @@ export function getCtx(): AudioContext | null {
   try {
     const Ctx =
       window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Ctx) return null
     ctx = new Ctx()
     masterGainNode = ctx.createGain()

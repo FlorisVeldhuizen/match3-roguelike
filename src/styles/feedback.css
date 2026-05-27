@@ -1,13 +1,31 @@
 /* --- Feedback animations (unchanged tuning) --- */
 
 @keyframes shake {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  10% { transform: translate3d(calc(-7px * var(--shake-mag, 1)), calc(2px * var(--shake-mag, 1)), 0) rotate(calc(-0.3deg * var(--shake-mag, 1))); }
-  25% { transform: translate3d(calc(6px * var(--shake-mag, 1)), calc(-3px * var(--shake-mag, 1)), 0) rotate(calc(0.35deg * var(--shake-mag, 1))); }
-  40% { transform: translate3d(calc(-5px * var(--shake-mag, 1)), calc(3px * var(--shake-mag, 1)), 0) rotate(calc(-0.25deg * var(--shake-mag, 1))); }
-  55% { transform: translate3d(calc(4px * var(--shake-mag, 1)), calc(-2px * var(--shake-mag, 1)), 0); }
-  70% { transform: translate3d(calc(-3px * var(--shake-mag, 1)), calc(2px * var(--shake-mag, 1)), 0); }
-  85% { transform: translate3d(calc(2px * var(--shake-mag, 1)), calc(-1px * var(--shake-mag, 1)), 0); }
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  10% {
+    transform: translate3d(calc(-7px * var(--shake-mag, 1)), calc(2px * var(--shake-mag, 1)), 0)
+      rotate(calc(-0.3deg * var(--shake-mag, 1)));
+  }
+  25% {
+    transform: translate3d(calc(6px * var(--shake-mag, 1)), calc(-3px * var(--shake-mag, 1)), 0)
+      rotate(calc(0.35deg * var(--shake-mag, 1)));
+  }
+  40% {
+    transform: translate3d(calc(-5px * var(--shake-mag, 1)), calc(3px * var(--shake-mag, 1)), 0)
+      rotate(calc(-0.25deg * var(--shake-mag, 1)));
+  }
+  55% {
+    transform: translate3d(calc(4px * var(--shake-mag, 1)), calc(-2px * var(--shake-mag, 1)), 0);
+  }
+  70% {
+    transform: translate3d(calc(-3px * var(--shake-mag, 1)), calc(2px * var(--shake-mag, 1)), 0);
+  }
+  85% {
+    transform: translate3d(calc(2px * var(--shake-mag, 1)), calc(-1px * var(--shake-mag, 1)), 0);
+  }
 }
 
 /* Shake scope: only the .game-scene wrapper around enemies + board
@@ -221,7 +239,6 @@ body.vignette-status-apply::before {
   animation: hp-burn-hit 520ms ease-out;
 }
 
-
 /* Low-HP urgency pulse via ::after so it doesn't stomp the .hit/.glow
    box-shadow animations on the main element. */
 .hp-bar.low::after {
@@ -234,7 +251,8 @@ body.vignette-status-apply::before {
 }
 
 @keyframes hp-low-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       inset 0 0 10px 1px rgba(238, 94, 87, 0.32),
       0 0 6px rgba(238, 94, 87, 0.18);
@@ -342,5 +360,3 @@ body.vignette-status-apply::before {
 .enemy-frame.hit {
   animation: enemy-hit 280ms ease-out;
 }
-
-

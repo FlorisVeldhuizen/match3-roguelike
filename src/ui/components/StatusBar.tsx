@@ -39,29 +39,16 @@ export function StatusBar({
                 {def.icon}
               </span>
               <span className="status-stacks" aria-hidden>
-                <span
-                  key={`n-${tick}`}
-                  className={tick > 0 ? 'status-stacks-pulse' : undefined}
-                >
+                <span key={`n-${tick}`} className={tick > 0 ? 'status-stacks-pulse' : undefined}>
                   {s.stacks}
                 </span>
               </span>
               {tick > 0 && (
-                <span
-                  key={`pop-${tick}`}
-                  className="status-chip-tick"
-                  aria-hidden
-                >
+                <span key={`pop-${tick}`} className="status-chip-tick" aria-hidden>
                   −1
                 </span>
               )}
-              {cue > 0 && (
-                <span
-                  key={`cue-${cue}`}
-                  className="status-chip-cue"
-                  aria-hidden
-                />
-              )}
+              {cue > 0 && <span key={`cue-${cue}`} className="status-chip-cue" aria-hidden />}
             </span>
           </HoverTooltip>
         )

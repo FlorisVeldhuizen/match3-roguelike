@@ -41,9 +41,7 @@ describe('shop actions', () => {
     const after = useGameStore.getState()
     expect(after.fight.player.gold).toBe(goldBefore - item.cost)
     expect(after.fight.player.relics.some((r) => r.id === item.id)).toBe(true)
-    expect(
-      after.currentShopOffer?.relics.find((r) => r.id === item.id)?.purchased,
-    ).toBe(true)
+    expect(after.currentShopOffer?.relics.find((r) => r.id === item.id)?.purchased).toBe(true)
   })
 
   it('shopBuyRelic refuses when gold is insufficient', () => {
@@ -108,10 +106,7 @@ describe('shop actions', () => {
     expect(result.gold).toBe(30) // sharp-edge is common → 30g
     const after = useGameStore.getState()
     expect(after.fight.player.gold).toBe(130)
-    expect(after.fight.player.relics.map((r) => r.id)).toEqual([
-      'iron-buckler',
-      'thornmail',
-    ])
+    expect(after.fight.player.relics.map((r) => r.id)).toEqual(['iron-buckler', 'thornmail'])
     expect(after.currentShopOffer?.pawnOffer?.used).toBe(true)
   })
 

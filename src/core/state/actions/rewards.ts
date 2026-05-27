@@ -21,10 +21,7 @@ export function makeAcquireRelic(set: StoreSet, get: StoreGet) {
     if (!current.pendingReward.offeredRelicIds.includes(id)) {
       return { ok: false, events: [] }
     }
-    const nextRelics = engineAcquireRelic(
-      cloneRelicsForHooks(current.fight.player.relics),
-      id,
-    )
+    const nextRelics = engineAcquireRelic(cloneRelicsForHooks(current.fight.player.relics), id)
     const events: GameEvent[] = [{ kind: 'relic-gained', relicId: id }]
     const gainEvents = runOnRelicGained(
       { relicId: id },

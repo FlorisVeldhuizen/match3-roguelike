@@ -8,11 +8,7 @@ export type DamageResult = {
   killed: boolean
 }
 
-export function applyDamage(
-  block: number,
-  hp: number,
-  incoming: number,
-): DamageResult {
+export function applyDamage(block: number, hp: number, incoming: number): DamageResult {
   const blocked = Math.min(block, incoming)
   const blockAfter = block - blocked
   const hpDamage = Math.min(hp, incoming - blocked)

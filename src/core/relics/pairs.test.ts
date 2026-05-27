@@ -97,32 +97,28 @@ describe('relic pair acquisition-order property', () => {
     }
   }
 
-  it.each(pairs)(
-    'pair %s × %s: commutative iff neither declares orderHint',
-    (a, b) => {
-      const ra = listRelics().find((r) => r.id === a)!
-      const rb = listRelics().find((r) => r.id === b)!
-      const orderSensitive =
-        ra.orderHint !== undefined || rb.orderHint !== undefined
+  it.each(pairs)('pair %s × %s: commutative iff neither declares orderHint', (a, b) => {
+    const ra = listRelics().find((r) => r.id === a)!
+    const rb = listRelics().find((r) => r.id === b)!
+    const orderSensitive = ra.orderHint !== undefined || rb.orderHint !== undefined
 
-      const ab = simulate([inst(a), inst(b)])
-      const ba = simulate([inst(b), inst(a)])
+    const ab = simulate([inst(a), inst(b)])
+    const ba = simulate([inst(b), inst(a)])
 
-      if (!orderSensitive) {
-        expect(ab.totals).toEqual(ba.totals)
-        expect(ab.damageTakenEventCount).toBe(ba.damageTakenEventCount)
-      } else {
-        // Divergence is allowed when one relic declares orderHint, but
-        // both orders must still produce valid (non-negative integer) deltas.
-        for (const color of ['red', 'blue', 'green', 'yellow', 'purple'] as const) {
-          expect(Number.isInteger(ab.totals[color])).toBe(true)
-          expect(Number.isInteger(ba.totals[color])).toBe(true)
-          expect(ab.totals[color]).toBeGreaterThanOrEqual(0)
-          expect(ba.totals[color]).toBeGreaterThanOrEqual(0)
-        }
+    if (!orderSensitive) {
+      expect(ab.totals).toEqual(ba.totals)
+      expect(ab.damageTakenEventCount).toBe(ba.damageTakenEventCount)
+    } else {
+      // Divergence is allowed when one relic declares orderHint, but
+      // both orders must still produce valid (non-negative integer) deltas.
+      for (const color of ['red', 'blue', 'green', 'yellow', 'purple'] as const) {
+        expect(Number.isInteger(ab.totals[color])).toBe(true)
+        expect(Number.isInteger(ba.totals[color])).toBe(true)
+        expect(ab.totals[color]).toBeGreaterThanOrEqual(0)
+        expect(ba.totals[color]).toBeGreaterThanOrEqual(0)
       }
-    },
-  )
+    }
+  })
 
   it('Sharp Edge × Cascade Crystal is one of the non-commutative pairs', () => {
     // Direct check that the orderHint we promise actually shows up under

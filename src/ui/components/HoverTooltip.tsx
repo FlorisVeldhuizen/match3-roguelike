@@ -1,20 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTooltipFade } from '../useTooltipFade'
 import { useTooltipReveal } from '../useTooltipReveal'
 import { useTooltipTouchAnchor } from '../useTooltipTouchAnchor'
-import {
-  getTriggerAvoidRects,
-  placeNestedTooltip,
-  rectFromBox,
-} from '../tooltipPosition'
+import { getTriggerAvoidRects, placeNestedTooltip, rectFromBox } from '../tooltipPosition'
 import { useCoarsePointer } from '../useCoarsePointer'
 import { useIgnoreMouseAfterTouch } from '../useIgnoreMouseAfterTouch'
 import { useParentTooltipOpen } from '../useParentTooltipOpen'
@@ -53,9 +42,7 @@ export function HoverTooltip({
   const anchorRef = useRef<HTMLSpanElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
   const [anchorHovered, setAnchorHovered] = useState(false)
-  const [autoShown, setAutoShown] = useState(
-    () => Boolean(autoShow) && autoShowDelayMs <= 0,
-  )
+  const [autoShown, setAutoShown] = useState(() => Boolean(autoShow) && autoShowDelayMs <= 0)
   const [prevAuto, setPrevAuto] = useState({ autoShow, autoShowDelayMs })
 
   const wasQueuedRef = useRef(queued ?? false)
@@ -83,8 +70,7 @@ export function HoverTooltip({
     }, delay)
   }, [])
 
-  const canOpenFromMouse = () =>
-    !coarsePointer && !ignoreMouseAfterTouch()
+  const canOpenFromMouse = () => !coarsePointer && !ignoreMouseAfterTouch()
 
   useEffect(() => {
     return () => {
@@ -107,10 +93,7 @@ export function HoverTooltip({
     wasQueuedRef.current = queued
   }, [queued, scheduleDismiss])
 
-  if (
-    autoShow !== prevAuto.autoShow ||
-    autoShowDelayMs !== prevAuto.autoShowDelayMs
-  ) {
+  if (autoShow !== prevAuto.autoShow || autoShowDelayMs !== prevAuto.autoShowDelayMs) {
     setPrevAuto({ autoShow, autoShowDelayMs })
     if (!autoShow) {
       setAutoShown(false)
@@ -128,9 +111,7 @@ export function HoverTooltip({
   }, [autoShow, autoShowDelayMs])
 
   const parentOpen = useParentTooltipOpen(anchorRef, Boolean(autoShow))
-  const hovered = autoShow
-    ? parentOpen && (autoShown || anchorHovered)
-    : anchorHovered
+  const hovered = autoShow ? parentOpen && (autoShown || anchorHovered) : anchorHovered
   const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(hovered)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const displayPos = tipMounted ? pos : null
@@ -155,9 +136,7 @@ export function HoverTooltip({
       if (container) {
         const c = container.getBoundingClientRect()
         const parent = rectFromBox(c.left, c.top, c.width, c.height)
-        const coarse = window.matchMedia(
-          '(pointer: coarse), (hover: none)',
-        ).matches
+        const coarse = window.matchMedia('(pointer: coarse), (hover: none)').matches
         const avoid = coarse ? getTriggerAvoidRects(container) : []
         setPos(
           placeNestedTooltip(
@@ -175,10 +154,7 @@ export function HoverTooltip({
       const wantsBelow = a.top - margin - t.height < margin
       const top = wantsBelow ? a.bottom + margin : a.top - margin - t.height
       let left = a.left + a.width / 2 - t.width / 2
-      left = Math.max(
-        margin,
-        Math.min(window.innerWidth - t.width - margin, left),
-      )
+      left = Math.max(margin, Math.min(window.innerWidth - t.width - margin, left))
       setPos({ left, top })
     }
     compute()

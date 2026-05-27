@@ -158,7 +158,7 @@ describe('generateMap', () => {
     const total = roleMixedCount + simpleStackCount
     const fraction = roleMixedCount / total
     expect(fraction).toBeGreaterThan(0.1) // at least 10%
-    expect(fraction).toBeLessThan(0.9)   // not the whole pool
+    expect(fraction).toBeLessThan(0.9) // not the whole pool
   })
 
   // Rallier must appear in at least one node across a reasonable seed range.
@@ -219,12 +219,7 @@ describe('generateMap', () => {
     let found = false
     for (let seed = 1; seed <= 200 && !found; seed++) {
       const map = build(seed)
-      if (
-        map.nodes.some(
-          (n) =>
-            (n.archetypes?.filter((a) => a === 'swarmer').length ?? 0) >= 2,
-        )
-      ) {
+      if (map.nodes.some((n) => (n.archetypes?.filter((a) => a === 'swarmer').length ?? 0) >= 2)) {
         found = true
       }
     }
@@ -241,9 +236,7 @@ describe('generateMap', () => {
       const map = build(seed)
       if (
         map.nodes.some(
-          (n) =>
-            n.archetypes?.includes('defender') &&
-            n.archetypes?.includes('smolder'),
+          (n) => n.archetypes?.includes('defender') && n.archetypes?.includes('smolder'),
         )
       ) {
         found = true

@@ -13,14 +13,11 @@ function synthAttack(amount: number): void {
   const kick = c.createOscillator()
   kick.type = 'sine'
   // Bigger hits drop the kick lower for extra weight.
-  kick.frequency.setValueAtTime(170 * pitchJ * (1 - 0.15 * (I - 1) / 0.7), now)
+  kick.frequency.setValueAtTime(170 * pitchJ * (1 - (0.15 * (I - 1)) / 0.7), now)
   kick.frequency.exponentialRampToValueAtTime(60, now + 0.06)
   const kickGain = c.createGain()
   kickGain.gain.setValueAtTime(0.0001, now)
-  kickGain.gain.exponentialRampToValueAtTime(
-    0.22 * jitter(0.18) * heavyGain,
-    now + 0.003,
-  )
+  kickGain.gain.exponentialRampToValueAtTime(0.22 * jitter(0.18) * heavyGain, now + 0.003)
   kickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08)
   kick.connect(kickGain).connect(out(c))
   kick.start(now)
@@ -40,16 +37,9 @@ function synthAttack(amount: number): void {
   swooshLp.Q.value = 0.5
   const swooshGain = c.createGain()
   swooshGain.gain.setValueAtTime(0.0001, now)
-  swooshGain.gain.exponentialRampToValueAtTime(
-    0.22 * jitter(0.2) * brightGain,
-    now + 0.008,
-  )
+  swooshGain.gain.exponentialRampToValueAtTime(0.22 * jitter(0.2) * brightGain, now + 0.008)
   swooshGain.gain.exponentialRampToValueAtTime(0.0001, now + swooshDur)
-  swoosh
-    .connect(swooshHp)
-    .connect(swooshLp)
-    .connect(swooshGain)
-    .connect(out(c))
+  swoosh.connect(swooshHp).connect(swooshLp).connect(swooshGain).connect(out(c))
   swoosh.start(now)
   swoosh.stop(now + swooshDur + 0.02)
 
@@ -60,10 +50,7 @@ function synthAttack(amount: number): void {
   shinkBp.Q.value = 1.6
   const shinkGain = c.createGain()
   shinkGain.gain.setValueAtTime(0.0001, now)
-  shinkGain.gain.exponentialRampToValueAtTime(
-    0.2 * jitter(0.2) * brightGain,
-    now + 0.001,
-  )
+  shinkGain.gain.exponentialRampToValueAtTime(0.2 * jitter(0.2) * brightGain, now + 0.001)
   shinkGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.018)
   shink.connect(shinkBp).connect(shinkGain).connect(out(c))
   shink.start(now)
@@ -76,10 +63,7 @@ function synthAttack(amount: number): void {
   snapBp.Q.value = 2
   const snapGain = c.createGain()
   snapGain.gain.setValueAtTime(0.0001, now)
-  snapGain.gain.exponentialRampToValueAtTime(
-    0.28 * jitter(0.2) * brightGain,
-    now + 0.002,
-  )
+  snapGain.gain.exponentialRampToValueAtTime(0.28 * jitter(0.2) * brightGain, now + 0.002)
   snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045)
   snap.connect(snapBp).connect(snapGain).connect(out(c))
   snap.start(now)

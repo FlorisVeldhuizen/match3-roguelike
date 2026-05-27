@@ -20,26 +20,14 @@ const player: Player = {
 
 function boardWithRow(colors: Cell['gemColor'][]): Cell[][] {
   const row = colors.map((gemColor) => ({ gemColor }))
-  return Array.from({ length: 8 }, () =>
-    row.map((c) => ({ ...c })),
-  )
+  return Array.from({ length: 8 }, () => row.map((c) => ({ ...c })))
 }
 
 describe('resolveTransmute', () => {
   it('emits gems-transmuted before cascade events', () => {
     const board = boardWithRow(['red', 'red', 'red', 'blue', 'blue', 'blue', 'green', 'green'])
     const rng: RngState = { seed: 42 }
-    const r = resolveTransmute(
-      board,
-      'red',
-      'blue',
-      rng,
-      player,
-      [],
-      null,
-      [],
-      [],
-    )
+    const r = resolveTransmute(board, 'red', 'blue', rng, player, [], null, [], [])
     expect(r.events[0]).toEqual({
       kind: 'gems-transmuted',
       cells: expect.arrayContaining([

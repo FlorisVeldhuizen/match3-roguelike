@@ -14,15 +14,15 @@ const bulwark: SpellDef = {
   resolution: 'pending',
   description: (
     <>
-      When your turn ends, your <Keyword id="block">armor</Keyword> strikes the
-      enemy for half its value. You'll have no armor this turn.
+      When your turn ends, your <Keyword id="block">armor</Keyword> strikes the enemy for half its
+      value. You'll have no armor this turn.
     </>
   ),
   pendingLabel: 'queued',
   pendingDescription: (
     <>
-      When your turn ends, your <Keyword id="block">armor</Keyword> strikes the
-      enemy for half its value, then drops to zero.
+      When your turn ends, your <Keyword id="block">armor</Keyword> strikes the enemy for half its
+      value, then drops to zero.
     </>
   ),
   starter: true,
@@ -36,15 +36,15 @@ const reinforce: SpellDef = {
   resolution: 'pending',
   description: (
     <>
-      Doubles your <Keyword id="block">armor</Keyword> when your turn ends and
-      carries it over into next turn instead of letting it evaporate.
+      Doubles your <Keyword id="block">armor</Keyword> when your turn ends and carries it over into
+      next turn instead of letting it evaporate.
     </>
   ),
   pendingLabel: 'queued',
   pendingDescription: (
     <>
-      When your turn ends, your <Keyword id="block">armor</Keyword> is doubled
-      and survives into next turn.
+      When your turn ends, your <Keyword id="block">armor</Keyword> is doubled and survives into
+      next turn.
     </>
   ),
   starter: true,
@@ -57,10 +57,10 @@ const volley: SpellDef = {
   cost: { red: 4 },
   resolution: 'pending',
   description:
-    "Pick three targets when you cast it. Red matches feed a single pool, then split into three strikes when your turn ends — one per chosen target.",
+    'Pick three targets when you cast it. Red matches feed a single pool, then split into three strikes when your turn ends — one per chosen target.',
   pendingLabel: 'loaded',
   pendingDescription:
-    "When your turn ends, the red pool splits into three strikes, one per chosen target.",
+    'When your turn ends, the red pool splits into three strikes, one per chosen target.',
 }
 
 const focus: SpellDef = {
@@ -70,7 +70,7 @@ const focus: SpellDef = {
   cost: { yellow: 2 },
   resolution: 'immediate',
   description:
-    "Trade up to 3 mana of one color for the same amount of another. Pick the swap when you cast it.",
+    'Trade up to 3 mana of one color for the same amount of another. Pick the swap when you cast it.',
   pendingLabel: '',
   pendingDescription: '',
 }
@@ -114,8 +114,7 @@ const purify: SpellDef = {
   resolution: 'immediate',
   description: (
     <>
-      Strip a curse off you entirely. If you cleared a <Keyword id="burn" />,
-      recover 3 HP.
+      Strip a curse off you entirely. If you cleared a <Keyword id="burn" />, recover 3 HP.
     </>
   ),
   pendingLabel: '',
@@ -128,8 +127,7 @@ const skewer: SpellDef = {
   icon: '🗡️',
   cost: { red: 2 },
   resolution: 'pending',
-  description:
-    "Charge your next strike. The damage from your next red match is doubled.",
+  description: 'Charge your next strike. The damage from your next red match is doubled.',
   pendingLabel: 'armed',
   pendingDescription: 'Your next red match deals double damage.',
 }
@@ -156,10 +154,9 @@ const surge: SpellDef = {
   cost: { yellow: 3 },
   resolution: 'pending',
   description:
-    "Crackle the next match with stored energy — it counts as if it were two cascades deep.",
+    'Crackle the next match with stored energy — it counts as if it were two cascades deep.',
   pendingLabel: 'crackling',
-  pendingDescription:
-    'Your next match counts as cascade level +2 (triggers cascade relics).',
+  pendingDescription: 'Your next match counts as cascade level +2 (triggers cascade relics).',
 }
 
 const cinderLash: SpellDef = {
@@ -207,8 +204,7 @@ const blessedGround: SpellDef = {
   icon: '✦',
   cost: { green: 3 },
   resolution: 'immediate',
-  description:
-    'Bless 4 random cells on the board. Matches through blessed cells pay out double.',
+  description: 'Bless 4 random cells on the board. Matches through blessed cells pay out double.',
   pendingLabel: '',
   pendingDescription: '',
 }
@@ -231,11 +227,9 @@ const chainLightning: SpellDef = {
   icon: '⚡',
   cost: { red: 3 },
   resolution: 'pending',
-  description:
-    'Your next red match strikes ALL enemies instead of just your target.',
+  description: 'Your next red match strikes ALL enemies instead of just your target.',
   pendingLabel: 'charged',
-  pendingDescription:
-    'Your next red match will deal its damage to every living enemy.',
+  pendingDescription: 'Your next red match will deal its damage to every living enemy.',
 }
 
 const riposte: UltimateDef = {
@@ -246,8 +240,7 @@ const riposte: UltimateDef = {
   description:
     "Parry the next enemy attack. Take no damage and hit them back for the full amount. If they don't swing, the parry is wasted.",
   pendingLabel: 'armed',
-  pendingDescription:
-    "Next enemy attack hits you for 0 and bounces back at full strength.",
+  pendingDescription: 'Next enemy attack hits you for 0 and bounces back at full strength.',
 }
 
 registerSpell(bulwark)

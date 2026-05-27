@@ -24,11 +24,7 @@ export function VictoryOverlay() {
       <div className="victory-card">
         <h1 className="victory-title">Run cleared</h1>
         <p className="victory-sub">The boss has fallen.</p>
-        <button
-          type="button"
-          className="victory-restart"
-          onClick={handleRestart}
-        >
+        <button type="button" className="victory-restart" onClick={handleRestart}>
           Start a new run
         </button>
       </div>

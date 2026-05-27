@@ -6,10 +6,7 @@ import type {
   SpellVisualBeat,
   StatusKind,
 } from '../../types'
-import {
-  SPEND_TRAIL_ARRIVAL_MS,
-  SPELL_EFFECT_TRAIL_ARRIVAL_MS,
-} from '../../timing'
+import { SPEND_TRAIL_ARRIVAL_MS, SPELL_EFFECT_TRAIL_ARRIVAL_MS } from '../../timing'
 
 export type { SpellVisualBeat, SpellEffectLeg } from '../../types'
 
@@ -125,10 +122,7 @@ function tagEffectEvents(
   })
 }
 
-export function withImmediateSpellVisuals(
-  spellId: SpellId,
-  events: GameEvent[],
-): GameEvent[] {
+export function withImmediateSpellVisuals(spellId: SpellId, events: GameEvent[]): GameEvent[] {
   const beat = immediateSpellBeat(spellId)
   const effectOnly = events.filter(
     (e) => e.kind !== 'spell-cast' && e.kind !== 'spell-effect-trail',
@@ -140,10 +134,7 @@ export function withImmediateSpellVisuals(
   return [trail, ...withoutDup]
 }
 
-export function withPendingSpellVisuals(
-  spellId: PendingSpellId,
-  events: GameEvent[],
-): GameEvent[] {
+export function withPendingSpellVisuals(spellId: PendingSpellId, events: GameEvent[]): GameEvent[] {
   const beat = pendingSpellBeat(spellId)
   const trail = buildTrailEvent(spellId, events, beat)
   const tagged = tagEffectEvents(events, beat, true)
@@ -151,9 +142,7 @@ export function withPendingSpellVisuals(
   return [trail, ...tagged.filter((e) => e.kind !== 'spell-effect-trail')]
 }
 
-export function readSpellVisualBeat(
-  event: GameEvent,
-): SpellVisualBeat | undefined {
+export function readSpellVisualBeat(event: GameEvent): SpellVisualBeat | undefined {
   if ('spellVisual' in event && event.spellVisual) {
     return event.spellVisual
   }

@@ -15,9 +15,7 @@ export type GemBoardVisuals = {
 
 export type GemBoardSprite = Sprite
 
-async function loadTextures(
-  variant: GemStyleVariant,
-): Promise<Record<GemColor, Texture>> {
+async function loadTextures(variant: GemStyleVariant): Promise<Record<GemColor, Texture>> {
   const entries = await Promise.all(
     GEM_COLORS.map(async (color) => {
       const texture = await Assets.load<Texture>(gemAssetPath(variant, color))
@@ -36,9 +34,7 @@ export async function loadGemBoardVisuals(): Promise<GemBoardVisuals> {
   return { textures, boardScale: gemBoardScale(variant) }
 }
 
-export function boardVisualsAsTextures(
-  visuals: GemBoardVisuals,
-): Record<GemColor, Texture> {
+export function boardVisualsAsTextures(visuals: GemBoardVisuals): Record<GemColor, Texture> {
   return visuals.textures
 }
 

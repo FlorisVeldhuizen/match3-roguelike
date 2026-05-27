@@ -22,9 +22,7 @@ function bounceOffsetPx(s: number): number {
   }
   const u = (s - IMPACT_FRACTION) / (1 - IMPACT_FRACTION)
   return (
-    -Math.abs(Math.sin(BOUNCE_CYCLES * Math.PI * u)) *
-    Math.exp(-BOUNCE_DAMPING * u) *
-    BOUNCE_AMP_PX
+    -Math.abs(Math.sin(BOUNCE_CYCLES * Math.PI * u)) * Math.exp(-BOUNCE_DAMPING * u) * BOUNCE_AMP_PX
   )
 }
 
@@ -32,12 +30,7 @@ function squashEnvelope(s: number): number {
   return Math.cos(1.5 * Math.PI * s) * Math.exp(-SQUASH_DAMPING * s)
 }
 
-export function tweenDrop(
-  sprite: Sprite,
-  toX: number,
-  toY: number,
-  fallMs: number,
-): Promise<void> {
+export function tweenDrop(sprite: Sprite, toX: number, toY: number, fallMs: number): Promise<void> {
   const startX = sprite.x
   const startY = sprite.y
   // Pixi may set scale != 1.0 based on texture size vs sprite dimensions

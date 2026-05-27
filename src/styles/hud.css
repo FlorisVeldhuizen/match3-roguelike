@@ -31,8 +31,7 @@
   background: url('/ornaments/mystic-knot.svg') center / contain no-repeat;
   pointer-events: none;
   z-index: 1;
-  filter: drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.75))
-    drop-shadow(0 0 1px rgba(0, 0, 0, 0.85));
+  filter: drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.85));
 }
 
 .hud-row {
@@ -106,14 +105,15 @@
   color: var(--parchment);
   opacity: 0.7;
   filter: grayscale(0.35) brightness(0.95);
-  transition: opacity 140ms ease, filter 140ms ease;
+  transition:
+    opacity 140ms ease,
+    filter 140ms ease;
   position: relative;
 }
 
 .block-badge.active {
   opacity: 1;
-  filter: grayscale(0) brightness(1.1)
-    drop-shadow(0 0 8px rgba(80, 150, 220, 0.55));
+  filter: grayscale(0) brightness(1.1) drop-shadow(0 0 8px rgba(80, 150, 220, 0.55));
 }
 
 /* Hide the inline shield emoji — the SVG shield IS the icon. */
@@ -197,15 +197,16 @@
   color: var(--gold-2);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   min-width: 0;
-  transition: filter 180ms ease, transform 180ms ease;
+  transition:
+    filter 180ms ease,
+    transform 180ms ease;
 }
 
 /* Wild yellow: a subtle gold glow on the dot so the player notices
    "this colour does something special" without the heavy prismatic
    border the chip version had. */
 .mana-chip.mana-wild .mana-dot {
-  filter: drop-shadow(0 0 4px rgba(195, 165, 80, 0.5))
-    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 0 4px rgba(195, 165, 80, 0.5)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
 }
 
 .mana-dot {
@@ -215,8 +216,7 @@
   background-position: center;
   background-size: contain;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55))
-    drop-shadow(0 0 4px rgba(154, 125, 82, 0.25));
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 4px rgba(154, 125, 82, 0.25));
 }
 .mana-dot[data-color='red'] {
   background-image: var(--gem-red-url, url('/gems/pack-melle/red.png'));
@@ -247,8 +247,7 @@
    the amber tone from the SVG; the chip just doesn't get the mana-cap
    line since gold uncapped. */
 .mana-chip.mana-gold .mana-dot {
-  filter: drop-shadow(0 0 4px rgba(255, 195, 80, 0.55))
-    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 0 4px rgba(255, 195, 80, 0.55)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
 }
 
 .mana-value {
@@ -294,8 +293,7 @@
   animation: mana-pip-spend 480ms cubic-bezier(0.4, 0, 0.7, 1);
 }
 .mana-chip.mana-red.spending .mana-dot {
-  filter: drop-shadow(0 0 10px rgba(215, 84, 82, 0.95))
-    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 0 10px rgba(215, 84, 82, 0.95)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
 }
 .mana-chip.mana-blue.spending .mana-dot {
   filter: drop-shadow(0 0 10px rgba(74, 143, 207, 0.95))
@@ -356,12 +354,7 @@
   width: 1px;
   height: 16px;
   margin: 0 0.35rem;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    rgba(154, 125, 82, 0.28),
-    transparent
-  );
+  background: linear-gradient(180deg, transparent, rgba(154, 125, 82, 0.28), transparent);
 }
 
 /* Charge pip — same lightweight treatment as mana pips. Identity
@@ -384,7 +377,9 @@
   color: var(--gold-2);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   min-width: 0;
-  transition: filter 180ms ease, transform 180ms ease;
+  transition:
+    filter 180ms ease,
+    transform 180ms ease;
 }
 .charge-icon {
   width: 18px;
@@ -394,8 +389,7 @@
   background-position: center;
   background-size: contain;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55))
-    drop-shadow(0 0 4px rgba(130, 100, 180, 0.4));
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 4px rgba(130, 100, 180, 0.4));
 }
 .charge-chip.pulsing {
   animation: mana-pip-pulse 540ms cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -412,8 +406,7 @@
 }
 .charge-chip.is-ready .charge-icon {
   filter: drop-shadow(0 0 6px rgba(201, 168, 108, 0.7))
-    drop-shadow(0 0 4px rgba(130, 100, 180, 0.5))
-    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+    drop-shadow(0 0 4px rgba(130, 100, 180, 0.5)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
 }
 @keyframes charge-ready-breathe {
   0%,
@@ -519,8 +512,7 @@
    background) so the SVG shield stays visible — matches .active. */
 .block-badge.pending {
   opacity: 1;
-  filter: grayscale(0) brightness(1.05)
-    drop-shadow(0 0 6px rgba(80, 150, 220, 0.5));
+  filter: grayscale(0) brightness(1.05) drop-shadow(0 0 6px rgba(80, 150, 220, 0.5));
 }
 
 /* Red gem trail just arrived on the targeted enemy: brief outline pulse. */

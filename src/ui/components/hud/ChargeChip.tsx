@@ -25,9 +25,7 @@ export function ChargeChip({
         <div>
           <strong>Purple gems</strong> build <Keyword id="ultimate">ultimate</Keyword> charge — no
           direct combat effect on match.
-          {ready
-            ? ' Ready to cast.'
-            : ` ${threshold - value} more needed.`}
+          {ready ? ' Ready to cast.' : ` ${threshold - value} more needed.`}
         </div>
       }
       ariaLabel={`Skill charge: ${value}`}
@@ -38,7 +36,9 @@ export function ChargeChip({
       >
         <span className="charge-icon" data-color="purple" aria-hidden />
         <span className="mana-value">
-          <span key={pop.key} className={popClass(pop)}>{value}</span>
+          <span key={pop.key} className={popClass(pop)}>
+            {value}
+          </span>
         </span>
       </span>
     </HoverTooltip>

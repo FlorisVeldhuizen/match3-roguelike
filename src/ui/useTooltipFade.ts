@@ -13,9 +13,7 @@ export function useTooltipFade(open: boolean): {
   visible: boolean
 } {
   const [holdMount, setHoldMount] = useState(false)
-  const [visible, setVisible] = useState(
-    () => open && prefersReducedMotion(),
-  )
+  const [visible, setVisible] = useState(() => open && prefersReducedMotion())
   const [prevOpen, setPrevOpen] = useState(open)
 
   if (open !== prevOpen) {

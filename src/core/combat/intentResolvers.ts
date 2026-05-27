@@ -16,11 +16,7 @@ import { applyCombatEvents } from './applyCombatEvents'
 import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage } from './statuses'
 import { getArchetype } from './archetypeRegistry'
-import {
-  applyFlagToCells,
-  getFlag,
-  pickClusterCellsWithoutFlag,
-} from '../board/flags'
+import { applyFlagToCells, getFlag, pickClusterCellsWithoutFlag } from '../board/flags'
 import { applyGravity } from '../board/gravity'
 import {
   cloneRelicsForHooks,
@@ -94,11 +90,7 @@ export function resolveAttackIntent(
     return { source: updatedEnemy, player: nextPlayer, events }
   }
 
-  const finalDamage = composeDamage(
-    intent.amount,
-    updatedEnemy.statuses,
-    nextPlayer.statuses,
-  )
+  const finalDamage = composeDamage(intent.amount, updatedEnemy.statuses, nextPlayer.statuses)
   const res = applyDamage(nextPlayer.block, nextPlayer.hp, finalDamage)
   let finalHp = res.hpAfter
   const writeRelics = cloneRelicsForHooks(nextPlayer.relics)
@@ -120,10 +112,7 @@ export function resolveAttackIntent(
     relics: writeRelics,
   }
   const actualHpDamage = res.hpDamage - (finalHp - res.hpAfter)
-  const willApplyRider =
-    intent.onHit != null && res.hpDamage > 0
-      ? intent.onHit.status
-      : undefined
+  const willApplyRider = intent.onHit != null && res.hpDamage > 0 ? intent.onHit.status : undefined
   events.push({
     kind: 'damage-taken',
     amount: actualHpDamage,
@@ -140,12 +129,7 @@ export function resolveAttackIntent(
       snapshotOf(nextPlayer, nextEnemies, targetEnemyId, 0),
     )
     events.push(...bbEvents)
-    const bbApplied = applyCombatEvents(
-      bbEvents,
-      nextPlayer,
-      nextEnemies,
-      targetEnemyId,
-    )
+    const bbApplied = applyCombatEvents(bbEvents, nextPlayer, nextEnemies, targetEnemyId)
     nextEnemies = bbApplied.enemies
     events.push(...bbApplied.derived)
   } else if (res.blockAbsorbed) {
@@ -162,16 +146,8 @@ export function resolveAttackIntent(
     snapshotOf(nextPlayer, nextEnemies, targetEnemyId, 0),
   )
   for (const ev of dtEvents) {
-    if (
-      ev.kind === 'damage-dealt' &&
-      ev.source === 'thornmail' &&
-      updatedEnemy.hp > 0
-    ) {
-      const reflectRes = applyDamage(
-        updatedEnemy.block,
-        updatedEnemy.hp,
-        ev.amount,
-      )
+    if (ev.kind === 'damage-dealt' && ev.source === 'thornmail' && updatedEnemy.hp > 0) {
+      const reflectRes = applyDamage(updatedEnemy.block, updatedEnemy.hp, ev.amount)
       updatedEnemy = {
         ...updatedEnemy,
         block: reflectRes.blockAfter,
@@ -248,12 +224,7 @@ export function resolveTileBurnIntent(
 ): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
   const def = getArchetype(source.archetype)
   const duration = def.tileBurnDuration ?? 2
-  const { cells, rng: pickRng } = pickClusterCellsWithoutFlag(
-    board,
-    'burning',
-    intent.count,
-    rng,
-  )
+  const { cells, rng: pickRng } = pickClusterCellsWithoutFlag(board, 'burning', intent.count, rng)
   if (cells.length === 0) return { board, rng: pickRng, events: [] }
   const nextBoard = applyFlagToCells(board, cells, 'burning', duration)
   return {
@@ -442,9 +413,7 @@ export function resolveHealAllyIntent(
   source: Enemy,
   nextEnemies: Enemy[],
 ): { enemies: Enemy[]; events: GameEvent[] } {
-  const target = nextEnemies.find(
-    (e) => e.id === intent.targetAllyId && e.hp > 0,
-  )
+  const target = nextEnemies.find((e) => e.id === intent.targetAllyId && e.hp > 0)
   if (!target) return { enemies: nextEnemies, events: [] }
   const healed = Math.min(intent.amount, target.maxHp - target.hp)
   if (healed <= 0) return { enemies: nextEnemies, events: [] }
@@ -467,9 +436,7 @@ export function resolveBuffAllyIntent(
   source: Enemy,
   nextEnemies: Enemy[],
 ): { enemies: Enemy[]; events: GameEvent[] } {
-  const target = nextEnemies.find(
-    (e) => e.id === intent.targetAllyId && e.hp > 0,
-  )
+  const target = nextEnemies.find((e) => e.id === intent.targetAllyId && e.hp > 0)
   if (!target) return { enemies: nextEnemies, events: [] }
   const newStatus = { kind: 'strength' as const, stacks: intent.stacks }
   const buffedTarget: Enemy = {
@@ -494,9 +461,7 @@ export function resolveShieldAllyIntent(
   source: Enemy,
   nextEnemies: Enemy[],
 ): { enemies: Enemy[]; events: GameEvent[] } {
-  const target = nextEnemies.find(
-    (e) => e.id === intent.targetAllyId && e.hp > 0,
-  )
+  const target = nextEnemies.find((e) => e.id === intent.targetAllyId && e.hp > 0)
   if (!target) return { enemies: nextEnemies, events: [] }
   const shieldedTarget: Enemy = {
     ...target,
@@ -528,9 +493,7 @@ export function resolveColorDrainIntent(
   const def = getArchetype(source.archetype)
   const duration = def.colorDrainDuration ?? 2
   const next: DrainedColor[] = drainedColors.slice()
-  const existing = next.findIndex(
-    (d) => d.color === intent.color && d.enemyId === source.id,
-  )
+  const existing = next.findIndex((d) => d.color === intent.color && d.enemyId === source.id)
   if (existing >= 0) {
     const cur = next[existing]!
     next[existing] = { ...cur, turnsLeft: Math.max(cur.turnsLeft, duration) }

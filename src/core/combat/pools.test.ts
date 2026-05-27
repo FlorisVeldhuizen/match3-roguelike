@@ -1,11 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import type { GameEvent } from '../../types'
-import {
-  computeMatchPayouts,
-  hasExtraTurnMatch,
-  withPoolGainedEvents,
-  ZERO_DELTAS,
-} from './pools'
+import { computeMatchPayouts, hasExtraTurnMatch, withPoolGainedEvents, ZERO_DELTAS } from './pools'
 import { setCascadeMultipliers } from './multipliers'
 
 beforeAll(() => {
@@ -19,10 +14,7 @@ const cascadeStart = (level: number): GameEvent => ({
   level,
 })
 
-const match = (
-  color: 'red' | 'blue' | 'green' | 'yellow' | 'purple',
-  size: number,
-): GameEvent => ({
+const match = (color: 'red' | 'blue' | 'green' | 'yellow' | 'purple', size: number): GameEvent => ({
   kind: 'match-found',
   cells: [],
   color,
@@ -115,11 +107,7 @@ describe('hasExtraTurnMatch', () => {
 
 describe('withPoolGainedEvents', () => {
   it('inserts pool-gained after each match-found', () => {
-    const input: GameEvent[] = [
-      cascadeStart(0),
-      match('red', 3),
-      match('blue', 4),
-    ]
+    const input: GameEvent[] = [cascadeStart(0), match('red', 3), match('blue', 4)]
     const out = withPoolGainedEvents(input)
     expect(out.map((e) => e.kind)).toEqual([
       'cascade-start',

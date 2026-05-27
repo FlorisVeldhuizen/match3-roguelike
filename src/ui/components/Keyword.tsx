@@ -1,16 +1,7 @@
 import { getKeyword, type KeywordId } from '../../content/keywords'
-import {
-  HoverTooltip,
-  KEYWORD_SUBTOOLTIP_DELAY_MS,
-} from './HoverTooltip'
+import { HoverTooltip, KEYWORD_SUBTOOLTIP_DELAY_MS } from './HoverTooltip'
 
-export function Keyword({
-  id,
-  children,
-}: {
-  id: KeywordId
-  children?: React.ReactNode
-}) {
+export function Keyword({ id, children }: { id: KeywordId; children?: React.ReactNode }) {
   const def = getKeyword(id)
   return (
     <HoverTooltip

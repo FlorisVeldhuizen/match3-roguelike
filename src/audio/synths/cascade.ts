@@ -53,11 +53,11 @@ function synthCascadeCelebration(levels: number): void {
 
   const ARPEGGIO_RATIOS = [
     1.0,
-    Math.pow(2, 7 / 12),  // perfect fifth
-    2.0,                   // octave
+    Math.pow(2, 7 / 12), // perfect fifth
+    2.0, // octave
     Math.pow(2, 17 / 12), // octave + perfect fourth
     Math.pow(2, 19 / 12), // octave + fifth
-    4.0,                   // two octaves
+    4.0, // two octaves
   ]
   const noteCount = Math.min(ARPEGGIO_RATIOS.length, Math.max(3, levels))
 
@@ -85,10 +85,7 @@ function synthCascadeCelebration(levels: number): void {
       const decayS = (decay / 1000) * jitter(0.2)
       const g = c.createGain()
       g.gain.setValueAtTime(0.0001, startT)
-      g.gain.exponentialRampToValueAtTime(
-        peakJ * depthScale,
-        startT + attackTime,
-      )
+      g.gain.exponentialRampToValueAtTime(peakJ * depthScale, startT + attackTime)
       g.gain.exponentialRampToValueAtTime(0.0001, startT + decayS)
       osc.connect(g).connect(out(c))
       osc.start(startT)

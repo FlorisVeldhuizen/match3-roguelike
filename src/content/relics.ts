@@ -75,8 +75,7 @@ const cascadeCrystal: RelicDef = {
   name: 'Cascade Crystal',
   rarity: 'uncommon',
   icon: '💎',
-  description:
-    'Cascade chains amplify pools by ×1.5 (applied after additive bonuses).',
+  description: 'Cascade chains amplify pools by ×1.5 (applied after additive bonuses).',
   orderHint: 'multipliers apply after +N relics in acquisition order',
   hooks: {
     onMatch: (payload) => {
@@ -124,13 +123,10 @@ const harvester: RelicDef = {
   icon: '🪓',
   description: 'When an enemy dies, deal 2 damage to a random other living enemy.',
   upgradable: true,
-  upgradedDescription:
-    'When an enemy dies, deal 3 damage to a random other living enemy.',
+  upgradedDescription: 'When an enemy dies, deal 3 damage to a random other living enemy.',
   hooks: {
     onEnemyKilled: (event, ctx) => {
-      const others = ctx.state.enemies.filter(
-        (e) => e.hp > 0 && e.id !== event.enemyId,
-      )
+      const others = ctx.state.enemies.filter((e) => e.hp > 0 && e.id !== event.enemyId)
       if (others.length === 0) return
       const target = others[Math.floor(Math.random() * others.length)]
       if (!target) return
@@ -179,11 +175,9 @@ const afterburner: RelicDef = {
   name: 'Afterburner',
   rarity: 'uncommon',
   icon: '🔥',
-  description:
-    'At player phase end, deal damage equal to half your unspent red pool.',
+  description: 'At player phase end, deal damage equal to half your unspent red pool.',
   upgradable: true,
-  upgradedDescription:
-    'At player phase end, deal damage equal to your full unspent red pool.',
+  upgradedDescription: 'At player phase end, deal damage equal to your full unspent red pool.',
   hooks: {
     onPhaseEnd: (event, ctx) => {
       if (event.phaseKind !== 'player') return
@@ -191,9 +185,7 @@ const afterburner: RelicDef = {
       if (red <= 0) return
       const dmg = ctx.upgraded ? red : Math.floor(red / 2)
       if (dmg <= 0) return
-      const targetId =
-        ctx.state.targetEnemyId ??
-        ctx.state.enemies.find((e) => e.hp > 0)?.id
+      const targetId = ctx.state.targetEnemyId ?? ctx.state.enemies.find((e) => e.hp > 0)?.id
       if (targetId == null) return
       ctx.emit({
         kind: 'relic-triggered',
@@ -250,8 +242,7 @@ const fortified: RelicDef = {
   icon: '🧱',
   description: 'When you gain block, gain 1 additional block (once per phase).',
   upgradable: true,
-  upgradedDescription:
-    'When you gain block, gain 2 additional block (once per phase).',
+  upgradedDescription: 'When you gain block, gain 2 additional block (once per phase).',
   hooks: {
     onBlockGained: (event, ctx) => {
       if (event.target !== 'player') return
@@ -273,11 +264,9 @@ const spite: RelicDef = {
   name: 'Spite',
   rarity: 'uncommon',
   icon: '😈',
-  description:
-    'When your block is broken, apply 2 Vulnerable to the targeted enemy.',
+  description: 'When your block is broken, apply 2 Vulnerable to the targeted enemy.',
   upgradable: true,
-  upgradedDescription:
-    'When your block is broken, apply 3 Vulnerable to the targeted enemy.',
+  upgradedDescription: 'When your block is broken, apply 3 Vulnerable to the targeted enemy.',
   hooks: {
     onBlockBroken: (event, ctx) => {
       if (event.target !== 'player') return
@@ -306,8 +295,7 @@ const overcharge: RelicDef = {
   icon: '⚡',
   description: 'When you use your ultimate, apply 2 Burn to all enemies.',
   upgradable: true,
-  upgradedDescription:
-    'When you use your ultimate, apply 3 Burn to all enemies.',
+  upgradedDescription: 'When you use your ultimate, apply 3 Burn to all enemies.',
   hooks: {
     onUltimateUsed: (_event, ctx) => {
       const stacks = ctx.upgraded ? 3 : 2
@@ -384,8 +372,7 @@ const battleCry: RelicDef = {
   icon: '📯',
   description: 'When you cast a spell, deal 1 damage to the targeted enemy.',
   upgradable: true,
-  upgradedDescription:
-    'When you cast a spell, deal 2 damage to the targeted enemy.',
+  upgradedDescription: 'When you cast a spell, deal 2 damage to the targeted enemy.',
   hooks: {
     onSpellCast: (_event, ctx) => {
       const targetId = ctx.state.targetEnemyId

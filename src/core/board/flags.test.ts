@@ -45,7 +45,15 @@ describe('setFlag / clearFlag / hasFlag / getFlag', () => {
 describe('tickFlagDuration', () => {
   it('decrements remaining duration by 1 across the board', () => {
     let board = mkBoard()
-    board = applyFlagToCells(board, [{ x: 0, y: 0 }, { x: 1, y: 1 }], 'burning', 2)
+    board = applyFlagToCells(
+      board,
+      [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      'burning',
+      2,
+    )
     const { board: ticked, events } = tickFlagDuration(board, 'burning')
     expect(getFlag(ticked[0]?.[0], 'burning')).toBe(1)
     expect(getFlag(ticked[1]?.[1], 'burning')).toBe(1)
@@ -97,7 +105,15 @@ describe('tickFlagDuration', () => {
 describe('pickRandomCellsWithoutFlag', () => {
   it('skips cells that already carry the flag', () => {
     let board = mkBoard()
-    board = applyFlagToCells(board, [{ x: 0, y: 0 }, { x: 1, y: 1 }], 'burning', 2)
+    board = applyFlagToCells(
+      board,
+      [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      'burning',
+      2,
+    )
     const { cells } = pickRandomCellsWithoutFlag(board, 'burning', 2, { seed: 1 })
     expect(cells).toHaveLength(2)
     for (const p of cells) {
@@ -110,7 +126,12 @@ describe('pickRandomCellsWithoutFlag', () => {
     // Flag everything; nothing left to pick.
     board = applyFlagToCells(
       board,
-      [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+      [
+        { x: 0, y: 0 },
+        { x: 0, y: 1 },
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+      ],
       'burning',
       2,
     )
@@ -130,7 +151,15 @@ describe('pickRandomCellsWithoutFlag', () => {
 describe('findFlaggedCells', () => {
   it('returns positions of flagged cells in row-major order', () => {
     let board = mkBoard()
-    board = applyFlagToCells(board, [{ x: 1, y: 0 }, { x: 0, y: 1 }], 'burning', 2)
+    board = applyFlagToCells(
+      board,
+      [
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+      ],
+      'burning',
+      2,
+    )
     expect(findFlaggedCells(board, 'burning')).toEqual([
       { x: 1, y: 0 },
       { x: 0, y: 1 },

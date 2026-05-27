@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../../core/state/store'
 import { subscribeGameEvents } from '../../../core/events/emitter'
-import {
-  applyStatusToList,
-  statusKindFromDamageSource,
-} from '../../../core/combat/statuses'
-import {
-  SPEND_TRAIL_ARRIVAL_MS,
-  TRAIL_ARRIVAL_MS,
-  scheduleAfterMs,
-} from '../../../timing'
+import { applyStatusToList, statusKindFromDamageSource } from '../../../core/combat/statuses'
+import { SPEND_TRAIL_ARRIVAL_MS, TRAIL_ARRIVAL_MS, scheduleAfterMs } from '../../../timing'
 import { readSpellVisualBeat } from '../../../core/combat/spellVisual'
 import { subscribeTrailScheduled } from '../../../trails/sync'
 import { eventHudDelayMs } from '../../eventTiming'
@@ -21,11 +14,7 @@ import {
   type StatusKind,
 } from '../../../types'
 import { consumeSpellCost } from '../../../core/combat/mana'
-import {
-  getSpell,
-  getUltimate,
-  isUltimateId,
-} from '../../../core/combat/spellRegistry'
+import { getSpell, getUltimate, isUltimateId } from '../../../core/combat/spellRegistry'
 
 const PULSE_MS = 380
 const SPEND_PULSE_MS = 480
@@ -63,15 +52,9 @@ export function useHudEventChannel(): HudEventChannel {
   const [displayedStatuses, setDisplayedStatuses] = useState<StatusInstance[]>(
     () => useGameStore.getState().fight.player.statuses,
   )
-  const [statusTickMarks, setStatusTickMarks] = useState<
-    Partial<Record<StatusKind, number>>
-  >({})
-  const [statusCueMarks, setStatusCueMarks] = useState<
-    Partial<Record<StatusKind, number>>
-  >({})
-  const [expiringStatusKinds, setExpiringStatusKinds] = useState<
-    Set<StatusKind>
-  >(() => new Set())
+  const [statusTickMarks, setStatusTickMarks] = useState<Partial<Record<StatusKind, number>>>({})
+  const [statusCueMarks, setStatusCueMarks] = useState<Partial<Record<StatusKind, number>>>({})
+  const [expiringStatusKinds, setExpiringStatusKinds] = useState<Set<StatusKind>>(() => new Set())
   const [pulse, setPulse] = useState<Record<GemColor, number>>({
     red: 0,
     blue: 0,
@@ -164,12 +147,7 @@ export function useHudEventChannel(): HudEventChannel {
           }
           if (dest === 'mana') {
             bumpPulse()
-            if (
-              color === 'red' ||
-              color === 'blue' ||
-              color === 'green' ||
-              color === 'yellow'
-            ) {
+            if (color === 'red' || color === 'blue' || color === 'green' || color === 'yellow') {
               setDisplayedMana((m) => ({
                 ...m,
                 [color]: Math.min(MANA_CAPS[color], m[color] + amount),
@@ -205,10 +183,7 @@ export function useHudEventChannel(): HudEventChannel {
                 setHpBurnHit(true)
                 window.setTimeout(() => setHpBurnHit(false), 520)
                 document.body.classList.add('vignette-burn')
-                window.setTimeout(
-                  () => document.body.classList.remove('vignette-burn'),
-                  520,
-                )
+                window.setTimeout(() => document.body.classList.remove('vignette-burn'), 520)
               } else {
                 setHpHit(true)
                 window.setTimeout(() => setHpHit(false), 420)
@@ -220,11 +195,7 @@ export function useHudEventChannel(): HudEventChannel {
           if (tick) {
             pendingPlayerTickRef.current = null
             setDisplayedStatuses((prev) =>
-              prev.map((s) =>
-                s.kind === tick.statusKind
-                  ? { ...s, stacks: tick.remaining }
-                  : s,
-              ),
+              prev.map((s) => (s.kind === tick.statusKind ? { ...s, stacks: tick.remaining } : s)),
             )
             setStatusTickMarks((prev) => ({
               ...prev,
@@ -249,9 +220,7 @@ export function useHudEventChannel(): HudEventChannel {
           const pending = pendingStatusApplyRef.current
           pendingStatusApplyRef.current = null
           if (!pending) return
-          setDisplayedStatuses((prev) =>
-            applyStatusToList(prev, pending.status),
-          )
+          setDisplayedStatuses((prev) => applyStatusToList(prev, pending.status))
           if (pending.vignette) {
             document.body.style.setProperty(
               '--vignette-rgb',
@@ -271,10 +240,7 @@ export function useHudEventChannel(): HudEventChannel {
             if (amount != null) {
               pendingHealRef.current = null
               setDisplayedHp((h) =>
-                Math.min(
-                  useGameStore.getState().fight.player.maxHp,
-                  h + amount,
-                ),
+                Math.min(useGameStore.getState().fight.player.maxHp, h + amount),
               )
               setHpGlow(true)
               window.setTimeout(() => setHpGlow(false), 500)
@@ -292,9 +258,7 @@ export function useHudEventChannel(): HudEventChannel {
             const pending = pendingStatusApplyRef.current
             pendingStatusApplyRef.current = null
             if (!pending) return
-            setDisplayedStatuses((prev) =>
-              applyStatusToList(prev, pending.status),
-            )
+            setDisplayedStatuses((prev) => applyStatusToList(prev, pending.status))
             if (pending.vignette) {
               document.body.style.setProperty(
                 '--vignette-rgb',
@@ -331,12 +295,7 @@ export function useHudEventChannel(): HudEventChannel {
           pendingHealRef.current = amount
         } else {
           window.setTimeout(() => {
-            setDisplayedHp((h) =>
-              Math.min(
-                useGameStore.getState().fight.player.maxHp,
-                h + amount,
-              ),
-            )
+            setDisplayedHp((h) => Math.min(useGameStore.getState().fight.player.maxHp, h + amount))
           }, TRAIL_ARRIVAL_MS)
         }
       } else if (event.kind === 'damage-taken') {
@@ -366,10 +325,7 @@ export function useHudEventChannel(): HudEventChannel {
             triggerShake(amount >= 5 ? 1.3 : 1.0, amount >= 5 ? 420 : 280)
             if (event.onHitRider == null) {
               document.body.classList.add('vignette-damage')
-              window.setTimeout(
-                () => document.body.classList.remove('vignette-damage'),
-                500,
-              )
+              window.setTimeout(() => document.body.classList.remove('vignette-damage'), 500)
             }
           }
         }
@@ -390,10 +346,7 @@ export function useHudEventChannel(): HudEventChannel {
           setStagedBlue(0)
           setBlockCommitted(false)
         }
-      } else if (
-        event.kind === 'damage-dealt' &&
-        event.amount + event.blocked >= 5
-      ) {
+      } else if (event.kind === 'damage-dealt' && event.amount + event.blocked >= 5) {
         triggerShake(1.0, 320)
       } else if (event.kind === 'screen-shake') {
         const dur = 280 + Math.round(Math.min(event.magnitude, 2) * 140)
@@ -404,10 +357,7 @@ export function useHudEventChannel(): HudEventChannel {
           setHpGlow(true)
           window.setTimeout(() => setHpGlow(false), 500)
         }, TRAIL_ARRIVAL_MS)
-      } else if (
-        event.kind === 'block-gained' &&
-        !readSpellVisualBeat(event)
-      ) {
+      } else if (event.kind === 'block-gained' && !readSpellVisualBeat(event)) {
         const pulseDelay = eventHudDelayMs(event, 0)
         window.setTimeout(() => {
           setBlockPulse(true)
@@ -421,9 +371,7 @@ export function useHudEventChannel(): HudEventChannel {
             vignette: applySource != null && applySource.kind !== 'player',
           }
         } else if (applySource?.kind === 'enemy') {
-          setDisplayedStatuses((prev) =>
-            applyStatusToList(prev, event.status),
-          )
+          setDisplayedStatuses((prev) => applyStatusToList(prev, event.status))
         } else {
           pendingStatusApplyRef.current = {
             status: event.status,
@@ -439,9 +387,7 @@ export function useHudEventChannel(): HudEventChannel {
         } else {
           const { statusKind, remaining } = event
           setDisplayedStatuses((prev) =>
-            prev.map((s) =>
-              s.kind === statusKind ? { ...s, stacks: remaining } : s,
-            ),
+            prev.map((s) => (s.kind === statusKind ? { ...s, stacks: remaining } : s)),
           )
           setStatusTickMarks((prev) => ({
             ...prev,
@@ -461,9 +407,7 @@ export function useHudEventChannel(): HudEventChannel {
           })
         }, baseDelay)
         window.setTimeout(() => {
-          setDisplayedStatuses((prev) =>
-            prev.filter((s) => s.kind !== statusKind),
-          )
+          setDisplayedStatuses((prev) => prev.filter((s) => s.kind !== statusKind))
           setExpiringStatusKinds((prev) => {
             if (!prev.has(statusKind)) return prev
             const next = new Set(prev)

@@ -10,17 +10,12 @@ describe('spellManaTheme', () => {
   })
 
   it('lists pools touched when paying (including wild shortfall)', () => {
-    expect(
-      manaColorsSpentOnCast(
-        { red: 0, blue: 0, green: 0, yellow: 3 },
-        { red: 3 },
-      ),
-    ).toEqual(['red', 'yellow'])
-    expect(
-      manaColorsSpentOnCast(
-        { red: 4, blue: 0, green: 0, yellow: 0 },
-        { red: 3 },
-      ),
-    ).toEqual(['red'])
+    expect(manaColorsSpentOnCast({ red: 0, blue: 0, green: 0, yellow: 3 }, { red: 3 })).toEqual([
+      'red',
+      'yellow',
+    ])
+    expect(manaColorsSpentOnCast({ red: 4, blue: 0, green: 0, yellow: 0 }, { red: 3 })).toEqual([
+      'red',
+    ])
   })
 })

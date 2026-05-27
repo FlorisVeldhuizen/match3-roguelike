@@ -26,36 +26,31 @@ const defs: Record<StatusKind, StatusDef> = {
     id: 'burn',
     name: 'Burn',
     icon: '🔥',
-    tooltip:
-      'Takes {stacks} damage at the start of each turn, then weakens by 1.',
+    tooltip: 'Takes {stacks} damage at the start of each turn, then weakens by 1.',
   },
   vulnerable: {
     id: 'vulnerable',
     name: 'Vulnerable',
     icon: '💢',
-    tooltip:
-      'Takes 50% extra damage from attacks. {stacks} turns left.',
+    tooltip: 'Takes 50% extra damage from attacks. {stacks} turns left.',
   },
   weak: {
     id: 'weak',
     name: 'Weak',
     icon: '🪶',
-    tooltip:
-      'Attacks deal 50% less damage. {stacks} turns left.',
+    tooltip: 'Attacks deal 50% less damage. {stacks} turns left.',
   },
   regen: {
     id: 'regen',
     name: 'Regenerate',
     icon: '🌿',
-    tooltip:
-      'Heals {stacks} HP at the start of your turn, then weakens by 1.',
+    tooltip: 'Heals {stacks} HP at the start of your turn, then weakens by 1.',
   },
   strength: {
     id: 'strength',
     name: 'Strength',
     icon: '🔱',
-    tooltip:
-      'Attacks deal {stacks} extra damage. Does not decay — sticks until removed.',
+    tooltip: 'Attacks deal {stacks} extra damage. Does not decay — sticks until removed.',
   },
 }
 

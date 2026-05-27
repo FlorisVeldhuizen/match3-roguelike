@@ -13,17 +13,9 @@ export { installSfxBindings } from './bindings'
 export { playDropSfx } from './synths/drop'
 export { playClackSfx, playCoinPingSfx } from './synths/match'
 export { playHealSfx } from './synths/heal'
-export {
-  playTurnStartSfx,
-  playEnemyTurnSfx,
-  playExtraTurnSfx,
-} from './synths/turn'
+export { playTurnStartSfx, playEnemyTurnSfx, playExtraTurnSfx } from './synths/turn'
 export { playCascadeChimeSfx, playCascadeCelebrationSfx } from './synths/cascade'
-export {
-  playShieldThumpSfx,
-  playShieldCrackSfx,
-  playShieldParticleTickSfx,
-} from './synths/shield'
+export { playShieldThumpSfx, playShieldCrackSfx, playShieldParticleTickSfx } from './synths/shield'
 export {
   playBurnIgniteSfx,
   playBurnBurstSfx,

@@ -25,7 +25,9 @@ export function GoldChip({
       >
         <span className="mana-dot" data-color="gold" aria-hidden />
         <span className="mana-value">
-          <span key={pop.key} className={popClass(pop)}>{value}</span>
+          <span key={pop.key} className={popClass(pop)}>
+            {value}
+          </span>
         </span>
       </span>
     </HoverTooltip>

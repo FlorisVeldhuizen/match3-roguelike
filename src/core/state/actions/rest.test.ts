@@ -51,9 +51,7 @@ describe('rest actions', () => {
     })
     const result = useGameStore.getState().restUpgrade('iron-buckler')
     expect(result.ok).toBe(true)
-    const inst = useGameStore
-      .getState()
-      .fight.player.relics.find((r) => r.id === 'iron-buckler')
+    const inst = useGameStore.getState().fight.player.relics.find((r) => r.id === 'iron-buckler')
     expect(inst?.upgraded).toBe(true)
     expect(useGameStore.getState().runPhase).toBe('map')
   })
@@ -69,9 +67,7 @@ describe('rest actions', () => {
     })
     const result = useGameStore.getState().restUpgrade('stoneheart')
     expect(result.ok).toBe(false)
-    const inst = useGameStore
-      .getState()
-      .fight.player.relics.find((r) => r.id === 'stoneheart')
+    const inst = useGameStore.getState().fight.player.relics.find((r) => r.id === 'stoneheart')
     expect(inst?.upgraded).toBeUndefined()
     // Stays on rest screen since pick failed.
     expect(useGameStore.getState().runPhase).toBe('rest')

@@ -27,7 +27,7 @@ function randomSparks(): SparkConfig[] {
     const p = randomSparkPos()
     out.push({
       ...p,
-        delay: -Math.random() * 2.6,
+      delay: -Math.random() * 2.6,
       duration: 2.0 + Math.random() * 0.9,
     })
   }
@@ -134,13 +134,7 @@ export function BlessedOverlay() {
         const cellSparks = sparks.get(id)
         if (!cellSparks) return null
         return (
-          <CellAnchor
-            key={id}
-            x={p.x}
-            y={p.y}
-            transition={p.transition}
-            className="blessed-cell"
-          >
+          <CellAnchor key={id} x={p.x} y={p.y} transition={p.transition} className="blessed-cell">
             {cellSparks.map((s, i) => (
               <BlessedSpark key={i} initial={s} />
             ))}

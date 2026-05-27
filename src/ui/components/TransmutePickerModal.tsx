@@ -51,15 +51,14 @@ export function TransmutePickerModal({ onClose }: { onClose: () => void }) {
         <h2 className="spell-picker-title">Transmute</h2>
         <p className="spell-picker-sub">
           {from
-            ? `Change all ${COLOUR_LABELS[from as typeof COLOURS[number]]} gems into…`
+            ? `Change all ${COLOUR_LABELS[from as (typeof COLOURS)[number]]} gems into…`
             : 'Pick the color to change on the board.'}
         </p>
         <div className="spell-picker-focus-grid">
           {COLOURS.map((c) => {
             const isSource = from === c
             const phase: 'from' | 'to' = from == null ? 'from' : 'to'
-            const enabled =
-              phase === 'from' ? colorOnBoard(c) : !isSource
+            const enabled = phase === 'from' ? colorOnBoard(c) : !isSource
             return (
               <button
                 key={c}
@@ -80,19 +79,11 @@ export function TransmutePickerModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="spell-picker-actions">
           {from != null && (
-            <button
-              type="button"
-              className="spell-picker-back"
-              onClick={() => setFrom(null)}
-            >
+            <button type="button" className="spell-picker-back" onClick={() => setFrom(null)}>
               Back
             </button>
           )}
-          <button
-            type="button"
-            className="spell-picker-cancel"
-            onClick={onClose}
-          >
+          <button type="button" className="spell-picker-cancel" onClick={onClose}>
             Cancel
           </button>
         </div>

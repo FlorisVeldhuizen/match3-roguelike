@@ -7,12 +7,7 @@ export type Rect = {
   height: number
 }
 
-export function rectFromBox(
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-): Rect {
+export function rectFromBox(left: number, top: number, width: number, height: number): Rect {
   return { left, top, width, height, right: left + width, bottom: top + height }
 }
 
@@ -64,10 +59,8 @@ export function placeNestedTooltip(
 ): { left: number; top: number } {
   const vw = viewport?.width ?? window.innerWidth
   const vh = viewport?.height ?? window.innerHeight
-  const clampX = (x: number) =>
-    Math.max(margin, Math.min(vw - tip.width - margin, x))
-  const clampY = (y: number) =>
-    Math.max(margin, Math.min(vh - tip.height - margin, y))
+  const clampX = (x: number) => Math.max(margin, Math.min(vw - tip.width - margin, x))
+  const clampY = (y: number) => Math.max(margin, Math.min(vh - tip.height - margin, y))
   const stackedLeft = clampX(parent.left + parent.width / 2 - tip.width / 2)
   const stackedAbove = {
     left: stackedLeft,

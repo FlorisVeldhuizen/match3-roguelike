@@ -12,9 +12,7 @@ describe('spellVisual', () => {
   it('immediate beat starts after mana spend lands on spell', () => {
     const beat = immediateSpellBeat('ignite')
     expect(beat.trailStartMs).toBe(SPEND_TRAIL_ARRIVAL_MS)
-    expect(beat.arriveMs).toBe(
-      SPEND_TRAIL_ARRIVAL_MS + SPELL_EFFECT_TRAIL_ARRIVAL_MS,
-    )
+    expect(beat.arriveMs).toBe(SPEND_TRAIL_ARRIVAL_MS + SPELL_EFFECT_TRAIL_ARRIVAL_MS)
   })
 
   it('pending beat resolves on effect moment', () => {
@@ -39,9 +37,7 @@ describe('spellVisual', () => {
     ])
     expect(out[0]?.kind).toBe('spell-effect-trail')
     const status = out.find((e) => e.kind === 'status-applied')
-    expect(status && 'spellVisual' in status && status.spellVisual?.spellId).toBe(
-      'ignite',
-    )
+    expect(status && 'spellVisual' in status && status.spellVisual?.spellId).toBe('ignite')
   })
 
   it('tags volley damage for pending resolve', () => {

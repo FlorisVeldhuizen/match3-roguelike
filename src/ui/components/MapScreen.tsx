@@ -52,21 +52,7 @@ function positionFor(
   return { x, y }
 }
 
-const ROMAN = [
-  '',
-  'I',
-  'II',
-  'III',
-  'IV',
-  'V',
-  'VI',
-  'VII',
-  'VIII',
-  'IX',
-  'X',
-  'XI',
-  'XII',
-]
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
 function floorLabel(column: number, lastColumn: number): string {
   if (column === lastColumn) return 'Apex'
   return ROMAN[column + 1] ?? String(column + 1)
@@ -81,18 +67,13 @@ export function MapScreen() {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   const reachable = useMemo(() => getReachableFrom(map), [map])
-  const completedSet = useMemo(
-    () => new Set(map.completedNodeIds),
-    [map.completedNodeIds],
-  )
+  const completedSet = useMemo(() => new Set(map.completedNodeIds), [map.completedNodeIds])
 
   useEffect(() => {
     if (runPhase !== 'map') return
     const el = scrollerRef.current
     if (!el) return
-    const current = el.querySelector(
-      '.map-node-current',
-    ) as SVGGraphicsElement | null
+    const current = el.querySelector('.map-node-current') as SVGGraphicsElement | null
     if (current?.scrollIntoView) {
       current.scrollIntoView({ block: 'center', behavior: 'auto' })
     } else {
@@ -159,18 +140,17 @@ export function MapScreen() {
   }
 
   return (
-    <div
-      className="map-screen"
-      role="region"
-      aria-label="Run map"
-      ref={scrollerRef}
-    >
+    <div className="map-screen" role="region" aria-label="Run map" ref={scrollerRef}>
       <div className="map-screen-inner">
         <div className="map-brand">
           <span className="map-brand-rule" aria-hidden />
-          <span className="map-brand-glyph" aria-hidden>☘</span>
+          <span className="map-brand-glyph" aria-hidden>
+            ☘
+          </span>
           <h1 className="map-wordmark">Renzadora</h1>
-          <span className="map-brand-glyph" aria-hidden>☘</span>
+          <span className="map-brand-glyph" aria-hidden>
+            ☘
+          </span>
           <span className="map-brand-rule" aria-hidden />
         </div>
         <p className="map-sub">
@@ -180,7 +160,9 @@ export function MapScreen() {
         </p>
         <div className="map-run-sigil" aria-label="Run status">
           <div className="map-run-hp" title={`HP ${player.hp} / ${player.maxHp}`}>
-            <span className="map-run-hp-icon" aria-hidden>♥</span>
+            <span className="map-run-hp-icon" aria-hidden>
+              ♥
+            </span>
             <span className="map-run-hp-text">
               <span className="map-run-hp-cur">{player.hp}</span>
               <span className="map-run-hp-sep">/</span>
@@ -208,144 +190,129 @@ export function MapScreen() {
           )}
         </div>
         <div className="map-canvas-wrap">
-            <svg
-              className="map-canvas"
-              viewBox={`0 0 ${width} ${height}`}
-              width={width}
-              height={height}
-              role="img"
-              aria-label="Branching encounter map"
-            >
-              {floorMarkers.map((m, i) => (
-                <text
-                  key={`floor-${i}`}
+          <svg
+            className="map-canvas"
+            viewBox={`0 0 ${width} ${height}`}
+            width={width}
+            height={height}
+            role="img"
+            aria-label="Branching encounter map"
+          >
+            {floorMarkers.map((m, i) => (
+              <text
+                key={`floor-${i}`}
+                className={'map-floor-numeral' + (m.label === 'Apex' ? ' map-floor-apex' : '')}
+                x={FLOOR_RAIL_X}
+                y={m.y}
+                textAnchor="middle"
+                dy="0.35em"
+              >
+                {m.label}
+              </text>
+            ))}
+            {anchorVisible
+              ? entryNodes.map((n) => {
+                  const pos = nodePositions.get(n.id)
+                  if (!pos) return null
+                  return (
+                    <line
+                      key={`anchor-${n.id}`}
+                      className="map-edge map-edge-anchor"
+                      x1={anchorX}
+                      y1={anchorY - 18}
+                      x2={pos.x}
+                      y2={pos.y}
+                    />
+                  )
+                })
+              : null}
+            {map.edges.map((edge) => {
+              const from = nodePositions.get(edge.from)
+              const to = nodePositions.get(edge.to)
+              if (!from || !to) return null
+              const isTraversed = completedSet.has(edge.from) && edge.to === map.currentNodeId
+              const isOnPath = completedSet.has(edge.from) || edge.from === map.currentNodeId
+              return (
+                <line
+                  key={`${edge.from}-${edge.to}`}
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
                   className={
-                    'map-floor-numeral' +
-                    (m.label === 'Apex' ? ' map-floor-apex' : '')
+                    'map-edge' +
+                    (isTraversed ? ' map-edge-traversed' : '') +
+                    (isOnPath && !isTraversed ? ' map-edge-active' : '')
                   }
-                  x={FLOOR_RAIL_X}
-                  y={m.y}
-                  textAnchor="middle"
-                  dy="0.35em"
-                >
-                  {m.label}
-                </text>
-              ))}
-              {anchorVisible
-                ? entryNodes.map((n) => {
-                    const pos = nodePositions.get(n.id)
-                    if (!pos) return null
-                    return (
-                      <line
-                        key={`anchor-${n.id}`}
-                        className="map-edge map-edge-anchor"
-                        x1={anchorX}
-                        y1={anchorY - 18}
-                        x2={pos.x}
-                        y2={pos.y}
-                      />
-                    )
-                  })
-                : null}
-              {map.edges.map((edge) => {
-                const from = nodePositions.get(edge.from)
-                const to = nodePositions.get(edge.to)
-                if (!from || !to) return null
-                const isTraversed =
-                  completedSet.has(edge.from) && edge.to === map.currentNodeId
-                const isOnPath =
-                  completedSet.has(edge.from) || edge.from === map.currentNodeId
-                return (
-                  <line
-                    key={`${edge.from}-${edge.to}`}
-                    x1={from.x}
-                    y1={from.y}
-                    x2={to.x}
-                    y2={to.y}
-                    className={
-                      'map-edge' +
-                      (isTraversed ? ' map-edge-traversed' : '') +
-                      (isOnPath && !isTraversed ? ' map-edge-active' : '')
-                    }
-                  />
-                )
-              })}
-              {map.nodes.map((node) => {
-                const pos = nodePositions.get(node.id)
-                if (!pos) return null
-                const isCurrent = node.id === map.currentNodeId
-                const isCompleted = completedSet.has(node.id) && !isCurrent
-                const isReachable = reachable.has(node.id)
-                const classes = [
-                  'map-node',
-                  `map-node-${node.kind}`,
-                  isCurrent ? 'map-node-current' : '',
-                  isCompleted ? 'map-node-completed' : '',
-                  isReachable ? 'map-node-reachable' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-                return (
-                  <g
-                    key={node.id}
-                    className={classes}
-                    transform={`translate(${pos.x}, ${pos.y})`}
-                    onClick={() => {
-                      if (isReachable) enterNode(node.id)
-                    }}
-                    onMouseEnter={() => setHovered(node.id)}
-                    onMouseLeave={() =>
-                      setHovered((h) => (h === node.id ? null : h))
-                    }
-                    onTouchStart={(e) => {
-                      e.stopPropagation()
-                      setHovered(node.id)
-                    }}
-                    role={isReachable ? 'button' : undefined}
-                    aria-label={`${NODE_LABELS[node.kind]}${
-                      isCurrent
-                        ? ' — current'
-                        : isCompleted
-                          ? ' — visited'
-                          : isReachable
-                            ? ' — reachable'
-                            : ''
-                    }`}
-                    style={{ cursor: isReachable ? 'pointer' : 'default' }}
-                  >
-                    <circle r={NODE_RADIUS} className="map-node-circle" />
-                    <text
-                      className="map-node-icon"
-                      textAnchor="middle"
-                      dy="0.35em"
-                    >
-                      {NODE_ICONS[node.kind]}
-                    </text>
-                  </g>
-                )
-              })}
-              {anchorVisible ? (
+                />
+              )
+            })}
+            {map.nodes.map((node) => {
+              const pos = nodePositions.get(node.id)
+              if (!pos) return null
+              const isCurrent = node.id === map.currentNodeId
+              const isCompleted = completedSet.has(node.id) && !isCurrent
+              const isReachable = reachable.has(node.id)
+              const classes = [
+                'map-node',
+                `map-node-${node.kind}`,
+                isCurrent ? 'map-node-current' : '',
+                isCompleted ? 'map-node-completed' : '',
+                isReachable ? 'map-node-reachable' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
                 <g
-                  className="map-anchor"
-                  transform={`translate(${anchorX}, ${anchorY})`}
-                  aria-label="You are here"
+                  key={node.id}
+                  className={classes}
+                  transform={`translate(${pos.x}, ${pos.y})`}
+                  onClick={() => {
+                    if (isReachable) enterNode(node.id)
+                  }}
+                  onMouseEnter={() => setHovered(node.id)}
+                  onMouseLeave={() => setHovered((h) => (h === node.id ? null : h))}
+                  onTouchStart={(e) => {
+                    e.stopPropagation()
+                    setHovered(node.id)
+                  }}
+                  role={isReachable ? 'button' : undefined}
+                  aria-label={`${NODE_LABELS[node.kind]}${
+                    isCurrent
+                      ? ' — current'
+                      : isCompleted
+                        ? ' — visited'
+                        : isReachable
+                          ? ' — reachable'
+                          : ''
+                  }`}
+                  style={{ cursor: isReachable ? 'pointer' : 'default' }}
                 >
-                  <circle r={20} className="map-anchor-ring-outer" />
-                  <circle r={13} className="map-anchor-ring-inner" />
-                  <path
-                    className="map-anchor-star"
-                    d="M0,-9 L2.4,-2.4 L9,0 L2.4,2.4 L0,9 L-2.4,2.4 L-9,0 L-2.4,-2.4 Z"
-                  />
-                  <text
-                    className="map-anchor-label"
-                    y={36}
-                    textAnchor="middle"
-                  >
-                    YOU
+                  <circle r={NODE_RADIUS} className="map-node-circle" />
+                  <text className="map-node-icon" textAnchor="middle" dy="0.35em">
+                    {NODE_ICONS[node.kind]}
                   </text>
                 </g>
-              ) : null}
-            </svg>
+              )
+            })}
+            {anchorVisible ? (
+              <g
+                className="map-anchor"
+                transform={`translate(${anchorX}, ${anchorY})`}
+                aria-label="You are here"
+              >
+                <circle r={20} className="map-anchor-ring-outer" />
+                <circle r={13} className="map-anchor-ring-inner" />
+                <path
+                  className="map-anchor-star"
+                  d="M0,-9 L2.4,-2.4 L9,0 L2.4,2.4 L0,9 L-2.4,2.4 L-9,0 L-2.4,-2.4 Z"
+                />
+                <text className="map-anchor-label" y={36} textAnchor="middle">
+                  YOU
+                </text>
+              </g>
+            ) : null}
+          </svg>
           {tipMounted && tipNode && nodePositions.has(tipNode.id) ? (
             <div
               className={`map-node-tooltip${tipRevealed ? ' is-visible' : ''}`}

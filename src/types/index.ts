@@ -200,13 +200,7 @@ export type GameEvent =
   | {
       kind: 'spell-cast'
       spellId: PendingSpellId
-      spentColors: readonly (
-        | 'red'
-        | 'blue'
-        | 'green'
-        | 'yellow'
-        | 'purple'
-      )[]
+      spentColors: readonly ('red' | 'blue' | 'green' | 'yellow' | 'purple')[]
     }
   | { kind: 'pending-effect-resolved'; spellId: PendingSpellId }
   | {
@@ -302,11 +296,7 @@ export type GameEvent =
     }
   | TrailScheduledEvent
 
-export type CombatPhase =
-  | 'player-acting'
-  | 'enemy-acting'
-  | 'victory'
-  | 'game-over'
+export type CombatPhase = 'player-acting' | 'enemy-acting' | 'victory' | 'game-over'
 
 export type IntentKind =
   | 'attack'
@@ -389,13 +379,7 @@ export type RelicInstance = {
   upgraded?: boolean
 }
 
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [k: string]: JsonValue }
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue }
 
 export type Player = {
   hp: number
@@ -498,11 +482,4 @@ export type MapState = {
   completedNodeIds: string[]
 }
 
-export type RunPhase =
-  | 'map'
-  | 'fight'
-  | 'reward'
-  | 'shop'
-  | 'rest'
-  | 'victory'
-  | 'game-over'
+export type RunPhase = 'map' | 'fight' | 'reward' | 'shop' | 'rest' | 'victory' | 'game-over'

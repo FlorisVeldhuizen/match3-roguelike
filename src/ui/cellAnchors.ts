@@ -18,10 +18,7 @@ export function removeAnchorsAt(
   return removed
 }
 
-export function anchorIdsAt(
-  positions: AnimatedCellPositions,
-  cells: readonly Pos[],
-): string[] {
+export function anchorIdsAt(positions: AnimatedCellPositions, cells: readonly Pos[]): string[] {
   const ids: string[] = []
   for (const c of cells) {
     const id = positions.findIdAt(c.x, c.y)

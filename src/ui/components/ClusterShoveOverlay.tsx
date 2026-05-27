@@ -4,14 +4,8 @@ import { subscribeGameEvents } from '../../core/events/emitter'
 import { useFightReset } from '../hooks/useFightReset'
 import type { Pos } from '../../types'
 import { CellAnchor } from './CellAnchor'
-import {
-  getHoveredEnemy,
-  subscribeHoveredEnemy,
-} from '../state/hoveredEnemy'
-import {
-  getHoveredCell,
-  subscribeHoveredCell,
-} from '../../core/state/hoveredCell'
+import { getHoveredEnemy, subscribeHoveredEnemy } from '../state/hoveredEnemy'
+import { getHoveredCell, subscribeHoveredCell } from '../../core/state/hoveredCell'
 import { SHOVE_HUES, shoveHueAtIndex, shoveHueFor } from '../../core/combat/shoveHues'
 
 type Threat = {
@@ -25,10 +19,7 @@ type Threat = {
 const FADE_OUT_MS = 320
 
 const CURVE_RATIO = 0.22
-function bezierPath(
-  from: { cx: number; cy: number },
-  to: { cx: number; cy: number },
-): string {
+function bezierPath(from: { cx: number; cy: number }, to: { cx: number; cy: number }): string {
   const mx = (from.cx + to.cx) / 2
   const my = (from.cy + to.cy) / 2
   const dx = to.cx - from.cx
@@ -150,14 +141,12 @@ export function ClusterShoveOverlay() {
   const threatList = [...threats.values()]
 
   const cellMatchesThreat = (t: Threat, p: Pos): boolean =>
-    t.sources.some((s) => samePos(s, p)) ||
-    t.destinations.some((d) => samePos(d, p))
+    t.sources.some((s) => samePos(s, p)) || t.destinations.some((d) => samePos(d, p))
 
   const cellHoverRevealsThreat = (t: Threat): boolean =>
     hoveredCell !== null && cellMatchesThreat(t, hoveredCell)
 
-  const enemyHoverRevealsThreat = (t: Threat): boolean =>
-    hoveredEnemyId === t.enemyId
+  const enemyHoverRevealsThreat = (t: Threat): boolean => hoveredEnemyId === t.enemyId
 
   const lines = threatList.flatMap((t) => {
     const revealed = cellHoverRevealsThreat(t) || enemyHoverRevealsThreat(t)
@@ -227,11 +216,7 @@ export function ClusterShoveOverlay() {
         )
       })}
       {lines.length > 0 && (
-        <svg
-          className="cluster-shove-arrows"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-        >
+        <svg className="cluster-shove-arrows" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             {/* Cloned per hue — context-stroke interop is unreliable in Safari */}
             {SHOVE_HUES.map((hue) => (
@@ -246,10 +231,7 @@ export function ClusterShoveOverlay() {
                 markerUnits="userSpaceOnUse"
                 orient="auto-start-reverse"
               >
-                <path
-                  d="M 0 0 L 10 5 L 0 10 z"
-                  fill={`hsl(${hue} 80% 70% / 0.95)`}
-                />
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={`hsl(${hue} 80% 70% / 0.95)`} />
               </marker>
             ))}
           </defs>
@@ -262,12 +244,8 @@ export function ClusterShoveOverlay() {
               strokeWidth="0.6"
               strokeLinecap="round"
               strokeDasharray="1.6 1.4"
-              markerEnd={
-                arrowhead ? `url(#cluster-shove-arrowhead-${hue})` : undefined
-              }
-              style={
-                { ['--shove-hue' as string]: String(hue) } as CSSProperties
-              }
+              markerEnd={arrowhead ? `url(#cluster-shove-arrowhead-${hue})` : undefined}
+              style={{ ['--shove-hue' as string]: String(hue) } as CSSProperties}
             />
           ))}
         </svg>

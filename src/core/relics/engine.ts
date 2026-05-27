@@ -1,10 +1,4 @@
-import type {
-  DamageSource,
-  Enemy,
-  GameEvent,
-  Player,
-  RelicInstance,
-} from '../../types'
+import type { DamageSource, Enemy, GameEvent, Player, RelicInstance } from '../../types'
 import { getRelic } from './registry'
 import type {
   DamageDealtPayload,
@@ -17,19 +11,9 @@ import type {
   RelicDef,
 } from './types'
 
-const MATCH_DELTA_COLORS = [
-  'red',
-  'blue',
-  'green',
-  'yellow',
-  'purple',
-  'gold',
-] as const
+const MATCH_DELTA_COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'gold'] as const
 
-function matchDeltasEqual(
-  a: MatchPayload['deltas'],
-  b: MatchPayload['deltas'],
-): boolean {
+function matchDeltasEqual(a: MatchPayload['deltas'], b: MatchPayload['deltas']): boolean {
   return MATCH_DELTA_COLORS.every((c) => a[c] === b[c])
 }
 
@@ -45,13 +29,8 @@ function describeMatchDeltaChange(
   return parts.join(', ') || 'bonus applied'
 }
 
-function relicTriggeredThisPass(
-  events: GameEvent[],
-  relicId: string,
-): boolean {
-  return events.some(
-    (e) => e.kind === 'relic-triggered' && e.relicId === relicId,
-  )
+function relicTriggeredThisPass(events: GameEvent[], relicId: string): boolean {
+  return events.some((e) => e.kind === 'relic-triggered' && e.relicId === relicId)
 }
 
 function buildCtx(
@@ -75,10 +54,7 @@ function buildCtx(
   }
 }
 
-function getHook<K extends HookKind>(
-  def: RelicDef,
-  kind: K,
-): RelicDef['hooks'][K] {
+function getHook<K extends HookKind>(def: RelicDef, kind: K): RelicDef['hooks'][K] {
   return def.hooks[kind]
 }
 
@@ -101,10 +77,7 @@ export function runOnMatch(
     const ctx = buildCtx(inst, snapshot, (e) => events.push(e))
     const before = p.deltas
     p = hook(p, ctx)
-    if (
-      !matchDeltasEqual(before, p.deltas) &&
-      !relicTriggeredThisPass(events, inst.id)
-    ) {
+    if (!matchDeltasEqual(before, p.deltas) && !relicTriggeredThisPass(events, inst.id)) {
       events.push({
         kind: 'relic-triggered',
         relicId: inst.id,
@@ -129,10 +102,7 @@ export function runOnDamageDealt(
     const ctx = buildCtx(inst, snapshot, (e) => events.push(e))
     const before = p.amount
     p = hook(p, ctx)
-    if (
-      p.amount !== before &&
-      !relicTriggeredThisPass(events, inst.id)
-    ) {
+    if (p.amount !== before && !relicTriggeredThisPass(events, inst.id)) {
       const diff = p.amount - before
       events.push({
         kind: 'relic-triggered',
@@ -153,9 +123,7 @@ function runListener<K extends HookKind, E>(
   const events: GameEvent[] = []
   for (const inst of instances) {
     const def = getRelic(inst.id)
-    const hook = getHook(def, kind) as
-      | ((e: E, ctx: HookCtx) => void)
-      | undefined
+    const hook = getHook(def, kind) as ((e: E, ctx: HookCtx) => void) | undefined
     if (!hook) continue
     const ctx = buildCtx(inst, snapshot, (ev) => events.push(ev))
     hook(event, ctx)

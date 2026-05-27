@@ -1,19 +1,9 @@
-import {
-  MANA_CAPS,
-  type CombatPhase,
-  type Enemy,
-  type GameEvent,
-  type Player,
-} from '../../types'
+import { MANA_CAPS, type CombatPhase, type Enemy, type GameEvent, type Player } from '../../types'
 import type { PoolDeltas } from './pools'
 import { applyDamage } from './damage'
 import { composeDamage, tickStatuses } from './statuses'
 import { withPendingSpellVisuals } from './spellVisual'
-import {
-  cloneRelicsForHooks,
-  interceptFatalDamage,
-  snapshotOf,
-} from '../relics/engine'
+import { cloneRelicsForHooks, interceptFatalDamage, snapshotOf } from '../relics/engine'
 
 export function applyPoolDeltas(player: Player, deltas: PoolDeltas): Player {
   const m = player.mana
@@ -71,9 +61,7 @@ export function resolveEndOfPhase(
       const res = applyDamage(target.block, target.hp, dmg)
       if (res.blocked + res.hpDamage > 0) {
         nextEnemies = nextEnemies.map((e) =>
-          e.id === target.id
-            ? { ...e, block: res.blockAfter, hp: res.hpAfter }
-            : e,
+          e.id === target.id ? { ...e, block: res.blockAfter, hp: res.hpAfter } : e,
         )
         const bulwarkFx: GameEvent[] = [
           {
@@ -92,9 +80,7 @@ export function resolveEndOfPhase(
         events.push(...withPendingSpellVisuals('bulwark', bulwarkFx))
         if (res.killed) {
           events.push({ kind: 'enemy-killed', enemyId: target.id })
-          const nextLiving = nextEnemies.find(
-            (e) => e.id !== target.id && e.hp > 0,
-          )
+          const nextLiving = nextEnemies.find((e) => e.id !== target.id && e.hp > 0)
           nextTargetId = nextLiving?.id ?? null
         }
       }
@@ -127,9 +113,7 @@ export function resolveEndOfPhase(
         const res = applyDamage(enemy.block, enemy.hp, dmg)
         if (res.blocked + res.hpDamage <= 0) continue
         nextEnemies = nextEnemies.map((e) =>
-          e.id === enemy.id
-            ? { ...e, block: res.blockAfter, hp: res.hpAfter }
-            : e,
+          e.id === enemy.id ? { ...e, block: res.blockAfter, hp: res.hpAfter } : e,
         )
         volleyFx.push({
           kind: 'damage-dealt',
@@ -146,9 +130,7 @@ export function resolveEndOfPhase(
         if (res.killed) {
           events.push({ kind: 'enemy-killed', enemyId: enemy.id })
           if (enemy.id === nextTargetId) {
-            const nextLiving = nextEnemies.find(
-              (e) => e.id !== enemy.id && e.hp > 0,
-            )
+            const nextLiving = nextEnemies.find((e) => e.id !== enemy.id && e.hp > 0)
             nextTargetId = nextLiving?.id ?? null
           }
         }
@@ -178,8 +160,7 @@ export function resolveEndOfPhase(
     block: nextBlock,
     phasePools: { red: 0, blue: 0, green: 0 },
     pendingSpells: nextPending,
-    carryBlockNextPhase:
-      hasReinforce && !hasBulwark ? true : player.carryBlockNextPhase,
+    carryBlockNextPhase: hasReinforce && !hasBulwark ? true : player.carryBlockNextPhase,
     volleyTargets: hasVolley ? undefined : player.volleyTargets,
   }
 

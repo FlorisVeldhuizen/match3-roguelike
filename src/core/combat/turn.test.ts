@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Enemy, Player } from '../../types'
-import {
-  applyPoolDeltas,
-  beginPlayerPhase,
-  resolveEndOfPhase,
-} from './turn'
+import { applyPoolDeltas, beginPlayerPhase, resolveEndOfPhase } from './turn'
 import type { PoolDeltas } from './pools'
 
 const makePlayer = (overrides: Partial<Player> = {}): Player => ({
@@ -49,10 +45,7 @@ const deltas = (over: Partial<PoolDeltas> = {}): PoolDeltas => ({
 describe('applyPoolDeltas', () => {
   it('accumulates per-colour mana and phasePools, credits purple to charge', () => {
     const p = makePlayer()
-    const next = applyPoolDeltas(
-      p,
-      deltas({ red: 3, blue: 2, green: 1, yellow: 4, purple: 5 }),
-    )
+    const next = applyPoolDeltas(p, deltas({ red: 3, blue: 2, green: 1, yellow: 4, purple: 5 }))
     expect(next.mana).toEqual({ red: 3, blue: 2, green: 1, yellow: 4 })
     expect(next.skillCharge).toBe(5)
     expect(next.phasePools).toEqual({ red: 3, blue: 2, green: 1 })
@@ -171,9 +164,7 @@ describe('beginPlayerPhase', () => {
       statuses: [{ kind: 'burn', stacks: 2 }],
     })
     const result = beginPlayerPhase(p)
-    const dtIdx = result.events.findIndex(
-      (e) => e.kind === 'damage-taken' && e.source === 'burn',
-    )
+    const dtIdx = result.events.findIndex((e) => e.kind === 'damage-taken' && e.source === 'burn')
     const tickedIdx = result.events.findIndex((e) => e.kind === 'status-ticked')
     expect(dtIdx).toBeGreaterThanOrEqual(0)
     expect(tickedIdx).toBeGreaterThanOrEqual(0)
@@ -187,9 +178,7 @@ describe('beginPlayerPhase', () => {
       statuses: [{ kind: 'burn', stacks: 1 }],
     })
     const result = beginPlayerPhase(p)
-    const dtIdx = result.events.findIndex(
-      (e) => e.kind === 'damage-taken' && e.source === 'burn',
-    )
+    const dtIdx = result.events.findIndex((e) => e.kind === 'damage-taken' && e.source === 'burn')
     const expiredIdx = result.events.findIndex((e) => e.kind === 'status-expired')
     expect(dtIdx).toBeGreaterThanOrEqual(0)
     expect(expiredIdx).toBeGreaterThanOrEqual(0)
@@ -210,9 +199,7 @@ describe('beginPlayerPhase', () => {
     const result = beginPlayerPhase(p)
     expect(result.player.hp).toBe(40)
     expect(result.player.block).toBe(2)
-    const dt = result.events.find(
-      (e) => e.kind === 'damage-taken' && e.source === 'burn',
-    )
+    const dt = result.events.find((e) => e.kind === 'damage-taken' && e.source === 'burn')
     expect(dt).toMatchObject({ amount: 0, blocked: 3 })
     expect(result.events.some((e) => e.kind === 'block-absorbed')).toBe(true)
     expect(result.events.some((e) => e.kind === 'block-broken')).toBe(false)
@@ -229,9 +216,7 @@ describe('beginPlayerPhase', () => {
     const result = beginPlayerPhase(p)
     expect(result.player.hp).toBe(37)
     expect(result.player.block).toBe(0)
-    const dt = result.events.find(
-      (e) => e.kind === 'damage-taken' && e.source === 'burn',
-    )
+    const dt = result.events.find((e) => e.kind === 'damage-taken' && e.source === 'burn')
     expect(dt).toMatchObject({ amount: 3, blocked: 2 })
     expect(result.events.some((e) => e.kind === 'block-broken')).toBe(true)
   })

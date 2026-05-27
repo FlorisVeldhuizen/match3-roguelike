@@ -49,12 +49,7 @@
 .map-brand-rule {
   flex: 1 1 auto;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(154, 125, 82, 0.55),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(154, 125, 82, 0.55), transparent);
 }
 .map-brand-glyph {
   color: var(--gold-1);
@@ -72,12 +67,7 @@
   /* Tarnished-gold inscribed look: hot highlight on top, deeper gold
      base, soft glow halo. Matches the wordmark treatment the splash
      screen used to carry. */
-  background: linear-gradient(
-    180deg,
-    var(--gold-2) 0%,
-    var(--gold-1) 55%,
-    var(--gold-3) 100%
-  );
+  background: linear-gradient(180deg, var(--gold-2) 0%, var(--gold-1) 55%, var(--gold-3) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -102,11 +92,7 @@
   gap: 0.85rem;
   padding: 0.35rem 0.85rem;
   margin: 0 auto 1.1rem;
-  background: linear-gradient(
-    180deg,
-    rgba(30, 24, 18, 0.85),
-    rgba(21, 17, 11, 0.85)
-  );
+  background: linear-gradient(180deg, rgba(30, 24, 18, 0.85), rgba(21, 17, 11, 0.85));
   border: 1px solid rgba(154, 125, 82, 0.35);
   border-radius: 999px;
   box-shadow:
@@ -282,7 +268,10 @@
   fill: var(--ink-2);
   stroke: var(--stone-2);
   stroke-width: 2;
-  transition: fill 120ms, stroke 120ms, filter 120ms;
+  transition:
+    fill 120ms,
+    stroke 120ms,
+    filter 120ms;
 }
 .map-node-icon {
   fill: var(--parchment-dim);
@@ -375,4 +364,3 @@
 .game-fight-hidden .spell-tray {
   visibility: hidden;
 }
-

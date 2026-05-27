@@ -4,8 +4,8 @@ import { Keyword } from '../Keyword'
 export function hudHpTooltipBody(): ReactNode {
   return (
     <div>
-      Your <Keyword id="hp">HP</Keyword>. Restored by{' '}
-      <Keyword id="heal">healing</Keyword> and lost to enemy attacks and effects.
+      Your <Keyword id="hp">HP</Keyword>. Restored by <Keyword id="heal">healing</Keyword> and lost
+      to enemy attacks and effects.
     </div>
   )
 }
@@ -22,8 +22,8 @@ export function hudRedManaTooltipBody(): ReactNode {
 export function hudBlueManaTooltipBody(): ReactNode {
   return (
     <div>
-      <strong>Blue gems</strong> build toward your <Keyword id="block">armor</Keyword>{' '}
-      (shield) and add <Keyword id="mana">mana</Keyword> for defensive spells.
+      <strong>Blue gems</strong> build toward your <Keyword id="block">armor</Keyword> (shield) and
+      add <Keyword id="mana">mana</Keyword> for defensive spells.
     </div>
   )
 }
@@ -31,8 +31,8 @@ export function hudBlueManaTooltipBody(): ReactNode {
 export function hudGreenManaTooltipBody(): ReactNode {
   return (
     <div>
-      <strong>Green gems</strong> <Keyword id="heal">heal</Keyword> you when matched
-      and add <Keyword id="mana">mana</Keyword> for healing spells.
+      <strong>Green gems</strong> <Keyword id="heal">heal</Keyword> you when matched and add{' '}
+      <Keyword id="mana">mana</Keyword> for healing spells.
     </div>
   )
 }
@@ -40,16 +40,13 @@ export function hudGreenManaTooltipBody(): ReactNode {
 export function hudWildManaTooltipBody(): ReactNode {
   return (
     <div>
-      <strong>Yellow gems</strong> only add <Keyword id="wildMana">wild mana</Keyword>{' '}
-      — no direct combat effect on match.
+      <strong>Yellow gems</strong> only add <Keyword id="wildMana">wild mana</Keyword> — no direct
+      combat effect on match.
     </div>
   )
 }
 
-export function hudArmorTooltipTitle(opts: {
-  value: number
-  hasPending: boolean
-}): string {
+export function hudArmorTooltipTitle(opts: { value: number; hasPending: boolean }): string {
   return opts.hasPending ? `Armor (building) — ${opts.value}` : `Armor — ${opts.value}`
 }
 
@@ -61,8 +58,7 @@ export function hudArmorTooltipBody(opts: {
   if (opts.value <= 0) {
     return (
       <div>
-        Match blue gems to gain <Keyword id="block">armor</Keyword> for the upcoming
-        enemy turn.
+        Match blue gems to gain <Keyword id="block">armor</Keyword> for the upcoming enemy turn.
       </div>
     )
   }
@@ -71,8 +67,8 @@ export function hudArmorTooltipBody(opts: {
   if (opts.hasPending) {
     return (
       <div>
-        Armor you’re building from blue matches this turn. Finalized when you end
-        your turn (some effects can modify it).
+        Armor you’re building from blue matches this turn. Finalized when you end your turn (some
+        effects can modify it).
       </div>
     )
   }
@@ -80,17 +76,15 @@ export function hudArmorTooltipBody(opts: {
   if (opts.isActive) {
     return (
       <div>
-        Your <Keyword id="block">armor</Keyword> absorbs damage before{' '}
-        <Keyword id="hp">HP</Keyword> until your next turn unless an effect carries
-        it.
+        Your <Keyword id="block">armor</Keyword> absorbs damage before <Keyword id="hp">HP</Keyword>{' '}
+        until your next turn unless an effect carries it.
       </div>
     )
   }
 
   return (
     <div>
-      Your <Keyword id="block">armor</Keyword> absorbs damage before{' '}
-      <Keyword id="hp">HP</Keyword>.
+      Your <Keyword id="block">armor</Keyword> absorbs damage before <Keyword id="hp">HP</Keyword>.
     </div>
   )
 }
@@ -99,11 +93,10 @@ export function hudGoldTooltipBody(): ReactNode {
   return (
     <>
       <div>
-        From <strong>gold gems</strong> on the board and <strong>fight rewards</strong>
-        . Spend at shops.
+        From <strong>gold gems</strong> on the board and <strong>fight rewards</strong>. Spend at
+        shops.
       </div>
       <div className="hover-tooltip-aside">Kept for the whole run.</div>
     </>
   )
 }
-

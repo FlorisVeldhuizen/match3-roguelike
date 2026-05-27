@@ -29,7 +29,7 @@ export function forkStreams(rootSeed: string): RngStreams {
   const out: Partial<RngStreams> = {}
   for (const name of STREAM_NAMES) {
     const h = cyrb53(`${rootSeed}:${name}`)
-    out[name] = { seed: (h >>> 0) || 1 }
+    out[name] = { seed: h >>> 0 || 1 }
   }
   return out as RngStreams
 }

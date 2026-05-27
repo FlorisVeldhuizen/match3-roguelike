@@ -25,7 +25,10 @@
     inset 0 0 18px rgba(0, 0, 0, 0.45),
     0 4px 14px rgba(0, 0, 0, 0.4);
   min-width: 150px;
-  transition: border-color 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    opacity 160ms ease,
+    box-shadow 160ms ease;
 }
 
 @keyframes intent-pop-in {
@@ -70,7 +73,9 @@
 .enemy-intent.intent-attack {
   border-color: var(--ember-1);
   color: #ffb0ad;
-  box-shadow: 0 0 14px rgba(238, 94, 87, 0.25), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 14px rgba(238, 94, 87, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 /* Lethal warning — pulse and ring on attack badges that exceed hp + block. */
@@ -83,9 +88,12 @@
 }
 
 @keyframes intent-lethal {
-  0%, 100% {
+  0%,
+  100% {
     background: linear-gradient(180deg, #4a1a1a, #2a0d0d);
-    box-shadow: 0 0 14px rgba(238, 94, 87, 0.45), 0 2px 8px rgba(0, 0, 0, 0.55);
+    box-shadow:
+      0 0 14px rgba(238, 94, 87, 0.45),
+      0 2px 8px rgba(0, 0, 0, 0.55);
     border-color: #ff5550;
   }
   50% {
@@ -102,7 +110,9 @@
   .enemy-intent.intent-attack.lethal {
     animation: intent-pop-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1.05);
     background: linear-gradient(180deg, #6a1c1c, #3a0d0d);
-    box-shadow: 0 0 18px rgba(238, 94, 87, 0.65), 0 2px 8px rgba(0, 0, 0, 0.55);
+    box-shadow:
+      0 0 18px rgba(238, 94, 87, 0.65),
+      0 2px 8px rgba(0, 0, 0, 0.55);
     border-color: #ff5550;
   }
 }
@@ -110,7 +120,9 @@
 .enemy-intent.intent-block {
   border-color: var(--arcane-1);
   color: var(--arcane-2);
-  box-shadow: 0 0 14px rgba(80, 150, 220, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 14px rgba(80, 150, 220, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 /* Cluster-shove badge picks up the per-swarmer accent hue set inline
@@ -144,7 +156,11 @@
     inset 0 0 0 1px rgba(154, 125, 82, 0.1),
     0 6px 18px rgba(0, 0, 0, 0.55);
   color: var(--parchment);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.45;
@@ -406,7 +422,9 @@
 }
 
 @keyframes sigil-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .enemy-glyph {
@@ -482,7 +500,9 @@
 .enemy-intent.intent-heal-ally {
   border-color: #4caf82;
   color: #a8e6c3;
-  box-shadow: 0 0 14px rgba(76, 175, 130, 0.25), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 14px rgba(76, 175, 130, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .intent-tooltip.intent-heal-ally .intent-tooltip-title {
   color: #a8e6c3;
@@ -492,7 +512,9 @@
 .enemy-intent.intent-buff-ally {
   border-color: var(--gold-2, #c8a35a);
   color: var(--gold-3, #f0c870);
-  box-shadow: 0 0 14px rgba(154, 125, 82, 0.28), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 14px rgba(154, 125, 82, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .intent-tooltip.intent-buff-ally .intent-tooltip-title {
   color: var(--gold-3, #f0c870);
@@ -502,7 +524,9 @@
 .enemy-intent.intent-shield-ally {
   border-color: var(--arcane-1);
   color: var(--arcane-2);
-  box-shadow: 0 0 14px rgba(80, 150, 220, 0.22), 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 14px rgba(80, 150, 220, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .intent-tooltip.intent-shield-ally .intent-tooltip-title {
   color: var(--arcane-2);
@@ -522,4 +546,3 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-

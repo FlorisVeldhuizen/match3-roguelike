@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeGameEvents } from '../../core/events/emitter'
-import {
-  SWAP_MS,
-  fallDurationMs,
-  SWAP_BEZIER,
-  FALL_BEZIER,
-} from '../../timing'
+import { SWAP_MS, fallDurationMs, SWAP_BEZIER, FALL_BEZIER } from '../../timing'
 
 export type CellTransition = {
   durationMs: number
@@ -28,9 +23,7 @@ export type AnimatedCellPositions = {
 
 export function useAnimatedCellPositions(): AnimatedCellPositions {
   const entriesRef = useRef<Map<string, AnimatedCellPosition>>(new Map())
-  const [snapshot, setSnapshot] = useState<
-    ReadonlyMap<string, AnimatedCellPosition>
-  >(new Map())
+  const [snapshot, setSnapshot] = useState<ReadonlyMap<string, AnimatedCellPosition>>(new Map())
 
   const publish = useCallback(() => {
     const next = new Map<string, AnimatedCellPosition>()

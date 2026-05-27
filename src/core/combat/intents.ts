@@ -39,7 +39,7 @@ export function rollIntent(
   enraged?: boolean,
 ): { intent: Intent; rng: RngState } {
   const def = getArchetype(archetype)
-  const pattern = (enraged && def.enragePattern) ? def.enragePattern : def.pattern
+  const pattern = enraged && def.enragePattern ? def.enragePattern : def.pattern
   const kind: IntentKind | undefined = pattern[patternIndex % pattern.length]
   if (kind === undefined) throw new Error('rollIntent: empty pattern')
 
@@ -113,9 +113,7 @@ function addIntentToClaims(intent: Intent, claims: IntentClaims): void {
   // tile-burn picks cells at fire time, not roll time — no claim needed.
 }
 
-export function aggregateSiblingClaims(
-  siblingNextIntents: readonly Intent[],
-): IntentClaims {
+export function aggregateSiblingClaims(siblingNextIntents: readonly Intent[]): IntentClaims {
   const claims = emptyClaims()
   for (const i of siblingNextIntents) addIntentToClaims(i, claims)
   return claims

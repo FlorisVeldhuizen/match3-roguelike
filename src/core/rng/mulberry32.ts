@@ -13,10 +13,7 @@ export function next(rng: RngState): [number, RngState] {
   return [u32 / 0x100000000, nextRng]
 }
 
-export function nextInt(
-  rng: RngState,
-  maxExclusive: number,
-): [number, RngState] {
+export function nextInt(rng: RngState, maxExclusive: number): [number, RngState] {
   if (maxExclusive <= 0) throw new Error('nextInt: maxExclusive must be > 0')
   const [r, n] = next(rng)
   return [Math.floor(r * maxExclusive), n]

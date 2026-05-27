@@ -38,8 +38,7 @@ export function HUD() {
     blockPulse,
   } = useHudEventChannel()
 
-  const cls = (color: GemColor, base: string) =>
-    pulse[color] > 0 ? `${base} pulsing` : base
+  const cls = (color: GemColor, base: string) => (pulse[color] > 0 ? `${base} pulsing` : base)
 
   const hpPop = usePopOnChange(displayedHp)
   const blockPop = usePopOnChange(stagedBlue)
@@ -57,11 +56,7 @@ export function HUD() {
   const blockActive = badgeBlock > 0 && blockCommitted
 
   return (
-    <section
-      className="hud"
-      aria-label="Player status"
-      data-player-hud="true"
-    >
+    <section className="hud" aria-label="Player status" data-player-hud="true">
       <StatusBar
         statuses={displayedStatuses}
         tickMarks={statusTickMarks}
@@ -106,7 +101,9 @@ export function HUD() {
               className={`block-badge ${blockActive ? 'active' : ''} ${blockHasPending ? 'pending' : ''} ${blockPulse ? 'pulsing' : ''} ${cls('blue', '')}`}
               data-pool-target="blue"
             >
-              <span className="block-icon" aria-hidden>🛡</span>
+              <span className="block-icon" aria-hidden>
+                🛡
+              </span>
               <span className="block-value">
                 <span key={blockPop.key} className={popClass(blockPop)}>
                   {badgeBlock}
@@ -165,11 +162,7 @@ export function HUD() {
             spending={spendPulse.purple > 0}
           />
           <span className="hud-divider" aria-hidden />
-          <GoldChip
-            value={displayedGold}
-            pop={goldPop}
-            pulsing={pulse.gold > 0}
-          />
+          <GoldChip value={displayedGold} pop={goldPop} pulsing={pulse.gold > 0} />
         </div>
       </div>
     </section>

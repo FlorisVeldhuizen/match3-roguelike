@@ -32,9 +32,7 @@ export class BoardEffects {
   constructor(stage: Container, cellToStage: CellToStage) {
     this.stage = stage
     this.cellToStage = cellToStage
-    this.reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches
+    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     this.rgbSplit = new RGBSplitFilter({
       red: { x: -BOARD_RGB_OFFSET, y: 0 },

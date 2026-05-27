@@ -5,9 +5,7 @@ import type { AnimatedCellPositions } from './hooks/useAnimatedCellPositions'
 function mockPositions(
   entries: Array<{ id: string; x: number; y: number }>,
 ): AnimatedCellPositions {
-  const map = new Map(
-    entries.map((e) => [e.id, { x: e.x, y: e.y, transition: null }]),
-  )
+  const map = new Map(entries.map((e) => [e.id, { x: e.x, y: e.y, transition: null }]))
   const store = new Map(entries.map((e) => [e.id, { x: e.x, y: e.y }]))
   return {
     positions: map,

@@ -1,7 +1,6 @@
 import { Ticker, type Sprite } from 'pixi.js'
 
-const easeInOutQuad = (t: number) =>
-  t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+const easeInOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
 
 const ARC_HEIGHT_RATIO = 0.4
 const ARC_HEIGHT_MAX_PX = 90

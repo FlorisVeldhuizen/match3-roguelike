@@ -49,7 +49,7 @@ export function FocusPickerModal({ onClose }: { onClose: () => void }) {
         <h2 className="spell-picker-title">Focus</h2>
         <p className="spell-picker-sub">
           {from
-            ? `Convert ${FOCUS_TRANSFER} ${COLOUR_LABELS[from as typeof COLOURS[number]]} into…`
+            ? `Convert ${FOCUS_TRANSFER} ${COLOUR_LABELS[from as (typeof COLOURS)[number]]} into…`
             : `Pick the color to convert FROM.`}
         </p>
         <div className="spell-picker-focus-grid">
@@ -58,10 +58,7 @@ export function FocusPickerModal({ onClose }: { onClose: () => void }) {
             const cap = MANA_CAPS[c]
             const isSource = from === c
             const phase: 'from' | 'to' = from == null ? 'from' : 'to'
-            const enabled =
-              phase === 'from'
-                ? have >= 1
-                : !isSource && cap - have >= 1
+            const enabled = phase === 'from' ? have >= 1 : !isSource && cap - have >= 1
             return (
               <button
                 key={c}
@@ -86,19 +83,11 @@ export function FocusPickerModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="spell-picker-actions">
           {from != null && (
-            <button
-              type="button"
-              className="spell-picker-back"
-              onClick={() => setFrom(null)}
-            >
+            <button type="button" className="spell-picker-back" onClick={() => setFrom(null)}>
               Back
             </button>
           )}
-          <button
-            type="button"
-            className="spell-picker-cancel"
-            onClick={onClose}
-          >
+          <button type="button" className="spell-picker-cancel" onClick={onClose}>
             Cancel
           </button>
         </div>

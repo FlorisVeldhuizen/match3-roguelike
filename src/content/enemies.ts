@@ -1,7 +1,4 @@
-import {
-  registerArchetype,
-  type ArchetypeDef,
-} from '../core/combat/archetypeRegistry'
+import { registerArchetype, type ArchetypeDef } from '../core/combat/archetypeRegistry'
 import { STATUS_TEMPLATES } from './statuses'
 
 const brute: ArchetypeDef = {

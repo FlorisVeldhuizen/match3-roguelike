@@ -22,16 +22,8 @@ import { generateMap } from '../map/generate'
 import { getSpell } from '../combat/spellRegistry'
 import { canAffordSpell } from '../combat/mana'
 import { makeDebugForceFight } from './actions/debug'
-import {
-  makeAcquireRelic,
-  makeAcquireSpellReward,
-  makeSkipReward,
-} from './actions/rewards'
-import {
-  makeLeaveRest,
-  makeRestHeal,
-  makeRestUpgrade,
-} from './actions/rest'
+import { makeAcquireRelic, makeAcquireSpellReward, makeSkipReward } from './actions/rewards'
+import { makeLeaveRest, makeRestHeal, makeRestUpgrade } from './actions/rest'
 import {
   makeLeaveShop,
   makeRollShopOffer,
@@ -81,19 +73,13 @@ export type GameStore = {
     ok: boolean
     events: GameEvent[]
   }
-  castFocus: (
-    from: GemColor,
-    to: GemColor,
-  ) => { ok: boolean; events: GameEvent[] }
+  castFocus: (from: GemColor, to: GemColor) => { ok: boolean; events: GameEvent[] }
   castVolley: (targets: string[]) => {
     ok: boolean
     events: GameEvent[]
   }
   castShatter: (color: GemColor) => { ok: boolean; events: GameEvent[] }
-  castTransmute: (
-    from: GemColor,
-    to: GemColor,
-  ) => { ok: boolean; events: GameEvent[] }
+  castTransmute: (from: GemColor, to: GemColor) => { ok: boolean; events: GameEvent[] }
   castFrozenWall: (row: number) => { ok: boolean; events: GameEvent[] }
   boardTargetingSpell: SpellId | null
   beginBoardTargeting: (spellId: SpellId) => boolean

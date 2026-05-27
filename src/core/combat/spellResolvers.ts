@@ -38,9 +38,7 @@ export function resolveIgnite(
   if (!target) return { enemies: [...enemies], events: [] }
   const incoming: StatusInstance = { kind: 'burn', stacks: IGNITE_BURN_STACKS }
   const newStatuses = applyStatusToList(target.statuses, incoming)
-  const updated = enemies.map((e) =>
-    e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e,
-  )
+  const updated = enemies.map((e) => (e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e))
   return {
     enemies: updated,
     events: [
@@ -65,9 +63,7 @@ export function resolveBrittle(
     stacks: BRITTLE_VULN_STACKS,
   }
   const newStatuses = applyStatusToList(target.statuses, incoming)
-  const updated = enemies.map((e) =>
-    e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e,
-  )
+  const updated = enemies.map((e) => (e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e))
   return {
     enemies: updated,
     events: [
@@ -96,9 +92,7 @@ export function resolveCinderLash(
       stacks: CINDER_BURN_STACKS,
     }
     const newStatuses = applyStatusToList(target.statuses, incoming)
-    nextEnemies = enemies.map((e) =>
-      e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e,
-    )
+    nextEnemies = enemies.map((e) => (e.id === targetEnemyId ? { ...e, statuses: newStatuses } : e))
     events.push({
       kind: 'status-applied',
       target: targetEnemyId,
@@ -146,9 +140,7 @@ export function resolvePurify(
   if (!hadIt) {
     return { player, events: [] }
   }
-  const events: GameEvent[] = [
-    { kind: 'status-expired', target: 'player', statusKind },
-  ]
+  const events: GameEvent[] = [{ kind: 'status-expired', target: 'player', statusKind }]
   let nextPlayer: Player = {
     ...player,
     statuses: player.statuses.filter((s) => s.kind !== statusKind),
@@ -293,9 +285,7 @@ export function resolveTransmute(
     }),
   )
   const prelude: GameEvent[] =
-    transmuted.length > 0
-      ? [{ kind: 'gems-transmuted', cells: transmuted }]
-      : []
+    transmuted.length > 0 ? [{ kind: 'gems-transmuted', cells: transmuted }] : []
   const cascadeResult = runCascade(nextBoard, rng, detectMatches(nextBoard))
   const processed = processCascadeEvents(
     cascadeResult.events,
@@ -354,9 +344,8 @@ export function resolveBlessedGround(
   return {
     board: nextBoard,
     rng: r,
-    events: blessed.length > 0
-      ? [{ kind: 'tile-blessed-placed', cells: blessed, color: 'gold' }]
-      : [],
+    events:
+      blessed.length > 0 ? [{ kind: 'tile-blessed-placed', cells: blessed, color: 'gold' }] : [],
   }
 }
 
@@ -382,9 +371,7 @@ export function resolveFrozenWall(
 
 // ---------- Chain Lightning ----------
 // Marks the player's next red match as AOE (handled by cascadeProcessor).
-export function resolveChainLightning(
-  player: Player,
-): { player: Player; events: GameEvent[] } {
+export function resolveChainLightning(player: Player): { player: Player; events: GameEvent[] } {
   return {
     player: {
       ...player,

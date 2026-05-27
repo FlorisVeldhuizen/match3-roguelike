@@ -12,9 +12,7 @@ export function rollAttackIntent(
     ? { status: def.onHitStatus.kind, stacks: def.onHitStatus.stacks }
     : undefined
   return {
-    intent: onHit
-      ? { kind: 'attack', amount, onHit }
-      : { kind: 'attack', amount },
+    intent: onHit ? { kind: 'attack', amount, onHit } : { kind: 'attack', amount },
     rng: r2,
   }
 }
@@ -41,9 +39,7 @@ function pickAllySibling(
   rollerEnemyId: string | undefined,
   rng: RngState,
 ): { targetAllyId: string; rng: RngState } | null {
-  const siblings = livingAllies.filter(
-    (e) => e.hp > 0 && e.id !== rollerEnemyId,
-  )
+  const siblings = livingAllies.filter((e) => e.hp > 0 && e.id !== rollerEnemyId)
   if (siblings.length === 0) return null
   const [idx, r2] = nextInt(rng, siblings.length)
   return { targetAllyId: siblings[idx]!.id, rng: r2 }

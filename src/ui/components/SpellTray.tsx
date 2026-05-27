@@ -7,10 +7,7 @@ import {
   listSpellsForTray,
   listUltimates,
 } from '../../core/combat/spellRegistry'
-import {
-  isUnlockAllSpells,
-  subscribeUnlockAllSpells,
-} from '../../debug/devControls'
+import { isUnlockAllSpells, subscribeUnlockAllSpells } from '../../debug/devControls'
 import { canAffordSpell } from '../../core/combat/mana'
 import { MANA_CAPS, type ManaCost, type SpellId, type StatusKind } from '../../types'
 import { HoverTooltip } from './HoverTooltip'
@@ -22,17 +19,9 @@ import { useBoardSettled } from '../hooks/useBoardSettled'
 import { primaryManaRgb, spellManaClassName } from '../spellManaTheme'
 import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 
-const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
-  'purify',
-  'focus',
-  'volley',
-  'transmute',
-])
+const PICKER_SPELLS: ReadonlySet<SpellId> = new Set(['purify', 'focus', 'volley', 'transmute'])
 
-const BOARD_TARGETING_SPELLS: ReadonlySet<SpellId> = new Set([
-  'shatter',
-  'frozen-wall',
-])
+const BOARD_TARGETING_SPELLS: ReadonlySet<SpellId> = new Set(['shatter', 'frozen-wall'])
 
 const PURIFIABLE: ReadonlySet<StatusKind> = new Set(['burn', 'vulnerable', 'weak'])
 
@@ -46,8 +35,7 @@ function describeCost(cost: ManaCost): string {
 }
 
 function ManaCostBadges({ cost }: { cost: ManaCost }) {
-  const entries: { color: 'red' | 'blue' | 'green' | 'yellow'; amount: number }[] =
-    []
+  const entries: { color: 'red' | 'blue' | 'green' | 'yellow'; amount: number }[] = []
   if (cost.red) entries.push({ color: 'red', amount: cost.red })
   if (cost.blue) entries.push({ color: 'blue', amount: cost.blue })
   if (cost.green) entries.push({ color: 'green', amount: cost.green })
@@ -90,9 +78,7 @@ export function SpellTray() {
   const [pickerOpen, setPickerOpen] = useState<SpellId | null>(null)
 
   const [flashKey, setFlashKey] = useState<Record<string, number>>({})
-  const [tooltipCloseTick, setTooltipCloseTick] = useState<
-    Record<string, number>
-  >({})
+  const [tooltipCloseTick, setTooltipCloseTick] = useState<Record<string, number>>({})
   const bumpTooltipClose = (id: string) => {
     setTooltipCloseTick((prev) => ({
       ...prev,
@@ -117,18 +103,11 @@ export function SpellTray() {
         const livingEnemy = enemies.some((e) => e.hp > 0)
         let extraBlock = false
         let extraReason: string | null = null
-        if (
-          def.id === 'purify' &&
-          !statuses.some((s) => PURIFIABLE.has(s.kind))
-        ) {
+        if (def.id === 'purify' && !statuses.some((s) => PURIFIABLE.has(s.kind))) {
           extraBlock = true
           extraReason = 'No curses to purify.'
         } else if (def.id === 'focus') {
-          const haveSource =
-            mana.red >= 1 ||
-            mana.blue >= 1 ||
-            mana.green >= 1 ||
-            mana.yellow >= 1
+          const haveSource = mana.red >= 1 || mana.blue >= 1 || mana.green >= 1 || mana.yellow >= 1
           const haveTarget =
             MANA_CAPS.red - mana.red >= 1 ||
             MANA_CAPS.blue - mana.blue >= 1 ||
@@ -148,15 +127,14 @@ export function SpellTray() {
           extraBlock = true
           extraReason = 'No targets left.'
         }
-        const blocked =
-          !onPlayerPhase || !boardSettled || !canPay || queued || extraBlock
+        const blocked = !onPlayerPhase || !boardSettled || !canPay || queued || extraBlock
         const costSummary = describeCost(def.cost)
         const manaTheme = spellManaClassName(def.cost)
         const castRgb = primaryManaRgb(def.cost)
         const reason = queued
           ? 'Already cast this turn.'
           : !onPlayerPhase
-            ? "Wait for your turn."
+            ? 'Wait for your turn.'
             : !boardSettled
               ? 'Wait for the board to settle.'
               : !canPay
@@ -226,7 +204,7 @@ export function SpellTray() {
         const reason = queued
           ? 'Already armed — waiting for them to attack.'
           : !onPlayerPhase
-            ? "Wait for your turn."
+            ? 'Wait for your turn.'
             : !boardSettled
               ? 'Wait for the board to settle.'
               : !canPay
@@ -277,18 +255,10 @@ export function SpellTray() {
           </HoverTooltip>
         )
       })}
-      {pickerOpen === 'purify' && (
-        <PurifyPickerModal onClose={() => setPickerOpen(null)} />
-      )}
-      {pickerOpen === 'focus' && (
-        <FocusPickerModal onClose={() => setPickerOpen(null)} />
-      )}
-      {pickerOpen === 'transmute' && (
-        <TransmutePickerModal onClose={() => setPickerOpen(null)} />
-      )}
-      {pickerOpen === 'volley' && (
-        <VolleyTargetModal onClose={() => setPickerOpen(null)} />
-      )}
+      {pickerOpen === 'purify' && <PurifyPickerModal onClose={() => setPickerOpen(null)} />}
+      {pickerOpen === 'focus' && <FocusPickerModal onClose={() => setPickerOpen(null)} />}
+      {pickerOpen === 'transmute' && <TransmutePickerModal onClose={() => setPickerOpen(null)} />}
+      {pickerOpen === 'volley' && <VolleyTargetModal onClose={() => setPickerOpen(null)} />}
     </div>
   )
 }
@@ -310,9 +280,7 @@ export function PendingStrip() {
             title={`${meta.name} — ${meta.pendingLabel}`}
             body={meta.pendingDescription}
           >
-            <span className={`pending-pip pending-${id} ${manaTheme}`}>
-              {meta.icon}
-            </span>
+            <span className={`pending-pip pending-${id} ${manaTheme}`}>{meta.icon}</span>
           </HoverTooltip>
         )
       })}

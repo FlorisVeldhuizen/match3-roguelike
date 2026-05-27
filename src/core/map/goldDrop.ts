@@ -10,10 +10,7 @@ const GOLD_DROP_RANGES: Record<string, { min: number; max: number }> = {
   boss: { min: 0, max: 0 },
 }
 
-export function rollGoldDrop(
-  node: MapNode,
-  rng: RngState,
-): { gold: number; rng: RngState } {
+export function rollGoldDrop(node: MapNode, rng: RngState): { gold: number; rng: RngState } {
   const key = keyFor(node)
   const range = GOLD_DROP_RANGES[key]
   if (!range || range.max === 0) return { gold: range?.min ?? 0, rng }

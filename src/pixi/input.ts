@@ -22,8 +22,7 @@ export function createBoardInteraction(opts: {
   const click = async (pos: Pos) => {
     if (opts.isAnimating()) return
     const store = useGameStore.getState()
-    if (store.fight.phase === 'victory' || store.fight.phase === 'game-over')
-      return
+    if (store.fight.phase === 'victory' || store.fight.phase === 'game-over') return
     const selected = store.board.selected
     if (!selected) {
       store.selectCell(pos)
@@ -45,8 +44,7 @@ export function createBoardInteraction(opts: {
     if (opts.isAnimating()) return
     if (!adjacent(from, to)) return
     const store = useGameStore.getState()
-    if (store.fight.phase === 'victory' || store.fight.phase === 'game-over')
-      return
+    if (store.fight.phase === 'victory' || store.fight.phase === 'game-over') return
     store.selectCell(null)
     await opts.performSwap(from, to)
   }

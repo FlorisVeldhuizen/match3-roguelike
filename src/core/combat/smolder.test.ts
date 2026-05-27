@@ -69,11 +69,13 @@ const mkBoard = (rows: string[]): Cell[][] => {
 describe('Smolder attack — onHitStatus rider', () => {
   it('applies Burn to the player when the attack lands hp damage', () => {
     const player = makePlayer()
-    const smolder = makeSmolder({ currentIntent: {
+    const smolder = makeSmolder({
+      currentIntent: {
         kind: 'attack',
         amount: 4,
         onHit: { status: 'burn', stacks: 2 },
-      } })
+      },
+    })
     const res = executeEnemyTurn(player, [smolder], [], { seed: 1 })
     expect(res.player.hp).toBe(36)
     const burn = res.player.statuses.find((s) => s.kind === 'burn')
@@ -83,11 +85,13 @@ describe('Smolder attack — onHitStatus rider', () => {
 
   it('does NOT apply Burn when block fully absorbs the attack', () => {
     const player = makePlayer({ block: 10 })
-    const smolder = makeSmolder({ currentIntent: {
+    const smolder = makeSmolder({
+      currentIntent: {
         kind: 'attack',
         amount: 4,
         onHit: { status: 'burn', stacks: 2 },
-      } })
+      },
+    })
     const res = executeEnemyTurn(player, [smolder], [], { seed: 1 })
     expect(res.player.hp).toBe(40)
     expect(res.player.statuses.find((s) => s.kind === 'burn')).toBeUndefined()
@@ -106,9 +110,7 @@ describe('Smolder tile-burn intent', () => {
     })
     const res = executeEnemyTurn(player, [smolder], board, { seed: 1 })
 
-    const burningCount = res.board
-      .flat()
-      .filter((c) => (c.flags?.burning ?? 0) > 0).length
+    const burningCount = res.board.flat().filter((c) => (c.flags?.burning ?? 0) > 0).length
     expect(burningCount).toBe(2)
 
     const placed = res.events.find((e) => e.kind === 'tile-burn-placed')
@@ -124,7 +126,10 @@ describe('Smolder tile-burn intent', () => {
     // Pre-flag two corners; tile-burn should pick from the other 14.
     board = applyFlagToCells(
       board,
-      [{ x: 0, y: 0 }, { x: 3, y: 3 }],
+      [
+        { x: 0, y: 0 },
+        { x: 3, y: 3 },
+      ],
       'burning',
       2,
     )
@@ -156,7 +161,10 @@ describe('cascade emits tile-burn-triggered on burning cell clears', () => {
     // Flag cells (0,0) and (1,0) as burning — both will be cleared.
     board = applyFlagToCells(
       board,
-      [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+      [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+      ],
       'burning',
       2,
     )
@@ -172,7 +180,7 @@ describe('cascade emits tile-burn-triggered on burning cell clears', () => {
     }
   })
 
-  it("does NOT emit when no burning cells were among the cleared", () => {
+  it('does NOT emit when no burning cells were among the cleared', () => {
     const board = mkBoard(['RRBR', 'BBRB', 'GYGY', 'YGYG'])
     const res = resolveSwap(board, { seed: 99 }, { x: 2, y: 0 }, { x: 2, y: 1 })
     expect(res.valid).toBe(true)

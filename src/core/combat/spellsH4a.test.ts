@@ -300,10 +300,8 @@ describe('Focus (immediate, mana conversion)', () => {
 // ----- Volley (EOP) -----
 
 describe('Volley (pending, red pool split across 3 targets)', () => {
-  const e1 = (over: Partial<Enemy> = {}): Enemy =>
-    makeEnemy({ id: 'e1', ...over })
-  const e2 = (over: Partial<Enemy> = {}): Enemy =>
-    makeEnemy({ id: 'e2', ...over })
+  const e1 = (over: Partial<Enemy> = {}): Enemy => makeEnemy({ id: 'e1', ...over })
+  const e2 = (over: Partial<Enemy> = {}): Enemy => makeEnemy({ id: 'e2', ...over })
 
   it('splits 9 red into 3+3+3 across the chosen targets', () => {
     const p = makePlayer({
@@ -390,11 +388,7 @@ describe('Volley (pending, red pool split across 3 targets)', () => {
     const b = e2({ hp: 100 })
     const res = resolveEndOfPhase(p, [a, b], a.id)
     expect(res.enemies.find((e) => e.id === 'e1')?.hp).toBe(0)
-    expect(
-      res.events.some(
-        (e) => e.kind === 'enemy-killed' && e.enemyId === 'e1',
-      ),
-    ).toBe(true)
+    expect(res.events.some((e) => e.kind === 'enemy-killed' && e.enemyId === 'e1')).toBe(true)
     expect(res.targetEnemyId).toBe('e2')
   })
 })

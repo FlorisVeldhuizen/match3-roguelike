@@ -16,10 +16,7 @@ import { TRAIL_ARRIVAL_MS, scheduleAfterMs } from '../../timing'
 import { readSpellVisualBeat } from '../../core/combat/spellVisual'
 import { subscribeTrailScheduled } from '../../trails/sync'
 import type { Enemy, Intent, StatusInstance, StatusKind } from '../../types'
-import {
-  applyStatusToList,
-  statusKindFromDamageSource,
-} from '../../core/combat/statuses'
+import { applyStatusToList, statusKindFromDamageSource } from '../../core/combat/statuses'
 import { getStatusDef } from '../../content/statuses'
 import { intentDisplay } from '../../content/intentDisplays'
 import { StatusBar } from './StatusBar'
@@ -66,22 +63,22 @@ export function EnemyFrame() {
     return out
   })
 
-  const [displayedStatuses, setDisplayedStatuses] = useState<
-    Record<string, StatusInstance[]>
-  >(() => {
-    const out: Record<string, StatusInstance[]> = {}
-    for (const e of enemies) out[e.id] = e.statuses
-    return out
-  })
+  const [displayedStatuses, setDisplayedStatuses] = useState<Record<string, StatusInstance[]>>(
+    () => {
+      const out: Record<string, StatusInstance[]> = {}
+      for (const e of enemies) out[e.id] = e.statuses
+      return out
+    },
+  )
   const [statusTickMarks, setStatusTickMarks] = useState<
     Record<string, Partial<Record<StatusKind, number>>>
   >({})
   const [statusCueMarks, setStatusCueMarks] = useState<
     Record<string, Partial<Record<StatusKind, number>>>
   >({})
-  const [expiringStatusKinds, setExpiringStatusKinds] = useState<
-    Record<string, Set<StatusKind>>
-  >({})
+  const [expiringStatusKinds, setExpiringStatusKinds] = useState<Record<string, Set<StatusKind>>>(
+    {},
+  )
 
   const [flashing, setFlashing] = useState<Record<string, number>>({})
   const [trailPulse, setTrailPulse] = useState<Record<string, number>>({})
@@ -93,17 +90,12 @@ export function EnemyFrame() {
   const [intentTick, setIntentTick] = useState<Record<string, number>>({})
 
   const pendingEnemyDamageRef = useRef<
-    Record<
-      string,
-      { amount: number; blocked: number; isProc: boolean } | undefined
-    >
+    Record<string, { amount: number; blocked: number; isProc: boolean } | undefined>
   >({})
   const pendingEnemyTickRef = useRef<
     Record<string, { statusKind: StatusKind; remaining: number } | undefined>
   >({})
-  const pendingEnemyStatusApplyRef = useRef<
-    Record<string, StatusInstance | undefined>
-  >({})
+  const pendingEnemyStatusApplyRef = useRef<Record<string, StatusInstance | undefined>>({})
 
   const applyEnemyDamage = (id: string, amount: number, blocked: number) => {
     setDisplayedHp((prev) => {
@@ -174,9 +166,7 @@ export function EnemyFrame() {
             setDisplayedStatuses((prev) => ({
               ...prev,
               [id]: (prev[id] ?? []).map((s) =>
-                s.kind === tick.statusKind
-                  ? { ...s, stacks: tick.remaining }
-                  : s,
+                s.kind === tick.statusKind ? { ...s, stacks: tick.remaining } : s,
               ),
             }))
             setStatusTickMarks((prev) => ({
@@ -211,11 +201,7 @@ export function EnemyFrame() {
         }, trail.arrivalMs)
         return
       }
-      if (
-        trail.purpose === 'status-apply' &&
-        trail.target &&
-        trail.target !== 'player'
-      ) {
+      if (trail.purpose === 'status-apply' && trail.target && trail.target !== 'player') {
         const id = trail.target
         scheduleAfterMs(() => {
           const incoming = pendingEnemyStatusApplyRef.current[id]
@@ -228,11 +214,7 @@ export function EnemyFrame() {
         }, trail.arrivalMs)
         return
       }
-      if (
-        trail.purpose === 'spell-effect' &&
-        trail.target &&
-        trail.target !== 'player'
-      ) {
+      if (trail.purpose === 'spell-effect' && trail.target && trail.target !== 'player') {
         const id = trail.target
         scheduleAfterMs(() => {
           if (trail.slot === 'hp' || trail.slot === undefined) {
@@ -284,18 +266,14 @@ export function EnemyFrame() {
             isProc: false,
           }
         } else if (isPlayerAttack) {
-          window.setTimeout(
-            () => applyEnemyDamage(id, amount, event.blocked),
-            TRAIL_ARRIVAL_MS,
-          )
+          window.setTimeout(() => applyEnemyDamage(id, amount, event.blocked), TRAIL_ARRIVAL_MS)
         } else {
           applyEnemyDamage(id, amount, event.blocked)
         }
       } else if (event.kind === 'pool-gained' && event.color === 'red') {
         // Red pool trail pulse syncs via trail-scheduled.
       } else if (event.kind === 'damage-taken' && event.source === 'enemy-attack') {
-        const id =
-          event.attackerId ?? useGameStore.getState().fight.targetEnemyId
+        const id = event.attackerId ?? useGameStore.getState().fight.targetEnemyId
         if (id) bumpIntentFiring(setIntentFiring, id, 'attack')
       } else if (event.kind === 'enemy-block-gained') {
         bumpIntentFiring(setIntentFiring, event.enemyId, 'block')
@@ -380,9 +358,7 @@ export function EnemyFrame() {
         window.setTimeout(() => {
           setDisplayedStatuses((prev) => ({
             ...prev,
-            [enemyId]: (prev[enemyId] ?? []).filter(
-              (s) => s.kind !== statusKind,
-            ),
+            [enemyId]: (prev[enemyId] ?? []).filter((s) => s.kind !== statusKind),
           }))
           setExpiringStatusKinds((prev) => {
             const cur = prev[enemyId]
@@ -439,24 +415,17 @@ export function EnemyFrame() {
         const isFiring = (firingState?.count ?? 0) > 0
         const firingKind = firingState?.kind
         const intent = displayedIntent[enemy.id] ?? enemy.currentIntent
-        const lethalIntent =
-          intent.kind === 'attack' && intent.amount > playerHp + playerBlock
+        const lethalIntent = intent.kind === 'attack' && intent.amount > playerHp + playerBlock
         const hpPct = Math.max(0, (shownHp / enemy.maxHp) * 100)
         // Gate on store-immediate hp (not displayedHp) to avoid trails homing onto a corpse
-        const poolTargetAttr =
-          isTarget && enemy.hp > 0 ? 'red' : undefined
-        const selectable =
-          !dead && !isTarget && fightPhase === 'player-acting'
+        const poolTargetAttr = isTarget && enemy.hp > 0 ? 'red' : undefined
+        const selectable = !dead && !isTarget && fightPhase === 'player-acting'
         const shoveCellHovered =
           !dead &&
           hoveredCell !== null &&
           intent.kind === 'cluster-shove' &&
-          (intent.sources.some(
-            (p) => p.x === hoveredCell.x && p.y === hoveredCell.y,
-          ) ||
-            intent.destinations.some(
-              (p) => p.x === hoveredCell.x && p.y === hoveredCell.y,
-            ))
+          (intent.sources.some((p) => p.x === hoveredCell.x && p.y === hoveredCell.y) ||
+            intent.destinations.some((p) => p.x === hoveredCell.x && p.y === hoveredCell.y))
         return (
           <div
             key={enemy.id}
@@ -494,49 +463,41 @@ export function EnemyFrame() {
               }
             }}
           >
-            {!dead &&
-              (animatedPhase === 'player-acting' || !firedIntent[enemy.id]) && (
-                <IntentBadge
-                  intent={intent}
-                  tick={intentTick[enemy.id] ?? 0}
-                  lethal={lethalIntent}
-                  enemies={enemies}
-                  shoveHue={
-                    intent.kind === 'cluster-shove'
-                      ? shoveHueFor(enemies, enemy.id)
-                      : null
-                  }
-                />
-              )}
+            {!dead && (animatedPhase === 'player-acting' || !firedIntent[enemy.id]) && (
+              <IntentBadge
+                intent={intent}
+                tick={intentTick[enemy.id] ?? 0}
+                lethal={lethalIntent}
+                enemies={enemies}
+                shoveHue={intent.kind === 'cluster-shove' ? shoveHueFor(enemies, enemy.id) : null}
+              />
+            )}
             <div className="enemy-sprite" aria-hidden>
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
             <div className="enemy-name">
               {enemy.name}
               {isElite && (
-                <span className="enemy-elite-badge" title="Elite — tougher than the standard archetype">
+                <span
+                  className="enemy-elite-badge"
+                  title="Elite — tougher than the standard archetype"
+                >
                   ELITE
                 </span>
               )}
             </div>
             <div className="enemy-effects-row">
               <div
-                className={`enemy-block-badge${
-                  !dead && shownBlock > 0 ? '' : ' empty'
-                }`}
+                className={`enemy-block-badge${!dead && shownBlock > 0 ? '' : ' empty'}`}
                 title="Block"
-                aria-label={
-                  !dead && shownBlock > 0 ? `Block ${shownBlock}` : undefined
-                }
+                aria-label={!dead && shownBlock > 0 ? `Block ${shownBlock}` : undefined}
                 aria-hidden={dead || shownBlock <= 0}
               >
                 <span aria-hidden>🛡</span>
                 <span>{shownBlock}</span>
               </div>
               <StatusBar
-                statuses={
-                  dead ? [] : (displayedStatuses[enemy.id] ?? enemy.statuses)
-                }
+                statuses={dead ? [] : (displayedStatuses[enemy.id] ?? enemy.statuses)}
                 tickMarks={statusTickMarks[enemy.id]}
                 cueMarks={statusCueMarks[enemy.id]}
                 expiringKinds={expiringStatusKinds[enemy.id]}
@@ -589,10 +550,7 @@ function IntentBadge({
       const wantsBelow = a.top - margin - t.height < margin
       const top = wantsBelow ? a.bottom + margin : a.top - margin - t.height
       let left = a.left + a.width / 2 - t.width / 2
-      left = Math.max(
-        margin,
-        Math.min(window.innerWidth - t.width - margin, left),
-      )
+      left = Math.max(margin, Math.min(window.innerWidth - t.width - margin, left))
       setPos({ left, top })
     }
     compute()
@@ -617,9 +575,7 @@ function IntentBadge({
         key={`${intent.kind}-${display.number ?? 'x'}-${tick}`}
         className={`enemy-intent intent-${intent.kind}${lethal ? ' lethal' : ''}`}
         style={
-          shoveHue !== null
-            ? ({ ['--shove-hue']: String(shoveHue) } as CSSProperties)
-            : undefined
+          shoveHue !== null ? ({ ['--shove-hue']: String(shoveHue) } as CSSProperties) : undefined
         }
         role="img"
         aria-label={`${display.label}${allyTargetName ? ` → ${allyTargetName}` : ''}${lethal ? ' — lethal!' : ''}`}
@@ -632,21 +588,18 @@ function IntentBadge({
         <span className="intent-icon" aria-hidden>
           {display.icon}
         </span>
-        {display.number !== undefined && (
-          <span className="intent-amount">{display.number}</span>
-        )}
+        {display.number !== undefined && <span className="intent-amount">{display.number}</span>}
         {intent.kind === 'attack' && intent.onHit && (
-          <span
-            className={`intent-rider rider-${intent.onHit.status}`}
-            aria-hidden
-          >
+          <span className={`intent-rider rider-${intent.onHit.status}`} aria-hidden>
             {getStatusDef(intent.onHit.status).icon}
             <span className="intent-rider-amount">{intent.onHit.stacks}</span>
           </span>
         )}
         {allyTargetName && (
           <>
-            <span className="intent-ally-arrow" aria-hidden>➜</span>
+            <span className="intent-ally-arrow" aria-hidden>
+              ➜
+            </span>
             <span className="intent-ally-target" aria-hidden title={allyTargetName}>
               {allyTargetName}
             </span>
@@ -665,9 +618,7 @@ function IntentBadge({
             }}
           >
             <div className="intent-tooltip-title">{display.label}</div>
-            <div className="intent-tooltip-body">
-              {display.description}
-            </div>
+            <div className="intent-tooltip-body">{display.description}</div>
           </div>,
           document.body,
         )}
@@ -676,9 +627,7 @@ function IntentBadge({
 }
 
 function bumpIntentFiring(
-  setter: Dispatch<
-    SetStateAction<Record<string, { count: number; kind: 'attack' | 'block' }>>
-  >,
+  setter: Dispatch<SetStateAction<Record<string, { count: number; kind: 'attack' | 'block' }>>>,
   id: string,
   kind: 'attack' | 'block',
 ): void {

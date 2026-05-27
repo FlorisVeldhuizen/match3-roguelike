@@ -22,8 +22,8 @@ export function intentDisplay(intent: Intent): IntentDisplay {
           label: `Attacks for ${intent.amount} (applies ${onHit.stacks} ${def.name} on hit)`,
           description: (
             <>
-              Will hit you for {intent.amount} next turn. If it lands, you also
-              gain {onHit.stacks} <Keyword id={onHit.status} />.
+              Will hit you for {intent.amount} next turn. If it lands, you also gain {onHit.stacks}{' '}
+              <Keyword id={onHit.status} />.
             </>
           ),
         }
@@ -54,9 +54,9 @@ export function intentDisplay(intent: Intent): IntentDisplay {
         label: `Sets ${intent.count} tile${intent.count === 1 ? '' : 's'} on fire`,
         description: (
           <>
-            Next turn, sets {intent.count} tile{intent.count === 1 ? '' : 's'}{' '}
-            on fire. Match a burning tile and you take <Keyword id="burn" /> —
-            bigger matches mean longer, fiercer burns.
+            Next turn, sets {intent.count} tile{intent.count === 1 ? '' : 's'} on fire. Match a
+            burning tile and you take <Keyword id="burn" /> — bigger matches mean longer, fiercer
+            burns.
           </>
         ),
       }
@@ -94,16 +94,15 @@ export function intentDisplay(intent: Intent): IntentDisplay {
         description: `Next turn, row ${intent.row + 1} is petrified for 2 phases — its gems are locked (can't be swapped) and matches can't originate there. Cascades and matches anchored elsewhere can still flow through.`,
       }
     case 'color-hex': {
-      const colorName =
-        intent.color.charAt(0).toUpperCase() + intent.color.slice(1)
+      const colorName = intent.color.charAt(0).toUpperCase() + intent.color.slice(1)
       return {
         icon: '🔮',
         label: `Hexes ${colorName}`,
         description: (
           <>
-            Next turn, {colorName} gems are hexed. Matching them while the
-            hex is up piles on <Keyword id="weak" /> (one stack per gem
-            cleared, stacks add up). Wait it out or burn through the cost.
+            Next turn, {colorName} gems are hexed. Matching them while the hex is up piles on{' '}
+            <Keyword id="weak" /> (one stack per gem cleared, stacks add up). Wait it out or burn
+            through the cost.
           </>
         ),
       }
@@ -115,16 +114,14 @@ export function intentDisplay(intent: Intent): IntentDisplay {
         description: `Next turn, ${intent.sources.length} flagged gems get shoved to a new spot — their colours overwrite the destination cells. Match the source gems first to deny the shove.`,
       }
     case 'color-drain': {
-      const drainName =
-        intent.color.charAt(0).toUpperCase() + intent.color.slice(1)
+      const drainName = intent.color.charAt(0).toUpperCase() + intent.color.slice(1)
       return {
         icon: '🩸',
         label: `Drains ${drainName}`,
         description: (
           <>
-            Next turn, {drainName} gems are cursed. Matching them while the
-            drain is up heals this enemy for every gem matched. Avoid
-            the colour or kill the source.
+            Next turn, {drainName} gems are cursed. Matching them while the drain is up heals this
+            enemy for every gem matched. Avoid the colour or kill the source.
           </>
         ),
       }

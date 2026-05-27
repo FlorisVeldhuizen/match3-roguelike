@@ -62,8 +62,7 @@ describe('rollIntent', () => {
       if (result.intent.kind !== 'attack' && result.intent.kind !== 'block') {
         continue
       }
-      const range =
-        result.intent.kind === 'attack' ? def.attackRange : def.blockRange
+      const range = result.intent.kind === 'attack' ? def.attackRange : def.blockRange
       expect(result.intent.amount).toBeGreaterThanOrEqual(range.min)
       expect(result.intent.amount).toBeLessThanOrEqual(range.max)
     }

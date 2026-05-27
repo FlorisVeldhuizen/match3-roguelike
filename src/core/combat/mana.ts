@@ -3,11 +3,7 @@ import { getSpell, isUltimateId } from './spellRegistry'
 
 export type ManaSpendColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple'
 
-const COLOURED: ReadonlyArray<keyof Omit<ManaCost, 'yellow'>> = [
-  'red',
-  'blue',
-  'green',
-] as const
+const COLOURED: ReadonlyArray<keyof Omit<ManaCost, 'yellow'>> = ['red', 'blue', 'green'] as const
 
 // Yellow is wild — it can pay for any colour's shortfall at 1:1.
 export function canAffordSpell(mana: ManaPools, cost: ManaCost): boolean {
@@ -39,9 +35,7 @@ export function consumeSpellCost(mana: ManaPools, cost: ManaCost): ManaPools {
 }
 
 export function totalCost(cost: ManaCost): number {
-  return (
-    (cost.red ?? 0) + (cost.blue ?? 0) + (cost.green ?? 0) + (cost.yellow ?? 0)
-  )
+  return (cost.red ?? 0) + (cost.blue ?? 0) + (cost.green ?? 0) + (cost.yellow ?? 0)
 }
 
 /** Gem colours whose HUD pools should react when this cost is paid. */

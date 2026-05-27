@@ -1,11 +1,7 @@
 import { GEM_COLORS, type GemColor } from '../types'
 
 /** Board + HUD gem art sets — see public/gems/CREDITS.md */
-export const GEM_STYLE_VARIANTS = [
-  'pack-melle',
-  'pack-birthstones',
-  'vector',
-] as const
+export const GEM_STYLE_VARIANTS = ['pack-melle', 'pack-birthstones', 'vector'] as const
 
 export type GemStyleVariant = (typeof GEM_STYLE_VARIANTS)[number]
 
@@ -81,11 +77,7 @@ function normalizeVariant(raw: string | null): GemStyleVariant {
   if (raw === 'pack-7soul' || raw === 'pack-7soul-34') {
     return 'pack-birthstones'
   }
-  if (
-    raw === 'pixel-chunky' ||
-    raw === 'pixel-soft' ||
-    raw === 'pixel-rune'
-  ) {
+  if (raw === 'pixel-chunky' || raw === 'pixel-soft' || raw === 'pixel-rune') {
     return 'vector'
   }
   if (raw && GEM_STYLE_VARIANTS.includes(raw as GemStyleVariant)) {
@@ -118,10 +110,7 @@ export function applyGemStyleToDocument(v: GemStyleVariant = variant): void {
   root.dataset.gemStyle = v
   root.style.setProperty('--gem-board-scale', String(gemBoardScale(v)))
   for (const color of GEM_COLORS) {
-    root.style.setProperty(
-      `--gem-${color}-url`,
-      `url('${gemAssetPath(v, color)}')`,
-    )
+    root.style.setProperty(`--gem-${color}-url`, `url('${gemAssetPath(v, color)}')`)
   }
 }
 
@@ -137,9 +126,7 @@ export function setGemStyle(next: GemStyleVariant): void {
   for (const l of listeners) l(next)
 }
 
-export function subscribeGemStyle(
-  listener: (v: GemStyleVariant) => void,
-): () => void {
+export function subscribeGemStyle(listener: (v: GemStyleVariant) => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }

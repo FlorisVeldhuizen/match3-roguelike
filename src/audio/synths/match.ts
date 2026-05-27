@@ -41,17 +41,9 @@ function synthCoinPing(amount: number): void {
   if (!c) return
   const I = matchIntensity(amount)
   const detune = jitter(0.025)
-  const base = 1700 * (1 + 0.06 * (I - 1) / 0.18)
+  const base = 1700 * (1 + (0.06 * (I - 1)) / 0.18)
   const FIFTH = Math.pow(2, 7 / 12)
-  renderTwinkleSeq(
-    c, c.currentTime, base, detune,
-    [1, FIFTH, 2],
-    0.01,
-    0.035,
-    0.07,
-    0.003,
-    I,
-  )
+  renderTwinkleSeq(c, c.currentTime, base, detune, [1, FIFTH, 2], 0.01, 0.035, 0.07, 0.003, I)
 }
 
 export function playCoinPingSfx(amount = 1): void {

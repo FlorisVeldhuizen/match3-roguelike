@@ -214,4 +214,3 @@ body:has(.game-over-overlay) .intent-tooltip {
 .hover-tooltip.tooltip-ultimate .hover-tooltip-title {
   color: var(--royal-2);
 }
-

@@ -35,11 +35,7 @@ export function generateBoard(
   return { board, rng: r }
 }
 
-function fillAndDematch(
-  width: number,
-  height: number,
-  randColor: () => GemColor,
-): Cell[][] {
+function fillAndDematch(width: number, height: number, randColor: () => GemColor): Cell[][] {
   const board: Cell[][] = Array.from({ length: height }, () =>
     Array.from({ length: width }, () => ({ gemColor: randColor() })),
   )
@@ -58,14 +54,9 @@ function fillAndDematch(
   return board
 }
 
-function forbiddenColorsAt(
-  board: Cell[][],
-  x: number,
-  y: number,
-): Set<GemColor> {
+function forbiddenColorsAt(board: Cell[][], x: number, y: number): Set<GemColor> {
   const out = new Set<GemColor>()
-  const at = (xx: number, yy: number): GemColor | null =>
-    board[yy]?.[xx]?.gemColor ?? null
+  const at = (xx: number, yy: number): GemColor | null => board[yy]?.[xx]?.gemColor ?? null
   // Ban any color that would complete a triplet with two filled neighbors.
   const ban = (a: GemColor | null, b: GemColor | null) => {
     if (a && a === b) out.add(a)
@@ -112,11 +103,7 @@ export function findAllValidSwaps(
       if (x + 1 < w && swapMakesMatch(board, x, y, x + 1, y)) {
         out.push({ from: { x, y }, to: { x: x + 1, y } })
       }
-      if (
-        y + 1 < h &&
-        (petrifiedRows[y + 1] ?? 0) === 0 &&
-        swapMakesMatch(board, x, y, x, y + 1)
-      ) {
+      if (y + 1 < h && (petrifiedRows[y + 1] ?? 0) === 0 && swapMakesMatch(board, x, y, x, y + 1)) {
         out.push({ from: { x, y }, to: { x, y: y + 1 } })
       }
     }
@@ -124,13 +111,7 @@ export function findAllValidSwaps(
   return out
 }
 
-function swapMakesMatch(
-  board: Cell[][],
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-): boolean {
+function swapMakesMatch(board: Cell[][], ax: number, ay: number, bx: number, by: number): boolean {
   const rowA = board[ay]
   const rowB = board[by]
   if (!rowA || !rowB) return false
@@ -184,12 +165,7 @@ function forcePlaceSwap(
   return board
 }
 
-function tryForceSegment(
-  board: Cell[][],
-  y: number,
-  a: GemColor,
-  b: GemColor,
-): boolean {
+function tryForceSegment(board: Cell[][], y: number, a: GemColor, b: GemColor): boolean {
   const row = board[y]
   if (!row) return false
   const segment: GemColor[] = [a, b, a, b]

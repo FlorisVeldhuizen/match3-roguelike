@@ -1,28 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { applyIntentTelegraph, rollIntent } from './intents'
-import {
-  resolveColumnSmashIntent,
-  resolvePetrifyRowIntent,
-} from './intentResolvers'
+import { resolveColumnSmashIntent, resolvePetrifyRowIntent } from './intentResolvers'
 import { resolveShatter } from './spellResolvers'
 import { executeEnemyTurn } from './enemyTurn'
 import { registerArchetype } from './archetypeRegistry'
 import { resolveSwap } from '../board/cascade'
 import { detectMatches } from '../board/detectMatches'
-import {
-  generateBoard,
-  findAllValidSwaps,
-  hasValidSwap,
-} from '../board/generation'
+import { generateBoard, findAllValidSwaps, hasValidSwap } from '../board/generation'
 import { tickPetrifiedRows } from '../board/flags'
-import type {
-  Cell,
-  Enemy,
-  GemColor,
-  Intent,
-  PetrifiedRows,
-  Player,
-} from '../../types'
+import type { Cell, Enemy, GemColor, Intent, PetrifiedRows, Player } from '../../types'
 
 // Local archetype registration so the test doesn't depend on
 // `content/enemies.ts` loading. Mirrors the Smolder test setup.
@@ -94,9 +80,12 @@ const makeDefender = (overrides: Partial<Enemy> = {}): Enemy => ({
 const mkBoard8 = (): Cell[][] => {
   const colors: Array<Cell['gemColor']> = ['red', 'blue', 'green', 'yellow']
   return Array.from({ length: 8 }, (_, y) =>
-    Array.from({ length: 8 }, (_, x): Cell => ({
-      gemColor: colors[(x + (y % 2 === 0 ? 0 : 2)) % 4]!,
-    })),
+    Array.from(
+      { length: 8 },
+      (_, x): Cell => ({
+        gemColor: colors[(x + (y % 2 === 0 ? 0 : 2)) % 4]!,
+      }),
+    ),
   )
 }
 
@@ -149,13 +138,11 @@ describe('applyIntentTelegraph — column-smash', () => {
   it('emits column-smash-placed with the threatened column without touching the board', () => {
     const board = mkBoard8()
     const intent: Intent = { kind: 'column-smash', column: 3 }
-    const { board: nextBoard, petrifiedRows, events } = applyIntentTelegraph(
-      board,
-      {},
-      intent,
-      'brute-1',
-      'brute',
-    )
+    const {
+      board: nextBoard,
+      petrifiedRows,
+      events,
+    } = applyIntentTelegraph(board, {}, intent, 'brute-1', 'brute')
     // No per-cell flag — threat is column-bound and tracked from the
     // event by the overlay.
     expect(nextBoard).toBe(board)
@@ -232,21 +219,13 @@ describe('resolveColumnSmashIntent', () => {
 // ----------------------------------------------------------------------
 describe('resolvePetrifyRowIntent', () => {
   it('writes the row into petrifiedRows with the archetype duration', () => {
-    const res = resolvePetrifyRowIntent(
-      { kind: 'petrify-row', row: 5 },
-      makeDefender(),
-      {},
-    )
+    const res = resolvePetrifyRowIntent({ kind: 'petrify-row', row: 5 }, makeDefender(), {})
     expect(res.petrifiedRows[5]).toBe(2)
     expect(res.events.some((e) => e.kind === 'petrify-fired')).toBe(true)
   })
 
   it('keeps the higher duration when re-applied to an already-locked row', () => {
-    const res = resolvePetrifyRowIntent(
-      { kind: 'petrify-row', row: 3 },
-      makeDefender(),
-      { 3: 1 },
-    )
+    const res = resolvePetrifyRowIntent({ kind: 'petrify-row', row: 3 }, makeDefender(), { 3: 1 })
     // 1 (existing) < 2 (incoming) → uses incoming.
     expect(res.petrifiedRows[3]).toBe(2)
   })
@@ -264,11 +243,7 @@ describe('executeEnemyTurn — column-smash', () => {
       currentIntent: { kind: 'column-smash', column: 4 },
     })
     const res = executeEnemyTurn(player, [brute], board, { seed: 1 })
-    expect(
-      res.events.some(
-        (e) => e.kind === 'column-smash-resolved' && e.column === 4,
-      ),
-    ).toBe(true)
+    expect(res.events.some((e) => e.kind === 'column-smash-resolved' && e.column === 4)).toBe(true)
   })
 })
 
@@ -290,9 +265,7 @@ describe('detectMatches — petrify pass-through', () => {
     const matches = detectMatches(board)
     expect(matches.length).toBeGreaterThan(0)
     // The match should include all 3 cells.
-    const match = matches.find((m) =>
-      m.cells.some((c) => c.x === 0 && c.y === 1),
-    )
+    const match = matches.find((m) => m.cells.some((c) => c.x === 0 && c.y === 1))
     expect(match).toBeDefined()
   })
 })
@@ -311,13 +284,7 @@ describe('resolveSwap — petrify swap gate', () => {
     board[2]![0] = { gemColor: 'red' }
     board[3]![0] = { gemColor: 'red' }
     const petrified: PetrifiedRows = { 0: 2 }
-    const res = resolveSwap(
-      board,
-      { seed: 1 },
-      { x: 0, y: 0 },
-      { x: 0, y: 1 },
-      petrified,
-    )
+    const res = resolveSwap(board, { seed: 1 }, { x: 0, y: 0 }, { x: 0, y: 1 }, petrified)
     expect(res.valid).toBe(false)
     expect(res.events.some((e) => e.kind === 'swap-reverted')).toBe(true)
   })
@@ -325,13 +292,7 @@ describe('resolveSwap — petrify swap gate', () => {
   it('reverts a swap whose target is on a petrified row', () => {
     const board = mkBoard8()
     const petrified: PetrifiedRows = { 1: 1 }
-    const res = resolveSwap(
-      board,
-      { seed: 1 },
-      { x: 0, y: 0 },
-      { x: 0, y: 1 },
-      petrified,
-    )
+    const res = resolveSwap(board, { seed: 1 }, { x: 0, y: 0 }, { x: 0, y: 1 }, petrified)
     expect(res.valid).toBe(false)
   })
 
@@ -343,13 +304,7 @@ describe('resolveSwap — petrify swap gate', () => {
     board[7]![0] = { gemColor: 'red' }
     const petrified: PetrifiedRows = { 0: 1 } // row 0 locked
     // Swap on row 6 — unrelated to the locked row.
-    const res = resolveSwap(
-      board,
-      { seed: 1 },
-      { x: 0, y: 6 },
-      { x: 1, y: 6 },
-      petrified,
-    )
+    const res = resolveSwap(board, { seed: 1 }, { x: 0, y: 6 }, { x: 1, y: 6 }, petrified)
     expect(res.valid).toBe(true)
   })
 })
@@ -411,12 +366,7 @@ describe('hasValidSwap / findAllValidSwaps — petrify awareness', () => {
 describe('generateBoard — petrify-aware regen', () => {
   it('returns a board with at least one valid swap outside the petrified row(s)', () => {
     const petrified: PetrifiedRows = { 0: 2, 7: 2 }
-    const { board } = generateBoard(
-      { seed: 12345 },
-      undefined,
-      undefined,
-      petrified,
-    )
+    const { board } = generateBoard({ seed: 12345 }, undefined, undefined, petrified)
     expect(hasValidSwap(board, petrified)).toBe(true)
   })
 
@@ -470,14 +420,7 @@ describe('resolveShatter', () => {
     const reds = countColor(board, 'red')
     const player = makePlayer()
     const enemy = makeBrute({ hp: 100 })
-    const r = resolveShatter(
-      player,
-      [enemy],
-      board,
-      { seed: 1 },
-      'red',
-      enemy.id,
-    )
+    const r = resolveShatter(player, [enemy], board, { seed: 1 }, 'red', enemy.id)
     const dmgEvent = r.events.find((e) => e.kind === 'damage-dealt')
     expect(dmgEvent).toBeTruthy()
     // Single-target — should hit the named target with damage equal
@@ -563,12 +506,8 @@ describe('tickPetrifiedRows', () => {
     expect(result.expired).toEqual([5])
     const ticks = result.events.filter((e) => e.kind === 'petrify-row-ticked')
     expect(ticks).toHaveLength(2)
-    const tick2 = ticks.find(
-      (e) => e.kind === 'petrify-row-ticked' && e.row === 2,
-    )
-    const tick5 = ticks.find(
-      (e) => e.kind === 'petrify-row-ticked' && e.row === 5,
-    )
+    const tick2 = ticks.find((e) => e.kind === 'petrify-row-ticked' && e.row === 2)
+    const tick5 = ticks.find((e) => e.kind === 'petrify-row-ticked' && e.row === 5)
     if (tick2?.kind === 'petrify-row-ticked') expect(tick2.remaining).toBe(1)
     if (tick5?.kind === 'petrify-row-ticked') expect(tick5.remaining).toBe(0)
   })

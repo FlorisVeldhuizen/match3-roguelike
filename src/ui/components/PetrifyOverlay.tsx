@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { scheduleAfterMs } from '../../timing'
@@ -43,9 +37,7 @@ function readPetrifyFromStore(): { pending: Set<number>; active: Map<number, Act
 export function PetrifyOverlay() {
   const [pending, setPending] = useState(() => readPetrifyFromStore().pending)
   const [active, setActive] = useState(() => readPetrifyFromStore().active)
-  const w = useGameStore(
-    (s) => s.board.cells[0]?.length ?? 0,
-  )
+  const w = useGameStore((s) => s.board.cells[0]?.length ?? 0)
   const pendingFireRef = useRef<{
     row: number
     duration: number
@@ -90,9 +82,7 @@ export function PetrifyOverlay() {
         })
         const boardW = useGameStore.getState().board.cells[0]?.length ?? 0
         if (boardW > 0) {
-          impactsSpawnRef.current(
-            Array.from({ length: boardW }, (_, x) => ({ x, y: row })),
-          )
+          impactsSpawnRef.current(Array.from({ length: boardW }, (_, x) => ({ x, y: row })))
         }
         scheduleAfterMs(() => {
           if (useGameStore.getState().fightCounter !== pending.fightCounter) return

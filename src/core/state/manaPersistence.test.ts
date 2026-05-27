@@ -33,9 +33,7 @@ describe('mana resets on each new fight', () => {
 
     // Find a fight node reachable from the start of the map.
     const map = useGameStore.getState().map
-    const startFight = map.nodes.find(
-      (n) => n.column === 0 && n.kind === 'fight',
-    )
+    const startFight = map.nodes.find((n) => n.column === 0 && n.kind === 'fight')
     expect(startFight).toBeDefined()
 
     useGameStore.getState().enterNode(startFight!.id)
@@ -50,9 +48,7 @@ describe('mana resets on each new fight', () => {
     setSkillCharge(6)
 
     const map = useGameStore.getState().map
-    const startFight = map.nodes.find(
-      (n) => n.column === 0 && n.kind === 'fight',
-    )
+    const startFight = map.nodes.find((n) => n.column === 0 && n.kind === 'fight')
     expect(startFight).toBeDefined()
 
     useGameStore.getState().enterNode(startFight!.id)

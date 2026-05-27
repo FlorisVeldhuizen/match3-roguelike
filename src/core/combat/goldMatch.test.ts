@@ -58,9 +58,7 @@ describe('cascadeProcessor — gold-color match payout', () => {
   it('emits pool-gained with color=gold for the HUD/SFX layer', () => {
     const player = makePlayer()
     const r = processCascadeEvents(goldMatch(3), player, [], null, [])
-    const gained = r.events.find(
-      (e) => e.kind === 'pool-gained' && e.color === 'gold',
-    )
+    const gained = r.events.find((e) => e.kind === 'pool-gained' && e.color === 'gold')
     expect(gained).toBeDefined()
     expect(gained && gained.kind === 'pool-gained' ? gained.amount : 0).toBe(6)
   })

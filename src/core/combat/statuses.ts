@@ -1,9 +1,4 @@
-import type {
-  DamageSource,
-  GameEvent,
-  StatusInstance,
-  StatusKind,
-} from '../../types'
+import type { DamageSource, GameEvent, StatusInstance, StatusKind } from '../../types'
 
 export const BURN_FROM_TILE_BONUS = 1
 
@@ -18,7 +13,7 @@ export function applyStatusToList(
   }
   return list.map((s) =>
     s.kind === incoming.kind
-      ? { kind: s.kind, stacks: s.stacks + incoming.stacks } as StatusInstance
+      ? ({ kind: s.kind, stacks: s.stacks + incoming.stacks } as StatusInstance)
       : s,
   )
 }
@@ -66,10 +61,7 @@ export function tickStatuses(
   return { statuses: next, burnDamage, regenHeal, events }
 }
 
-export function hasStatus(
-  list: readonly StatusInstance[],
-  kind: StatusKind,
-): boolean {
+export function hasStatus(list: readonly StatusInstance[], kind: StatusKind): boolean {
   return list.some((s) => s.kind === kind)
 }
 
@@ -77,9 +69,7 @@ export function weakMultiplier(sourceStatuses: readonly StatusInstance[]): numbe
   return hasStatus(sourceStatuses, 'weak') ? 0.5 : 1
 }
 
-export function vulnerableMultiplier(
-  targetStatuses: readonly StatusInstance[],
-): number {
+export function vulnerableMultiplier(targetStatuses: readonly StatusInstance[]): number {
   return hasStatus(targetStatuses, 'vulnerable') ? 1.5 : 1
 }
 
@@ -95,9 +85,7 @@ export function getStatusTemplate(kind: StatusKind): StatusInstance {
   return t
 }
 
-export function statusKindFromDamageSource(
-  source: DamageSource,
-): 'burn' | null {
+export function statusKindFromDamageSource(source: DamageSource): 'burn' | null {
   switch (source) {
     case 'burn':
       return 'burn'

@@ -1,11 +1,5 @@
 import { type RngState, nextInt, shuffle } from '../rng/mulberry32'
-import type {
-  EnemyArchetype,
-  MapEdge,
-  MapNode,
-  MapState,
-  NodeKind,
-} from '../../types'
+import type { EnemyArchetype, MapEdge, MapNode, MapState, NodeKind } from '../../types'
 
 const COLUMN_COUNT = 6
 
@@ -85,10 +79,7 @@ const ROLE_MIXED_CHANCE_NUMERATOR = 4
 const ROLE_MIXED_CHANCE_DENOMINATOR = 10
 
 // These archetypes require multi-enemy plumbing; solo instances break.
-const SOLO_BANNED_ARCHETYPES: ReadonlySet<EnemyArchetype> = new Set([
-  'swarmer',
-  'rallier',
-])
+const SOLO_BANNED_ARCHETYPES: ReadonlySet<EnemyArchetype> = new Set(['swarmer', 'rallier'])
 
 function rollEnemyCount(
   column: number,
@@ -121,17 +112,13 @@ function rollWeightedArchetype(
   return { archetype: filtered[0]!.archetype, rng: next }
 }
 
-function rollColumnKinds(
-  column: number,
-  rng: RngState,
-): { kinds: NodeKind[]; rng: RngState } {
+function rollColumnKinds(column: number, rng: RngState): { kinds: NodeKind[]; rng: RngState } {
   if (column === 0) {
     return { kinds: ['fight', 'fight', 'fight'], rng }
   }
   if (column === 1) {
     const [variant, n] = nextInt(rng, 2)
-    const kinds: NodeKind[] =
-      variant === 0 ? ['fight', 'shop'] : ['fight', 'fight']
+    const kinds: NodeKind[] = variant === 0 ? ['fight', 'shop'] : ['fight', 'fight']
     const [shuffled, n2] = shuffle(n, kinds)
     return { kinds: shuffled, rng: n2 }
   }

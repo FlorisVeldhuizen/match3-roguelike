@@ -73,10 +73,7 @@ export function rollPostFightReward(args: {
   const [pick, advanced] = nextInt(args.rng, SPELL_OFFER_DENOMINATOR)
   if (pick < SPELL_OFFER_NUMERATOR) {
     const spell = rollSpellReward(args.ownedSpellIds, advanced, args.gold)
-    if (
-      spell.reward.kind === 'spell' &&
-      spell.reward.offeredSpellIds.length > 0
-    ) {
+    if (spell.reward.kind === 'spell' && spell.reward.offeredSpellIds.length > 0) {
       return spell
     }
     return rollReward(args.ownedRelics, args.rarity, spell.rng, args.gold)

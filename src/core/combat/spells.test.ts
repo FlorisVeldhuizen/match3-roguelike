@@ -89,7 +89,9 @@ describe('Bulwark at end of phase', () => {
     expect(res.player.carryBlockNextPhase).toBe(false)
     // both pending effects resolve and are cleared (riposte not queued)
     const resolved = res.events.filter((e) => e.kind === 'pending-effect-resolved')
-    expect(resolved.map((e) => (e.kind === 'pending-effect-resolved' ? e.spellId : '')).sort()).toEqual(['bulwark', 'reinforce'])
+    expect(
+      resolved.map((e) => (e.kind === 'pending-effect-resolved' ? e.spellId : '')).sort(),
+    ).toEqual(['bulwark', 'reinforce'])
     expect(res.player.pendingSpells).toEqual([])
   })
 
@@ -177,11 +179,7 @@ describe('Riposte', () => {
     const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.enemies[0]?.hp).toBeLessThanOrEqual(0)
     expect(res.phase).toBe('victory')
-    expect(
-      res.events.some(
-        (e) => e.kind === 'phase-changed' && e.phase === 'victory',
-      ),
-    ).toBe(true)
+    expect(res.events.some((e) => e.kind === 'phase-changed' && e.phase === 'victory')).toBe(true)
   })
 
   it('expires unused at end of enemy turn when no attack came', () => {
@@ -194,13 +192,9 @@ describe('Riposte', () => {
     })
     const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.player.pendingSpells).not.toContain('riposte')
-    const resolved = res.events.filter(
-      (e) => e.kind === 'pending-effect-resolved',
-    )
+    const resolved = res.events.filter((e) => e.kind === 'pending-effect-resolved')
     expect(
-      resolved.some(
-        (e) => e.kind === 'pending-effect-resolved' && e.spellId === 'riposte',
-      ),
+      resolved.some((e) => e.kind === 'pending-effect-resolved' && e.spellId === 'riposte'),
     ).toBe(true)
     expect(res.events.some((e) => e.kind === 'riposte-counter')).toBe(false)
   })
@@ -245,11 +239,7 @@ describe('Burn at turn start', () => {
     })
     const res = executeEnemyTurn(player, [enemy], [], { seed: 1 })
     expect(res.phase).toBe('victory')
-    expect(
-      res.events.some(
-        (e) => e.kind === 'phase-changed' && e.phase === 'victory',
-      ),
-    ).toBe(true)
+    expect(res.events.some((e) => e.kind === 'phase-changed' && e.phase === 'victory')).toBe(true)
   })
 
   // FX-pipeline contract: damage-dealt (burn proc on enemy) must come

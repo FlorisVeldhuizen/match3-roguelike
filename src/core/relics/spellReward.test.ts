@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  rollPostFightReward,
-  rollSpellReward,
-} from './reward'
+import { rollPostFightReward, rollSpellReward } from './reward'
 // Side-effect imports — register the relic and spell pools.
 import '../../content/relics'
 import '../../content/spells'

@@ -84,7 +84,10 @@
   cursor: pointer;
   border-radius: 0.4rem;
   font-family: inherit;
-  transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .reward-relic:hover {
@@ -157,14 +160,15 @@
   font-size: 0.75rem;
   border-radius: 0.3rem;
   cursor: pointer;
-  transition: background 160ms ease, color 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .reward-skip:hover {
   background: rgba(154, 125, 82, 0.1);
   color: var(--parchment);
 }
-
 
 /* Phase I shop additions. The shop reuses .reward-overlay / .reward-card
    / .reward-relic so its sections sit visually next to the relic-reward

@@ -37,12 +37,7 @@ import {
 } from '../timing'
 import { emitTrailScheduled, scheduleAtTrailSpawn } from '../trails/sync'
 import type { TrailScheduledEvent } from '../types'
-import {
-  elementCenter,
-  type Attractor,
-  type OverlayScene,
-  type ScreenPoint,
-} from './OverlayScene'
+import { elementCenter, type Attractor, type OverlayScene, type ScreenPoint } from './OverlayScene'
 
 const CLEAR_MS = 280
 // Deterministic per-gem delay (0–24ms) to desynchronize same-distance falls.
@@ -112,9 +107,7 @@ const keyOf = (p: Pos) => `${p.x},${p.y}`
 
 // Scaled by dev time-scale; production (scale=1) behaves like plain setTimeout.
 const wait = (ms: number) =>
-  new Promise<void>((resolve) =>
-    window.setTimeout(resolve, ms / getTimeScale()),
-  )
+  new Promise<void>((resolve) => window.setTimeout(resolve, ms / getTimeScale()))
 
 function phaseBeat(phase: import('../types').CombatPhase): number {
   switch (phase) {
@@ -157,27 +150,13 @@ const VISUAL = {
   strengthGold: 0xd4a847,
 } as const
 
-const FLAME_PALETTE: readonly number[] = [
-  0xc4423c,
-  0xee5e57,
-  0xff9034,
-  0xffc15c,
-] as const
+const FLAME_PALETTE: readonly number[] = [0xc4423c, 0xee5e57, 0xff9034, 0xffc15c] as const
 const FLAME_CORE_HEX = 0xffe39a
 
-const HEX_PALETTE: readonly number[] = [
-  0x6b21a8,
-  0x9333ea,
-  0xa855f7,
-  0xd8b4fe,
-] as const
+const HEX_PALETTE: readonly number[] = [0x6b21a8, 0x9333ea, 0xa855f7, 0xd8b4fe] as const
 const HEX_CORE_HEX = 0xeed6ff
 
-const STONE_PALETTE: readonly number[] = [
-  0x4a5260,
-  0x6b7888,
-  0x96a4b8,
-] as const
+const STONE_PALETTE: readonly number[] = [0x4a5260, 0x6b7888, 0x96a4b8] as const
 const STONE_CORE_HEX = 0xd6dde7
 
 const BLESSED_CORE_HEX = 0xfff5d6
@@ -392,10 +371,7 @@ export class AnimationController {
         const height = this.sprites.length
         const width = this.sprites[0]?.length ?? 0
         const columnOrder = shuffledColumnOrder(width)
-        const deepestFallMs = Math.max(
-          DROP_MIN_FALL_MS,
-          DROP_PER_CELL_MS * height,
-        )
+        const deepestFallMs = Math.max(DROP_MIN_FALL_MS, DROP_PER_CELL_MS * height)
         for (let x = 0; x < width; x++) {
           const slot = columnOrder[x] ?? 0
           const columnDelay = slot * INITIAL_FILL_COLUMN_STEP_MS
@@ -405,10 +381,7 @@ export class AnimationController {
             const target = this.geometry.cellCenter(x, y)
             sprite.y = target.y - this.geometry.cellSize * (y + 1)
             const distance = y + 1
-            const fallMs = Math.max(
-              DROP_MIN_FALL_MS,
-              DROP_PER_CELL_MS * distance,
-            )
+            const fallMs = Math.max(DROP_MIN_FALL_MS, DROP_PER_CELL_MS * distance)
             const delay = columnDelay + dropJitterMs(x, y)
             const tween = () => tweenDrop(sprite, target.x, target.y, fallMs)
             promises.push(delay > 0 ? wait(delay).then(tween) : tween())
@@ -440,8 +413,7 @@ export class AnimationController {
         const columnOrder = shuffledColumnOrder(width)
         const promises: Promise<void>[] = []
         for (let x = 0; x < width; x++) {
-          const columnDelay =
-            (columnOrder[x] ?? 0) * INITIAL_FILL_COLUMN_STEP_MS
+          const columnDelay = (columnOrder[x] ?? 0) * INITIAL_FILL_COLUMN_STEP_MS
           for (let y = 0; y < height; y++) {
             const sprite = this.sprites[y]?.[x]
             if (!sprite) continue
@@ -449,10 +421,7 @@ export class AnimationController {
             const start = this.geometry.cellCenter(x, y)
             const distance = height - y + 1
             const targetY = start.y + this.geometry.cellSize * distance
-            const fallMs = Math.max(
-              DROP_MIN_FALL_MS,
-              DROP_PER_CELL_MS * distance,
-            )
+            const fallMs = Math.max(DROP_MIN_FALL_MS, DROP_PER_CELL_MS * distance)
             const delay = columnDelay + dropJitterMs(x, y)
             const tween = () =>
               tweenDrop(sprite, start.x, targetY, fallMs).then(() => {
@@ -485,18 +454,13 @@ export class AnimationController {
           if (event.kind === 'gems-fell' && peek?.kind === 'gems-spawned') {
             emitGameEvent(event)
             emitGameEvent(peek)
-            await Promise.all([
-              this.animateFall(event.movements),
-              this.animateSpawn(peek.spawns),
-            ])
+            await Promise.all([this.animateFall(event.movements), this.animateSpawn(peek.spawns)])
             i++
             continue
           }
           // Look ahead to anchor chain callout on upcoming matches, not previous link.
           if (event.kind === 'cascade-start' && event.level >= 1) {
-            const anchor = cascadeAnchorFromUpcoming(events, i + 1, (p) =>
-              this.cellScreenCenter(p),
-            )
+            const anchor = cascadeAnchorFromUpcoming(events, i + 1, (p) => this.cellScreenCenter(p))
             emitGameEvent(event)
             this.cellColor.clear()
             this.lastMatchCells.clear()
@@ -524,12 +488,7 @@ export class AnimationController {
                 if (e.kind === 'enemy-block-gained') {
                   this.spawnEnemyBlockPopup(e.enemyId, e.amount)
                 } else if (e.kind === 'tile-burn-placed') {
-                  this.spawnVerbToCellsTrail(
-                    e.enemyId,
-                    e.cells,
-                    FLAME_PALETTE,
-                    FLAME_CORE_HEX,
-                  )
+                  this.spawnVerbToCellsTrail(e.enemyId, e.cells, FLAME_PALETTE, FLAME_CORE_HEX)
                 }
                 i++
               }
@@ -596,36 +555,19 @@ export class AnimationController {
         await this.animateShuffle(event.cells)
         return
       case 'pool-gained':
-        this.spawnPoolTrail(
-          event.color,
-          this.currentMatchBlessed,
-          event.amount,
-        )
+        this.spawnPoolTrail(event.color, this.currentMatchBlessed, event.amount)
         return
       case 'damage-dealt': {
         const procKind = statusKindFromDamageSource(event.source)
         if (procKind && (event.amount > 0 || event.blocked > 0)) {
           if (event.amount > 0) {
-            this.spawnStatusProcTrail(
-              event.targetId,
-              procKind,
-              event.amount,
-              'hp',
-            )
+            this.spawnStatusProcTrail(event.targetId, procKind, event.amount, 'hp')
             // Popup fires on trail-scheduled in spawnStatusProcTrail.
           }
           if (event.blocked > 0) {
-            this.spawnStatusProcTrail(
-              event.targetId,
-              procKind,
-              event.blocked,
-              'block',
-            )
+            this.spawnStatusProcTrail(event.targetId, procKind, event.blocked, 'block')
           }
-        } else if (
-          event.source === 'player-attack' &&
-          !readSpellVisualBeat(event)
-        ) {
+        } else if (event.source === 'player-attack' && !readSpellVisualBeat(event)) {
           this.scheduleDelayedDamagePopup(event.targetId, event.amount)
         } else if (event.source === 'player-attack') {
           this.pendingSpellAttackPopups.set(event.targetId, event.amount)
@@ -736,13 +678,7 @@ export class AnimationController {
           }
         }
         if (cells.length > 0) {
-          this.spawnVerbToCellsTrail(
-            event.enemyId,
-            cells,
-            HEX_PALETTE,
-            HEX_CORE_HEX,
-            'color-hex',
-          )
+          this.spawnVerbToCellsTrail(event.enemyId, cells, HEX_PALETTE, HEX_CORE_HEX, 'color-hex')
         }
         return
       }
@@ -751,13 +687,7 @@ export class AnimationController {
         for (let x = 0; x < BOARD_WIDTH; x++) {
           cells.push({ x, y: event.row })
         }
-        this.spawnVerbToCellsTrail(
-          event.enemyId,
-          cells,
-          STONE_PALETTE,
-          STONE_CORE_HEX,
-          'petrify',
-        )
+        this.spawnVerbToCellsTrail(event.enemyId, cells, STONE_PALETTE, STONE_CORE_HEX, 'petrify')
         return
       }
       case 'column-smash-resolved':
@@ -784,9 +714,7 @@ export class AnimationController {
           }
         } else {
           const targetId = event.targetId
-          scheduleAtTrailArrival(() =>
-            this.spawnShieldEffect(targetId, 'absorbed'),
-          )
+          scheduleAtTrailArrival(() => this.spawnShieldEffect(targetId, 'absorbed'))
         }
         return
       case 'block-broken':
@@ -799,9 +727,7 @@ export class AnimationController {
           }
         } else {
           const targetId = event.targetId
-          scheduleAtTrailArrival(() =>
-            this.spawnShieldEffect(targetId, 'broken'),
-          )
+          scheduleAtTrailArrival(() => this.spawnShieldEffect(targetId, 'broken'))
         }
         return
       case 'turn-ended':
@@ -876,14 +802,10 @@ export class AnimationController {
     }
   }
 
-  private async animateFall(
-    movements: { from: Pos; to: Pos }[],
-  ): Promise<void> {
+  private async animateFall(movements: { from: Pos; to: Pos }[]): Promise<void> {
     const moves = movements
       .map(({ from, to }) => ({ sprite: this.getSprite(from), from, to }))
-      .filter(
-        (m): m is { sprite: Sprite; from: Pos; to: Pos } => m.sprite !== null,
-      )
+      .filter((m): m is { sprite: Sprite; from: Pos; to: Pos } => m.sprite !== null)
     for (const { from } of moves) this.setSprite(from, null)
     const promises = moves.map(({ sprite, from, to }) => {
       const target = this.geometry.cellCenter(to.x, to.y)
@@ -928,7 +850,10 @@ export class AnimationController {
       }
       this.setSprite(destination, sprite)
     }
-    this.spawnShoveLandingBursts(enemyId, flights.map((f) => f.destination))
+    this.spawnShoveLandingBursts(
+      enemyId,
+      flights.map((f) => f.destination),
+    )
   }
 
   private hueToHex(hue: number): number {
@@ -936,8 +861,7 @@ export class AnimationController {
     const l = 0.65
     const k = (n: number) => (n + hue / 30) % 12
     const a = s * Math.min(l, 1 - l)
-    const f = (n: number) =>
-      l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
     const r = Math.round(f(0) * 255)
     const g = Math.round(f(8) * 255)
     const b = Math.round(f(4) * 255)
@@ -966,9 +890,7 @@ export class AnimationController {
     }
   }
 
-  private async animateGemsTransmuted(
-    cells: { at: Pos; color: GemColor }[],
-  ): Promise<void> {
+  private async animateGemsTransmuted(cells: { at: Pos; color: GemColor }[]): Promise<void> {
     for (const { at, color } of cells) {
       const sprite = this.getSprite(at)
       if (!sprite) continue
@@ -977,9 +899,7 @@ export class AnimationController {
     await wait(240)
   }
 
-  private async animateShuffle(
-    cells: { at: Pos; color: GemColor }[],
-  ): Promise<void> {
+  private async animateShuffle(cells: { at: Pos; color: GemColor }[]): Promise<void> {
     this.spawnNoMovesCallout()
     emitGameEvent({ kind: 'screen-shake', magnitude: 0.6 })
     await wait(360)
@@ -1017,31 +937,21 @@ export class AnimationController {
       driftY: -10,
       rotationFrom: this.nextTiltRadians(),
     })
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y + 38 },
-      'reshuffling…',
-      {
-        color: 0xffffff,
-        fontSize: 22,
-        lifeMs: 900,
-        driftY: -10,
-        growBy: 0.1,
-        chromatic: true,
-      },
-    )
+    overlay.spawnFloatingText({ x: center.x, y: center.y + 38 }, 'reshuffling…', {
+      color: 0xffffff,
+      fontSize: 22,
+      lifeMs: 900,
+      driftY: -10,
+      growBy: 0.1,
+      chromatic: true,
+    })
   }
 
-  private async animateSpawn(
-    spawns: { at: Pos; color: GemColor }[],
-  ): Promise<void> {
+  private async animateSpawn(spawns: { at: Pos; color: GemColor }[]): Promise<void> {
     const promises: Promise<void>[] = []
     const created: { sprite: Sprite; pos: Pos }[] = []
     for (const { at, color } of spawns) {
-      const sprite = createBoardGemSprite(
-        color,
-        this.visuals,
-        this.geometry.gemSize,
-      )
+      const sprite = createBoardGemSprite(color, this.visuals, this.geometry.gemSize)
       const target = this.geometry.cellCenter(at.x, at.y)
       sprite.x = target.x
       sprite.y = target.y - this.geometry.cellSize * (at.y + 1)
@@ -1074,10 +984,7 @@ export class AnimationController {
     }
   }
 
-  private spawnCascadeCallout(
-    displayLevel: number,
-    anchor: { x: number; y: number } | null,
-  ): void {
+  private spawnCascadeCallout(displayLevel: number, anchor: { x: number; y: number } | null): void {
     const overlay = this.overlay
     if (!overlay) return
     const center = anchor ?? this.cellScreenCenter({ x: 3.5, y: -1 })
@@ -1142,12 +1049,7 @@ export class AnimationController {
     }, 200)
   }
 
-  private spawnMatchCallout(
-    size: number,
-    shape: MatchShape,
-    color: GemColor,
-    cells: Pos[],
-  ): void {
+  private spawnMatchCallout(size: number, shape: MatchShape, color: GemColor, cells: Pos[]): void {
     const overlay = this.overlay
     if (!overlay) return
     const text = matchCalloutText(size, shape)
@@ -1252,19 +1154,15 @@ export class AnimationController {
         spread: 1.4,
       })
       overlay.spawnSparkle(center, 12)
-      overlay.spawnFloatingText(
-        { x: center.x, y: center.y - 12 },
-        'DEFEATED',
-        {
-          ...WORD_POP,
-          chromatic: false,
-          color: VISUAL.cascadeGold,
-          fontSize: 34,
-          lifeMs: 1050,
-          driftY: -55,
-          rotationFrom: this.nextTiltRadians(),
-        },
-      )
+      overlay.spawnFloatingText({ x: center.x, y: center.y - 12 }, 'DEFEATED', {
+        ...WORD_POP,
+        chromatic: false,
+        color: VISUAL.cascadeGold,
+        fontSize: 34,
+        lifeMs: 1050,
+        driftY: -55,
+        rotationFrom: this.nextTiltRadians(),
+      })
     }
     emitGameEvent({ kind: 'screen-shake', magnitude: 1.6 })
   }
@@ -1272,11 +1170,7 @@ export class AnimationController {
   // Alternating ±2-6° tilt so consecutive callouts never lean same direction.
   private nextTiltRadians(): number {
     const sign =
-      this.lastCalloutTiltSign !== 0
-        ? -this.lastCalloutTiltSign
-        : Math.random() < 0.5
-          ? -1
-          : 1
+      this.lastCalloutTiltSign !== 0 ? -this.lastCalloutTiltSign : Math.random() < 0.5 ? -1 : 1
     this.lastCalloutTiltSign = sign
     const tiltDeg = (2 + Math.random() * 4) * sign
     return (tiltDeg * Math.PI) / 180
@@ -1293,17 +1187,13 @@ export class AnimationController {
     const isDamage = color === 'red'
     const text = isDamage ? `-${amount}` : `+${amount}`
     const popupColor = STORED_HEX[color]
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y - 18 },
-      text,
-      {
-        color: popupColor,
-        fontSize: damagePopupFontSize(amount),
-        lifeMs: 720,
-        driftY: -52,
-        growBy: 0.25,
-      },
-    )
+    overlay.spawnFloatingText({ x: center.x, y: center.y - 18 }, text, {
+      color: popupColor,
+      fontSize: damagePopupFontSize(amount),
+      lifeMs: 720,
+      driftY: -52,
+      growBy: 0.25,
+    })
   }
 
   private scheduleDelayedDamagePopup(
@@ -1318,10 +1208,7 @@ export class AnimationController {
     }, arrivalMs)
   }
 
-  private scheduleDelayedHealPopup(
-    amount: number,
-    arrivalMs: number = TRAIL_ARRIVAL_MS,
-  ): void {
+  private scheduleDelayedHealPopup(amount: number, arrivalMs: number = TRAIL_ARRIVAL_MS): void {
     if (amount <= 0) return
     scheduleAtTrailArrival(() => {
       const overlay = this.overlay
@@ -1330,31 +1217,26 @@ export class AnimationController {
       if (!el) return
       const center = elementCenter(el)
       if (!center) return
-      overlay.spawnFloatingText(
-        { x: center.x, y: center.y - 18 },
-        `+${amount}`,
-        {
-          color: STORED_HEX.green,
-          fontSize: damagePopupFontSize(amount),
-          lifeMs: 720,
-          driftY: -52,
-          growBy: 0.25,
-        },
-      )
+      overlay.spawnFloatingText({ x: center.x, y: center.y - 18 }, `+${amount}`, {
+        color: STORED_HEX.green,
+        fontSize: damagePopupFontSize(amount),
+        lifeMs: 720,
+        driftY: -52,
+        growBy: 0.25,
+      })
     }, arrivalMs)
   }
 
-  private scheduleSpellEffectTrails(
-    event: GameEvent & { kind: 'spell-effect-trail' },
-  ): void {
+  private scheduleSpellEffectTrails(event: GameEvent & { kind: 'spell-effect-trail' }): void {
     window.setTimeout(() => {
       this.spawnSpellEffectTrails(event.spellId, event.legs)
     }, event.trailStartMs)
   }
 
-  private paletteForSpellEffect(
-    palette: SpellEffectPalette,
-  ): { colors: readonly number[]; core: number } {
+  private paletteForSpellEffect(palette: SpellEffectPalette): {
+    colors: readonly number[]
+    core: number
+  } {
     switch (palette) {
       case 'burn':
         return { colors: STATUS_TRAIL.burn.palette, core: STATUS_TRAIL.burn.core }
@@ -1413,10 +1295,7 @@ export class AnimationController {
   }
 
   /** Spell card releases particles toward HP, status, block, etc. */
-  private spawnSpellEffectTrails(
-    spellId: PendingSpellId,
-    legs: readonly SpellEffectLeg[],
-  ): void {
+  private spawnSpellEffectTrails(spellId: PendingSpellId, legs: readonly SpellEffectLeg[]): void {
     const overlay = this.overlay
     if (!overlay) return
     const spellEl = this.findEl(`[data-spell-target="${spellId}"]`)
@@ -1447,9 +1326,7 @@ export class AnimationController {
           const amount = this.pendingSpellAttackPopups.get(enemyId)
           if (amount != null) {
             this.pendingSpellAttackPopups.delete(enemyId)
-            scheduleAtTrailSpawn(arrivalMs, () =>
-              this.spawnDamagePopup(enemyId, amount),
-            )
+            scheduleAtTrailSpawn(arrivalMs, () => this.spawnDamagePopup(enemyId, amount))
           }
         }
       }
@@ -1474,9 +1351,7 @@ export class AnimationController {
 
     for (const color of spentColors) {
       const sourceSelector =
-        color === 'purple'
-          ? '[data-pool-target="purple"]'
-          : `[data-mana-target="${color}"]`
+        color === 'purple' ? '[data-pool-target="purple"]' : `[data-mana-target="${color}"]`
       const sourceEl = this.findEl(sourceSelector)
       const from = sourceEl ? elementCenter(sourceEl) : null
       if (!from) continue
@@ -1489,11 +1364,7 @@ export class AnimationController {
     }
   }
 
-  private spawnPoolTrail(
-    color: GemColor,
-    blessed = false,
-    poolAmount = 0,
-  ): void {
+  private spawnPoolTrail(color: GemColor, blessed = false, poolAmount = 0): void {
     const overlay = this.overlay
     if (!overlay) return
     const cells = this.lastMatchCells.get(color)
@@ -1517,10 +1388,7 @@ export class AnimationController {
       : null
 
     const poolOpts = { purpose: 'pool-earn' as const }
-    const emitPoolEarn = (
-      earnDest: 'effect' | 'mana',
-      arrivalMs: number,
-    ): void => {
+    const emitPoolEarn = (earnDest: 'effect' | 'mana', arrivalMs: number): void => {
       emitTrailScheduled({
         purpose: 'pool-earn',
         color,
@@ -1559,39 +1427,19 @@ export class AnimationController {
         emitPoolEarn('mana', manaArrival)
       }
     } else {
-      const effectArrival = overlay.spawnTrail(
-        from,
-        effectAttractor,
-        color,
-        5,
-        0xffffff,
-        poolOpts,
-      )
+      const effectArrival = overlay.spawnTrail(from, effectAttractor, color, 5, 0xffffff, poolOpts)
       emitPoolEarn('effect', effectArrival)
       this.schedulePoolArrivalPopup(color, poolAmount, effectArrival)
       if (manaAttractor) {
-        const manaArrival = overlay.spawnTrail(
-          from,
-          manaAttractor,
-          color,
-          3,
-          0xffffff,
-          poolOpts,
-        )
+        const manaArrival = overlay.spawnTrail(from, manaAttractor, color, 3, 0xffffff, poolOpts)
         emitPoolEarn('mana', manaArrival)
       }
     }
   }
 
-  private schedulePoolArrivalPopup(
-    color: GemColor,
-    amount: number,
-    arrivalMs: number,
-  ): void {
+  private schedulePoolArrivalPopup(color: GemColor, amount: number, arrivalMs: number): void {
     if (amount <= 0 || color === 'red' || color === 'green') return
-    scheduleAtTrailSpawn(arrivalMs, () =>
-      this.spawnPoolArrivalPopup(color, amount),
-    )
+    scheduleAtTrailSpawn(arrivalMs, () => this.spawnPoolArrivalPopup(color, amount))
   }
 
   private spawnBlessedSourceBurst(cells: Pos[]): void {
@@ -1632,10 +1480,7 @@ export class AnimationController {
   ): void {
     const overlay = this.overlay
     if (!overlay) return
-    const parentSel =
-      target === 'player'
-        ? '[data-player-hud]'
-        : `[data-enemy-id="${target}"]`
+    const parentSel = target === 'player' ? '[data-player-hud]' : `[data-enemy-id="${target}"]`
     const chip = this.findEl(`${parentSel} [data-status-chip="${kind}"]`)
     const parentEl = this.findEl(parentSel)
     const from = chip ? elementCenter(chip) : null
@@ -1649,11 +1494,7 @@ export class AnimationController {
         : target === 'player'
           ? this.findEl(`${parentSel} [data-pool-target="green"]`)
           : this.findEl(`${parentSel} .enemy-hp-bar`)
-    const lockedTarget = destEl
-      ? elementCenter(destEl)
-      : parentEl
-        ? elementCenter(parentEl)
-        : null
+    const lockedTarget = destEl ? elementCenter(destEl) : parentEl ? elementCenter(parentEl) : null
     if (!lockedTarget) return
     const facet = destination === 'block' ? 'block' : 'damage'
     const attractor: Attractor = () => lockedTarget
@@ -1694,10 +1535,7 @@ export class AnimationController {
   private spawnBurnImpactBurst(target: 'player' | string): void {
     const overlay = this.overlay
     if (!overlay) return
-    const parentSel =
-      target === 'player'
-        ? '[data-player-hud]'
-        : `[data-enemy-id="${target}"]`
+    const parentSel = target === 'player' ? '[data-player-hud]' : `[data-enemy-id="${target}"]`
     const el = this.findEl(parentSel)
     const center = el ? elementCenter(el) : null
     if (!center) return
@@ -1813,15 +1651,9 @@ export class AnimationController {
     return { from, to }
   }
 
-  private statusApplyAnchor(
-    target: 'player' | string,
-    statusKind: StatusKind,
-  ): ScreenPoint | null {
-    const parentSel =
-      target === 'player' ? '[data-player-hud]' : `[data-enemy-id="${target}"]`
-    const chipEl = this.findEl(
-      `${parentSel} [data-status-chip="${statusKind}"]`,
-    )
+  private statusApplyAnchor(target: 'player' | string, statusKind: StatusKind): ScreenPoint | null {
+    const parentSel = target === 'player' ? '[data-player-hud]' : `[data-enemy-id="${target}"]`
+    const chipEl = this.findEl(`${parentSel} [data-status-chip="${statusKind}"]`)
     const statusBarEl = this.findEl(`${parentSel} .status-bar`)
     const parentEl = this.findEl(parentSel)
     return (
@@ -1832,25 +1664,15 @@ export class AnimationController {
   }
 
   /** Spell / enemy riders — immediate spells use choreographed beat timing. */
-  private scheduleSpellStatusApplyImpact(
-    event: GameEvent & { kind: 'status-applied' },
-  ): void {
+  private scheduleSpellStatusApplyImpact(event: GameEvent & { kind: 'status-applied' }): void {
     if (event.source?.kind === 'enemy') {
-      this.spawnStatusApplyImpact(
-        event.target,
-        event.status.kind,
-        event.status.stacks,
-      )
+      this.spawnStatusApplyImpact(event.target, event.status.kind, event.status.stacks)
       return
     }
     const beat = readSpellVisualBeat(event)
     if (!beat) return
     window.setTimeout(() => {
-      this.spawnStatusApplyImpact(
-        event.target,
-        event.status.kind,
-        event.status.stacks,
-      )
+      this.spawnStatusApplyImpact(event.target, event.status.kind, event.status.stacks)
     }, beat.arriveMs)
   }
 
@@ -1924,11 +1746,7 @@ export class AnimationController {
         }),
     )
     scheduleAtTrailSpawn(arrivalMs, () =>
-      this.spawnStatusApplyImpact(
-        event.target,
-        event.status.kind,
-        event.status.stacks,
-      ),
+      this.spawnStatusApplyImpact(event.target, event.status.kind, event.status.stacks),
     )
   }
 
@@ -1943,40 +1761,29 @@ export class AnimationController {
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y - 30 },
-      `-${amount}`,
-      {
-        color,
-        fontSize: 30,
-        lifeMs: 800,
-        driftY: -75,
-        growBy: 0.3,
-      },
-    )
+    overlay.spawnFloatingText({ x: center.x, y: center.y - 30 }, `-${amount}`, {
+      color,
+      fontSize: 30,
+      lifeMs: 800,
+      driftY: -75,
+      growBy: 0.3,
+    })
   }
 
-  private spawnPlayerDamagePopup(
-    amount: number,
-    color: number = VISUAL.damageRed,
-  ): void {
+  private spawnPlayerDamagePopup(amount: number, color: number = VISUAL.damageRed): void {
     const overlay = this.overlay
     if (!overlay) return
     const el = this.findEl('[data-player-hud]')
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y - 20 },
-      `-${amount}`,
-      {
-        color,
-        fontSize: 30,
-        lifeMs: 800,
-        driftY: -70,
-        growBy: 0.3,
-      },
-    )
+    overlay.spawnFloatingText({ x: center.x, y: center.y - 20 }, `-${amount}`, {
+      color,
+      fontSize: 30,
+      lifeMs: 800,
+      driftY: -70,
+      growBy: 0.3,
+    })
   }
 
   private spawnPlayerBlockedPopup(blocked: number): void {
@@ -1986,29 +1793,19 @@ export class AnimationController {
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y - 20 },
-      `-${blocked} 🛡`,
-      {
-        color: VISUAL.shieldBlue,
-        fontSize: 24,
-        lifeMs: 700,
-        driftY: -55,
-        growBy: 0.2,
-      },
-    )
+    overlay.spawnFloatingText({ x: center.x, y: center.y - 20 }, `-${blocked} 🛡`, {
+      color: VISUAL.shieldBlue,
+      fontSize: 24,
+      lifeMs: 700,
+      driftY: -55,
+      growBy: 0.2,
+    })
   }
 
-  private spawnShieldEffect(
-    targetId: string,
-    kind: 'absorbed' | 'broken',
-  ): void {
+  private spawnShieldEffect(targetId: string, kind: 'absorbed' | 'broken'): void {
     const overlay = this.overlay
     if (!overlay) return
-    const selector =
-      targetId === 'player'
-        ? '[data-player-hud]'
-        : `[data-enemy-id="${targetId}"]`
+    const selector = targetId === 'player' ? '[data-player-hud]' : `[data-enemy-id="${targetId}"]`
     const el = this.findEl(selector)
     if (!el) return
     const center = elementCenter(el)
@@ -2024,16 +1821,12 @@ export class AnimationController {
     if (!el) return
     const center = elementCenter(el)
     if (!center) return
-    overlay.spawnFloatingText(
-      { x: center.x, y: center.y - 30 },
-      `+${amount} 🛡`,
-      {
-        color: VISUAL.shieldBlue,
-        fontSize: 22,
-        lifeMs: 750,
-        driftY: -45,
-        growBy: 0.2,
-      },
-    )
+    overlay.spawnFloatingText({ x: center.x, y: center.y - 30 }, `+${amount} 🛡`, {
+      color: VISUAL.shieldBlue,
+      fontSize: 22,
+      lifeMs: 750,
+      driftY: -45,
+      growBy: 0.2,
+    })
   }
 }

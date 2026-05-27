@@ -26,9 +26,7 @@ function writeStored(key: string, value: string): void {
 const ALLOWED_SCALES = [1, 0.5, 0.25] as const
 function parseScale(raw: string): number | null {
   const n = Number(raw)
-  return ALLOWED_SCALES.includes(n as (typeof ALLOWED_SCALES)[number])
-    ? n
-    : null
+  return ALLOWED_SCALES.includes(n as (typeof ALLOWED_SCALES)[number]) ? n : null
 }
 let timeScale = readStored(STORAGE_KEYS.timeScale, parseScale) ?? 1
 const timeScaleListeners = new Set<(value: number) => void>()
@@ -50,8 +48,7 @@ export function subscribeTimeScale(cb: (value: number) => void): () => void {
   return () => timeScaleListeners.delete(cb)
 }
 
-let stepModeOn =
-  readStored(STORAGE_KEYS.stepMode, (raw) => raw === 'true') ?? false
+let stepModeOn = readStored(STORAGE_KEYS.stepMode, (raw) => raw === 'true') ?? false
 let pendingStepResolve: (() => void) | null = null
 const stepModeListeners = new Set<(on: boolean) => void>()
 
@@ -91,8 +88,7 @@ export function advanceStep(): void {
   resolve()
 }
 
-let unlockAllSpells =
-  readStored(STORAGE_KEYS.unlockAllSpells, (raw) => raw === 'true') ?? false
+let unlockAllSpells = readStored(STORAGE_KEYS.unlockAllSpells, (raw) => raw === 'true') ?? false
 const unlockAllSpellsListeners = new Set<(on: boolean) => void>()
 
 export function isUnlockAllSpells(): boolean {
@@ -106,9 +102,7 @@ export function setUnlockAllSpells(on: boolean): void {
   for (const cb of unlockAllSpellsListeners) cb(on)
 }
 
-export function subscribeUnlockAllSpells(
-  cb: (on: boolean) => void,
-): () => void {
+export function subscribeUnlockAllSpells(cb: (on: boolean) => void): () => void {
   unlockAllSpellsListeners.add(cb)
   return () => unlockAllSpellsListeners.delete(cb)
 }
@@ -116,9 +110,7 @@ export function subscribeUnlockAllSpells(
 type SwapRequest = { from: Pos; to: Pos }
 const debugSwapListeners = new Set<(req: SwapRequest) => void>()
 
-export function onDebugSwap(
-  cb: (req: SwapRequest) => void,
-): () => void {
+export function onDebugSwap(cb: (req: SwapRequest) => void): () => void {
   debugSwapListeners.add(cb)
   return () => debugSwapListeners.delete(cb)
 }

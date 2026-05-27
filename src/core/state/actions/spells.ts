@@ -22,11 +22,7 @@ import { rollPostFightReward } from '../../relics/reward'
 import { rollGoldDrop } from '../../map/goldDrop'
 import { applyCombatEvents } from '../../combat/applyCombatEvents'
 import { getSpell, getUltimate } from '../../combat/spellRegistry'
-import {
-  canAffordSpell,
-  consumeSpellCost,
-  makeSpellCastEvent,
-} from '../../combat/mana'
+import { canAffordSpell, consumeSpellCost, makeSpellCastEvent } from '../../combat/mana'
 import { withImmediateSpellVisuals } from '../../combat/spellVisual'
 import {
   resolveBlessedGround,
@@ -103,9 +99,7 @@ function computeBoardSpellOutcome(
       finalPlayer = { ...finalPlayer, hp: finalPlayer.maxHp }
       runPhase = 'victory'
     } else if (pendingReward == null) {
-      const clearedNode = current.map.nodes.find(
-        (n) => n.id === current.map.currentNodeId,
-      )
+      const clearedNode = current.map.nodes.find((n) => n.id === current.map.currentNodeId)
       let goldDrop = 0
       if (clearedNode) {
         const goldRoll = rollGoldDrop(clearedNode, lootRng)
@@ -125,10 +119,8 @@ function computeBoardSpellOutcome(
       extraEvents.push({
         kind: 'reward-offered',
         offerKind: rolled.reward.kind,
-        offeredRelicIds:
-          rolled.reward.kind === 'relic' ? rolled.reward.offeredRelicIds : [],
-        offeredSpellIds:
-          rolled.reward.kind === 'spell' ? rolled.reward.offeredSpellIds : [],
+        offeredRelicIds: rolled.reward.kind === 'relic' ? rolled.reward.offeredRelicIds : [],
+        offeredSpellIds: rolled.reward.kind === 'spell' ? rolled.reward.offeredSpellIds : [],
         gold: rolled.reward.gold,
       })
       runPhase = 'reward'
@@ -173,8 +165,7 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
     if (!canAffordSpell(current.fight.player.mana, def.cost)) {
       return { ok: false, events: [] }
     }
-    const needsTarget =
-      id === 'ignite' || id === 'brittle' || id === 'cinder-lash'
+    const needsTarget = id === 'ignite' || id === 'brittle' || id === 'cinder-lash'
     const targetId = current.fight.targetEnemyId
     if (needsTarget) {
       const t = targetId
@@ -187,12 +178,7 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: id },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     let playerWithCost: Player = {
@@ -202,12 +188,7 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
     }
     let enemies = [...current.fight.enemies]
     let fightTargetId = current.fight.targetEnemyId
-    const hooks = applySpellHooks(
-      hookEvents,
-      playerWithCost,
-      enemies,
-      fightTargetId,
-    )
+    const hooks = applySpellHooks(hookEvents, playerWithCost, enemies, fightTargetId)
     playerWithCost = hooks.player
     enemies = hooks.enemies
     fightTargetId = hooks.targetEnemyId
@@ -244,11 +225,7 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
         })
         return {
           ok: true,
-          events: withImmediateSpellVisuals(id, [
-            event,
-            ...hooks.events,
-            ...effectEvents,
-          ]),
+          events: withImmediateSpellVisuals(id, [event, ...hooks.events, ...effectEvents]),
         }
       }
       set((s) => {
@@ -258,11 +235,7 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
       })
       return {
         ok: true,
-        events: withImmediateSpellVisuals(id, [
-          event,
-          ...hooks.events,
-          ...effectEvents,
-        ]),
+        events: withImmediateSpellVisuals(id, [event, ...hooks.events, ...effectEvents]),
       }
     }
     set((s) => {
@@ -300,12 +273,7 @@ export function makeCastPurify(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: 'purify' },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     const r = resolvePurify(
@@ -317,11 +285,7 @@ export function makeCastPurify(set: StoreSet, get: StoreGet) {
     })
     return {
       ok: true,
-      events: withImmediateSpellVisuals('purify', [
-        event,
-        ...hookEvents,
-        ...r.events,
-      ]),
+      events: withImmediateSpellVisuals('purify', [event, ...hookEvents, ...r.events]),
     }
   }
 }
@@ -336,9 +300,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
     if (!canAffordSpell(current.fight.player.mana, def.cost)) {
       return { ok: false, events: [] }
     }
-    const hasAny = current.board.cells.some((row) =>
-      row.some((c) => c.gemColor === color),
-    )
+    const hasAny = current.board.cells.some((row) => row.some((c) => c.gemColor === color))
     if (!hasAny) {
       return { ok: false, events: [] }
     }
@@ -348,12 +310,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: 'shatter' },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     const playerWithCost: Player = {
@@ -419,9 +376,7 @@ export function makeCastTransmute(set: StoreSet, get: StoreGet) {
     if (!canAffordSpell(current.fight.player.mana, def.cost)) {
       return { ok: false, events: [] }
     }
-    const hasFrom = current.board.cells.some((row) =>
-      row.some((c) => c.gemColor === from),
-    )
+    const hasFrom = current.board.cells.some((row) => row.some((c) => c.gemColor === from))
     if (!hasFrom) return { ok: false, events: [] }
 
     const event = makeSpellCastEvent('transmute', current.fight.player.mana)
@@ -429,12 +384,7 @@ export function makeCastTransmute(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: 'transmute' },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     const playerWithCost: Player = {
@@ -503,12 +453,7 @@ export function makeCastFrozenWall(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: 'frozen-wall' },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     const hooks = applySpellHooks(
@@ -550,12 +495,7 @@ export function makeCastFocus(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: 'focus' },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     const r = resolveFocus(
@@ -586,9 +526,7 @@ export function makeCastVolley(set: StoreSet, get: StoreGet) {
     if (targets.length !== 3) {
       return { ok: false, events: [] }
     }
-    const living = new Set(
-      current.fight.enemies.filter((e) => e.hp > 0).map((e) => e.id),
-    )
+    const living = new Set(current.fight.enemies.filter((e) => e.hp > 0).map((e) => e.id))
     if (!targets.every((id) => living.has(id))) {
       return { ok: false, events: [] }
     }
@@ -597,12 +535,7 @@ export function makeCastVolley(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnSpellCast(
       { spellId: 'volley' },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     set((s) => {
@@ -634,12 +567,7 @@ export function makeCastUltimate(set: StoreSet, get: StoreGet) {
     const hookEvents = runOnUltimateUsed(
       { spellId: id },
       writeRelics,
-      snapshotOf(
-        current.fight.player,
-        current.fight.enemies,
-        current.fight.targetEnemyId,
-        0,
-      ),
+      snapshotOf(current.fight.player, current.fight.enemies, current.fight.targetEnemyId, 0),
     )
     let player: Player = {
       ...current.fight.player,

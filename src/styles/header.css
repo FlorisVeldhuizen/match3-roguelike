@@ -95,7 +95,10 @@
   font-size: 1rem;
   line-height: 1;
   padding: 0.3rem 0.55rem;
-  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .settings-button:hover,
@@ -267,7 +270,9 @@
   font: inherit;
   font-size: 0.82rem;
   text-align: left;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
 }
 
 .settings-btn:hover:not(:disabled) {
@@ -323,4 +328,3 @@
 .settings-section-dev .settings-title {
   color: #b89d5e;
 }
-

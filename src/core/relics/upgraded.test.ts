@@ -42,7 +42,11 @@ describe('relic upgrade flag', () => {
     const baseSnap = snapshotOf(baseP, [], null, 0)
     const upgSnap = snapshotOf(upgP, [], null, 0)
     const m = {
-      cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }],
+      cells: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+      ],
       color: 'blue' as const,
       size: 3,
       shape: 'line' as const,
@@ -65,7 +69,11 @@ describe('relic upgrade flag', () => {
     const p = makePlayer({ relics: [inst('sharp-edge', true)] })
     const snap = snapshotOf(p, [], null, 0)
     const m = {
-      cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }],
+      cells: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+      ],
       color: 'red' as const,
       size: 3,
       shape: 'line' as const,
@@ -86,9 +94,7 @@ describe('relic upgrade flag', () => {
       p.relics,
       snap,
     )
-    const reflect = events.find(
-      (e) => e.kind === 'damage-dealt' && e.source === 'thornmail',
-    )
+    const reflect = events.find((e) => e.kind === 'damage-dealt' && e.source === 'thornmail')
     expect(reflect).toBeDefined()
     if (reflect && reflect.kind === 'damage-dealt') {
       expect(reflect.amount).toBe(2)

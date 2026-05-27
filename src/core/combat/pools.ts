@@ -35,9 +35,7 @@ export function hasExtraTurnMatch(events: readonly GameEvent[]): boolean {
   return false
 }
 
-export function withPoolGainedEvents(
-  events: readonly GameEvent[],
-): GameEvent[] {
+export function withPoolGainedEvents(events: readonly GameEvent[]): GameEvent[] {
   const out: GameEvent[] = []
   let level = 0
   for (const event of events) {

@@ -40,11 +40,7 @@ void main() {
 }
 `
 
-function compile(
-  gl: WebGLRenderingContext,
-  type: number,
-  src: string,
-): WebGLShader | null {
+function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
   const sh = gl.createShader(type)
   if (!sh) return null
   gl.shaderSource(sh, src)
@@ -118,9 +114,7 @@ export function CRTOverlay() {
     resize()
     window.addEventListener('resize', resize)
 
-    const reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const start = performance.now()
     let raf = 0
     const FRAME_MIN_MS = 1000 / 30

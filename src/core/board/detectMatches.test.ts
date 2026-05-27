@@ -15,9 +15,7 @@ function build(rows: string[]): Cell[][] {
   }
   const h = rows.length
   const w = rows[0]?.length ?? 0
-  const grid: (GemColor | null)[][] = rows.map((row) =>
-    [...row].map((ch) => colorMap[ch] ?? null),
-  )
+  const grid: (GemColor | null)[][] = rows.map((row) => [...row].map((ch) => colorMap[ch] ?? null))
   const at = (x: number, y: number): GemColor | null => {
     if (x < 0 || y < 0 || x >= w || y >= h) return null
     return grid[y]?.[x] ?? null
