@@ -20,6 +20,7 @@ import { applyStatusToList, statusKindFromDamageSource } from '../../core/combat
 import { getStatusDef } from '../../content/statuses'
 import { intentDisplay, LIFESTEAL_RIDER_ICON } from '../../content/intentDisplays'
 import { enemyPassiveTraitHint } from '../../content/enemyTraits'
+import { getArchetype } from '../../core/combat/archetypeRegistry'
 import { Keyword } from './Keyword'
 import { StatusBar } from './StatusBar'
 import { setHoveredEnemy } from '../state/hoveredEnemy'
@@ -34,6 +35,15 @@ const HIT_FLASH_MS = 280
 const INTENT_FIRE_MS = 460
 const KILL_PULSE_MS = 720
 const HEAL_PULSE_MS = 520
+
+/** Enrage badge tracks displayed HP, not store HP (store commits before trail/particle FX). */
+function showsEnragedBadge(enemy: Enemy, shownHp: number): boolean {
+  if (!enemy.enraged || shownHp <= 0) return false
+  const def = getArchetype(enemy.archetype)
+  if (!def.enragePattern) return false
+  const threshold = def.enrageThreshold ?? 0.5
+  return shownHp / enemy.maxHp <= threshold
+}
 
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
@@ -434,7 +444,7 @@ export function EnemyFrame() {
         const isTrailHit = (trailPulse[enemy.id] ?? 0) > 0
         const isStaggered = (staggered[enemy.id] ?? 0) > 0
         const isHealing = (healing[enemy.id] ?? 0) > 0
-        const isEnraged = enemy.enraged === true
+        const isEnraged = showsEnragedBadge(enemy, shownHp)
         const traitHint = enemyPassiveTraitHint(enemy.archetype)
         const isKilledPulse = (killedPulse[enemy.id] ?? 0) > 0
         const firingState = intentFiring[enemy.id]
