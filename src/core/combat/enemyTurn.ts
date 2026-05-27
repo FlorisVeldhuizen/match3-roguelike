@@ -68,7 +68,7 @@ export function executeEnemyTurn(
   let nextEnemies: Enemy[] = enemies
   let nextBoard: Cell[][] = board
   let nextPetrifiedRows: PetrifiedRows = petrifiedRows
-  let nextWardedRows: WardedRows = wardedRows
+  const nextWardedRows: WardedRows = wardedRows
   let nextHexedColors: HexedColor[] = hexedColors
   let nextDrainedColors: DrainedColor[] = drainedColors
   let nextRng = rng

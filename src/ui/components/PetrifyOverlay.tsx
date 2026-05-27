@@ -236,10 +236,10 @@ function PetrifyActiveCell({
     .join(' ')
   const trembleStyle: CSSProperties | undefined =
     mode === 'weakening'
-      ? {
+      ? ({
           '--tremble-dur': `${cfg.duration.toFixed(2)}s`,
           '--tremble-delay': `${cfg.delay.toFixed(2)}s`,
-        }
+        } as CSSProperties)
       : undefined
 
   return (
