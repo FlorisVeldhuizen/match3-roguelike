@@ -18,12 +18,14 @@ import {
   rollBlockIntent,
   rollBuffAllyIntent,
   rollClusterShoveIntent,
+  rollColorDrainIntent,
   rollColorHexIntent,
   rollColumnSmashIntent,
   rollHealAllyIntent,
   rollPetrifyRowIntent,
   rollShieldAllyIntent,
   rollTileBurnIntent,
+  rollTrickIntent,
 } from './intentRollers'
 
 // Ally-target intents fall back to 'attack' when no siblings are alive.
@@ -34,9 +36,11 @@ export function rollIntent(
   livingAllies?: Enemy[],
   rollerEnemyId?: string,
   siblingNextIntents: readonly Intent[] = [],
+  enraged?: boolean,
 ): { intent: Intent; rng: RngState } {
   const def = getArchetype(archetype)
-  const kind: IntentKind | undefined = def.pattern[patternIndex % def.pattern.length]
+  const pattern = (enraged && def.enragePattern) ? def.enragePattern : def.pattern
+  const kind: IntentKind | undefined = pattern[patternIndex % pattern.length]
   if (kind === undefined) throw new Error('rollIntent: empty pattern')
 
   const claims = aggregateSiblingClaims(siblingNextIntents)
@@ -75,6 +79,10 @@ export function rollIntent(
         rng,
         expandClaimsToCells(claims, BOARD_WIDTH, BOARD_HEIGHT),
       )
+    case 'color-drain':
+      return rollColorDrainIntent(rng, claims.colors)
+    case 'trick':
+      return rollTrickIntent(def, rng)
   }
 }
 
@@ -98,6 +106,8 @@ function addIntentToClaims(intent: Intent, claims: IntentClaims): void {
     for (const s of intent.sources) claims.cells.add(`${s.x},${s.y}`)
     for (const d of intent.destinations) claims.cells.add(`${d.x},${d.y}`)
   } else if (intent.kind === 'color-hex') {
+    claims.colors.add(intent.color)
+  } else if (intent.kind === 'color-drain') {
     claims.colors.add(intent.color)
   }
   // tile-burn picks cells at fire time, not roll time — no claim needed.
@@ -225,6 +235,19 @@ export function applyIntentTelegraph(
           row: intent.row,
           cells,
           duration,
+        },
+      ],
+    }
+  }
+  if (intent.kind === 'color-drain') {
+    return {
+      board,
+      petrifiedRows,
+      events: [
+        {
+          kind: 'color-drain-placed',
+          enemyId,
+          color: intent.color,
         },
       ],
     }

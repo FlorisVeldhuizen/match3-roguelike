@@ -36,6 +36,10 @@ describe('rollSpellReward', () => {
       'surge',
       'cinder-lash',
       'shatter',
+      'transmute',
+      'blessed-ground',
+      'frozen-wall',
+      'chain-lightning',
     ] as const
     const r = rollSpellReward(allIds, { seed: 2 })
     if (r.reward.kind !== 'spell') throw new Error('unreachable')

@@ -1,6 +1,7 @@
 import type {
   Cell,
   CellFlags,
+  DrainedColor,
   GameEvent,
   HexedColor,
   PetrifiedRows,
@@ -133,6 +134,26 @@ export function tickHexedColors(
     })
   }
   return { hexedColors: next, events }
+}
+
+export function tickDrainedColors(
+  drainedColors: readonly DrainedColor[],
+): {
+  drainedColors: DrainedColor[]
+  events: GameEvent[]
+} {
+  const next: DrainedColor[] = []
+  const events: GameEvent[] = []
+  for (const d of drainedColors) {
+    const remaining = d.turnsLeft - 1
+    if (remaining > 0) next.push({ ...d, turnsLeft: remaining })
+    events.push({
+      kind: 'color-drain-ticked',
+      color: d.color,
+      remaining: Math.max(0, remaining),
+    })
+  }
+  return { drainedColors: next, events }
 }
 
 export function pickRandomCellsWithoutFlag(

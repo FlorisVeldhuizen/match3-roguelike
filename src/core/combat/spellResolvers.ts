@@ -1,18 +1,22 @@
 import { type RngState } from '../rng/mulberry32'
 import {
+  BOARD_WIDTH,
   MANA_CAPS,
   type Cell,
+  type DrainedColor,
   type Enemy,
   type GameEvent,
   type GemColor,
   type HexedColor,
   type ManaPools,
   type Match,
+  type PetrifiedRows,
   type Player,
   type Pos,
   type StatusInstance,
   type StatusKind,
 } from '../../types'
+import { nextInt } from '../rng/mulberry32'
 import { applyStatusToList } from './statuses'
 import { runCascade } from '../board/cascade'
 import { processCascadeEvents } from './cascadeProcessor'
@@ -172,6 +176,7 @@ export function resolveShatter(
   color: GemColor,
   targetEnemyId: string | null,
   hexedColors: readonly HexedColor[] = [],
+  drainedColors: readonly DrainedColor[] = [],
 ): {
   player: Player
   enemies: Enemy[]
@@ -215,6 +220,7 @@ export function resolveShatter(
     enemies,
     targetEnemyId,
     hexedColors,
+    drainedColors,
   )
 
   return {
@@ -250,6 +256,133 @@ export function resolveFocus(
         [fromKey]: m[fromKey] - moved,
         [toKey]: m[toKey] + moved,
       },
+    },
+    events: [],
+  }
+}
+
+// ---------- Transmute ----------
+// Swap all gems of `fromColor` to `toColor` on the board. Triggers cascade.
+export function resolveTransmute(
+  board: Cell[][],
+  fromColor: GemColor,
+  toColor: GemColor,
+  rng: RngState,
+  player: Player,
+  enemies: Enemy[],
+  targetEnemyId: string | null,
+  hexedColors: readonly HexedColor[],
+  drainedColors: readonly DrainedColor[],
+): {
+  board: Cell[][]
+  rng: RngState
+  player: Player
+  enemies: Enemy[]
+  targetEnemyId: string | null
+  events: GameEvent[]
+} {
+  if (fromColor === toColor) {
+    return { board, rng, player, enemies, targetEnemyId, events: [] }
+  }
+  let nextBoard = board.map((row) =>
+    row.map((cell) =>
+      cell.gemColor === fromColor ? { ...cell, gemColor: toColor } : cell,
+    ),
+  )
+  const cascadeResult = runCascade(nextBoard, rng)
+  nextBoard = cascadeResult.board
+  const processed = processCascadeEvents(
+    cascadeResult.events,
+    player,
+    enemies,
+    targetEnemyId,
+    hexedColors,
+    drainedColors,
+  )
+  return {
+    board: nextBoard,
+    rng: cascadeResult.rng,
+    player: processed.player,
+    enemies: processed.enemies,
+    targetEnemyId: processed.targetEnemyId,
+    events: processed.events,
+  }
+}
+
+// ---------- Blessed Ground ----------
+// Bless N random cells.
+export const BLESSED_GROUND_COUNT = 4
+
+export function resolveBlessedGround(
+  board: Cell[][],
+  rng: RngState,
+): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
+  const candidates: Pos[] = []
+  for (let y = 0; y < board.length; y++) {
+    const row = board[y]
+    if (!row) continue
+    for (let x = 0; x < row.length; x++) {
+      const cell = row[x]
+      if (!cell?.flags?.blessed) {
+        candidates.push({ x, y })
+      }
+    }
+  }
+  let r = rng
+  const blessed: Pos[] = []
+  let nextBoard = board
+  for (let i = 0; i < BLESSED_GROUND_COUNT && candidates.length > 0; i++) {
+    const [idx, nr] = nextInt(r, candidates.length)
+    r = nr
+    const pos = candidates.splice(idx, 1)[0]!
+    blessed.push(pos)
+    const row = nextBoard[pos.y]!.slice()
+    row[pos.x] = {
+      ...row[pos.x]!,
+      flags: { ...row[pos.x]!.flags, blessed: 3 },
+    }
+    const b = nextBoard.slice()
+    b[pos.y] = row
+    nextBoard = b
+  }
+  return {
+    board: nextBoard,
+    rng: r,
+    events: blessed.length > 0
+      ? [{ kind: 'tile-blessed-placed', cells: blessed, color: 'gold' }]
+      : [],
+  }
+}
+
+// ---------- Frozen Wall ----------
+// Petrify a player-chosen row for 1 turn (defensive counter).
+export function resolveFrozenWall(
+  row: number,
+  petrifiedRows: PetrifiedRows,
+): { petrifiedRows: PetrifiedRows; events: GameEvent[] } {
+  const next: PetrifiedRows = { ...petrifiedRows, [row]: 2 }
+  return {
+    petrifiedRows: next,
+    events: [
+      {
+        kind: 'petrify-row-placed',
+        row,
+        cells: Array.from({ length: BOARD_WIDTH }, (_, x) => ({ x, y: row })),
+        duration: 2,
+      },
+    ],
+  }
+}
+
+// ---------- Chain Lightning ----------
+// Marks the player's next red match as AOE (handled by cascadeProcessor).
+export function resolveChainLightning(
+  player: Player,
+): { player: Player; events: GameEvent[] } {
+  return {
+    player: {
+      ...player,
+      chainLightningArmed: true,
     },
     events: [],
   }

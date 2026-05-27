@@ -15,6 +15,7 @@ import { MANA_CAPS, type ManaCost, type SpellId, type StatusKind } from '../../t
 import { HoverTooltip } from './HoverTooltip'
 import { PurifyPickerModal } from './PurifyPickerModal'
 import { FocusPickerModal } from './FocusPickerModal'
+import { TransmutePickerModal } from './TransmutePickerModal'
 import { VolleyTargetModal } from './VolleyTargetModal'
 import { useBoardSettled } from '../hooks/useBoardSettled'
 
@@ -22,9 +23,13 @@ const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
   'purify',
   'focus',
   'volley',
+  'transmute',
 ])
 
-const BOARD_TARGETING_SPELLS: ReadonlySet<SpellId> = new Set(['shatter'])
+const BOARD_TARGETING_SPELLS: ReadonlySet<SpellId> = new Set([
+  'shatter',
+  'frozen-wall',
+])
 
 const PURIFIABLE: ReadonlySet<StatusKind> = new Set(['burn', 'vulnerable', 'weak'])
 
@@ -248,6 +253,9 @@ export function SpellTray() {
       )}
       {pickerOpen === 'focus' && (
         <FocusPickerModal onClose={() => setPickerOpen(null)} />
+      )}
+      {pickerOpen === 'transmute' && (
+        <TransmutePickerModal onClose={() => setPickerOpen(null)} />
       )}
       {pickerOpen === 'volley' && (
         <VolleyTargetModal onClose={() => setPickerOpen(null)} />

@@ -189,6 +189,55 @@ const shatter: SpellDef = {
   pendingDescription: '',
 }
 
+const transmute: SpellDef = {
+  id: 'transmute',
+  name: 'Transmute',
+  icon: '🔄',
+  cost: { yellow: 3 },
+  resolution: 'immediate',
+  description:
+    'Pick two gem colors. Every gem of the first color becomes the second. The board settles after the swap.',
+  pendingLabel: '',
+  pendingDescription: '',
+}
+
+const blessedGround: SpellDef = {
+  id: 'blessed-ground',
+  name: 'Blessed Ground',
+  icon: '✦',
+  cost: { green: 3 },
+  resolution: 'immediate',
+  description:
+    'Bless 4 random cells on the board. Matches through blessed cells pay out double.',
+  pendingLabel: '',
+  pendingDescription: '',
+}
+
+const frozenWall: SpellDef = {
+  id: 'frozen-wall',
+  name: 'Frozen Wall',
+  icon: '🧊',
+  cost: { blue: 3 },
+  resolution: 'immediate',
+  description:
+    'Petrify a row of your choice for 1 turn. Blocks enemy board verbs from landing on that row.',
+  pendingLabel: '',
+  pendingDescription: '',
+}
+
+const chainLightning: SpellDef = {
+  id: 'chain-lightning',
+  name: 'Chain Lightning',
+  icon: '⚡',
+  cost: { red: 3 },
+  resolution: 'pending',
+  description:
+    'Your next red match strikes ALL enemies instead of just your target.',
+  pendingLabel: 'charged',
+  pendingDescription:
+    'Your next red match will deal its damage to every living enemy.',
+}
+
 const riposte: UltimateDef = {
   id: 'riposte',
   name: 'Riposte',
@@ -213,4 +262,8 @@ registerSpell(brittle)
 registerSpell(surge)
 registerSpell(cinderLash)
 registerSpell(shatter)
+registerSpell(transmute)
+registerSpell(blessedGround)
+registerSpell(frozenWall)
+registerSpell(chainLightning)
 registerUltimate(riposte)

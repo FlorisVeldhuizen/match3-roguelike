@@ -48,6 +48,8 @@ import {
   makeCastFocus,
   makeCastVolley,
   makeCastShatter,
+  makeCastTransmute,
+  makeCastFrozenWall,
   makeCastUltimate,
 } from './actions/spells'
 import { makeSelectCell, makeSetTargetEnemy, makeAttemptSwap } from './actions/swap'
@@ -88,6 +90,11 @@ export type GameStore = {
     events: GameEvent[]
   }
   castShatter: (color: GemColor) => { ok: boolean; events: GameEvent[] }
+  castTransmute: (
+    from: GemColor,
+    to: GemColor,
+  ) => { ok: boolean; events: GameEvent[] }
+  castFrozenWall: (row: number) => { ok: boolean; events: GameEvent[] }
   boardTargetingSpell: SpellId | null
   beginBoardTargeting: (spellId: SpellId) => boolean
   cancelBoardTargeting: () => void
@@ -176,6 +183,8 @@ export const useGameStore = create<GameStore>()(
     castFocus: makeCastFocus(set, get),
     castVolley: makeCastVolley(set, get),
     castShatter: makeCastShatter(set, get),
+    castTransmute: makeCastTransmute(set, get),
+    castFrozenWall: makeCastFrozenWall(set, get),
     beginBoardTargeting: (spellId) => {
       const s = get()
       if (s.fight.phase !== 'player-acting') return false

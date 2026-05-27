@@ -1,6 +1,7 @@
 import { type RngState } from '../rng/mulberry32'
 import type {
   Cell,
+  DrainedColor,
   Enemy,
   GameEvent,
   GemColor,
@@ -11,6 +12,7 @@ import type {
   Pos,
 } from '../../types'
 import { pickGemColorWeighted } from '../board/gemSpawn'
+import { applyCombatEvents } from './applyCombatEvents'
 import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage } from './statuses'
 import { getArchetype } from './archetypeRegistry'
@@ -22,6 +24,7 @@ import {
 import { applyGravity } from '../board/gravity'
 import {
   interceptFatalDamage,
+  runOnBlockBroken,
   runOnDamageTaken,
   snapshotOf,
 } from '../relics/engine'
@@ -31,6 +34,7 @@ export function resolveAttackIntent(
   source: Enemy,
   player: Player,
   nextEnemies: Enemy[],
+  targetEnemyId: string | null = null,
 ): { source: Enemy; player: Player; events: GameEvent[] } {
   const events: GameEvent[] = []
   let updatedEnemy = source
@@ -133,6 +137,20 @@ export function resolveAttackIntent(
   })
   if (res.blockBroken) {
     events.push({ kind: 'block-broken', targetId: 'player' })
+    const bbEvents = runOnBlockBroken(
+      { target: 'player' },
+      writeRelics,
+      snapshotOf(nextPlayer, nextEnemies, targetEnemyId, 0),
+    )
+    events.push(...bbEvents)
+    const bbApplied = applyCombatEvents(
+      bbEvents,
+      nextPlayer,
+      nextEnemies,
+      targetEnemyId,
+    )
+    nextEnemies = bbApplied.enemies
+    events.push(...bbApplied.derived)
   } else if (res.blockAbsorbed) {
     events.push({ kind: 'block-absorbed', targetId: 'player' })
   }
@@ -144,7 +162,7 @@ export function resolveAttackIntent(
       attackerId: updatedEnemy.id,
     },
     writeRelics,
-    snapshotOf(nextPlayer, nextEnemies, null, 0),
+    snapshotOf(nextPlayer, nextEnemies, targetEnemyId, 0),
   )
   for (const ev of dtEvents) {
     if (
@@ -198,6 +216,22 @@ export function resolveAttackIntent(
       status: newStatus,
       source: { kind: 'enemy', enemyId: updatedEnemy.id },
     })
+  }
+  // Shade lifesteal: heal self for a fraction of HP damage dealt.
+  const archDef = getArchetype(updatedEnemy.archetype)
+  if (archDef.onHitSelfHeal && res.hpDamage > 0 && updatedEnemy.hp > 0) {
+    const healAmount = Math.ceil(res.hpDamage * archDef.onHitSelfHeal)
+    const healedHp = Math.min(updatedEnemy.maxHp, updatedEnemy.hp + healAmount)
+    const actualHeal = healedHp - updatedEnemy.hp
+    if (actualHeal > 0) {
+      updatedEnemy = { ...updatedEnemy, hp: healedHp }
+      events.push({
+        kind: 'ally-healed',
+        sourceId: updatedEnemy.id,
+        targetId: updatedEnemy.id,
+        amount: actualHeal,
+      })
+    }
   }
   return { source: updatedEnemy, player: nextPlayer, events }
 }
@@ -479,6 +513,41 @@ export function resolveShieldAllyIntent(
         sourceId: source.id,
         targetId: target.id,
         amount: intent.amount,
+      },
+    ],
+  }
+}
+
+// ---------- Color drain (Leech) ----------
+// Fire-time pushes a drained colour into FightState.drainedColors. When the
+// player matches gems of that colour, the draining enemy heals (handled by
+// the cascade processor). Same structure as color-hex but with a heal
+// effect instead of Weak application.
+export function resolveColorDrainIntent(
+  intent: Extract<Intent, { kind: 'color-drain' }>,
+  source: Enemy,
+  drainedColors: readonly DrainedColor[],
+): { drainedColors: DrainedColor[]; events: GameEvent[] } {
+  const def = getArchetype(source.archetype)
+  const duration = def.colorDrainDuration ?? 2
+  const next: DrainedColor[] = drainedColors.slice()
+  const existing = next.findIndex(
+    (d) => d.color === intent.color && d.enemyId === source.id,
+  )
+  if (existing >= 0) {
+    const cur = next[existing]!
+    next[existing] = { ...cur, turnsLeft: Math.max(cur.turnsLeft, duration) }
+  } else {
+    next.push({ color: intent.color, enemyId: source.id, turnsLeft: duration })
+  }
+  return {
+    drainedColors: next,
+    events: [
+      {
+        kind: 'color-drain-fired',
+        enemyId: source.id,
+        color: intent.color,
+        turnsLeft: duration,
       },
     ],
   }

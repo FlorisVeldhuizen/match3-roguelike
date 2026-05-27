@@ -11,6 +11,7 @@ const brute: ArchetypeDef = {
   pattern: ['attack', 'column-smash', 'attack', 'block', 'attack'],
   attackRange: { min: 3, max: 5 },
   blockRange: { min: 3, max: 5 },
+  enragePattern: ['attack', 'column-smash', 'attack', 'attack', 'column-smash'],
 }
 
 const smolder: ArchetypeDef = {
@@ -23,6 +24,7 @@ const smolder: ArchetypeDef = {
   tileBurnCount: 4,
   tileBurnDuration: 3,
   onHitStatus: { ...STATUS_TEMPLATES.burn },
+  enragePattern: ['attack', 'tile-burn', 'attack', 'tile-burn'],
 }
 
 const skirmisher: ArchetypeDef = {
@@ -52,6 +54,7 @@ const defender: ArchetypeDef = {
   attackRange: { min: 2, max: 3 },
   blockRange: { min: 3, max: 5 },
   petrifyDuration: 2,
+  enragePattern: ['block', 'petrify-row', 'attack', 'attack'],
 }
 
 const caster: ArchetypeDef = {
@@ -93,6 +96,42 @@ const tyrant: ArchetypeDef = {
   attackRange: { min: 6, max: 9 },
   blockRange: { min: 5, max: 8 },
   petrifyDuration: 2,
+  tileBurnCount: 4,
+  tileBurnDuration: 3,
+  enragePattern: ['attack', 'column-smash', 'tile-burn', 'attack', 'petrify-row', 'attack'],
+  enrageThreshold: 0.5,
+}
+
+// Leech: drains a gem colour — matching it heals the Leech.
+const leech: ArchetypeDef = {
+  id: 'leech',
+  name: 'Leech',
+  maxHp: 14,
+  pattern: ['attack', 'color-drain', 'attack', 'attack'],
+  attackRange: { min: 2, max: 4 },
+  blockRange: { min: 0, max: 0 },
+  colorDrainDuration: 2,
+}
+
+// Shade: lifesteal attacker — heals half the HP damage it deals.
+const shade: ArchetypeDef = {
+  id: 'shade',
+  name: 'Shade',
+  maxHp: 10,
+  pattern: ['attack', 'attack', 'attack'],
+  attackRange: { min: 4, max: 6 },
+  blockRange: { min: 0, max: 0 },
+  onHitSelfHeal: 0.5,
+}
+
+// Trickster: telegraphs "???" — resolves as attack or block (50/50).
+const trickster: ArchetypeDef = {
+  id: 'trickster',
+  name: 'Trickster',
+  maxHp: 13,
+  pattern: ['attack', 'trick', 'attack', 'trick', 'block'],
+  attackRange: { min: 2, max: 5 },
+  blockRange: { min: 3, max: 5 },
 }
 
 registerArchetype(brute)
@@ -103,3 +142,6 @@ registerArchetype(defender)
 registerArchetype(caster)
 registerArchetype(swarmer)
 registerArchetype(tyrant)
+registerArchetype(leech)
+registerArchetype(shade)
+registerArchetype(trickster)

@@ -1,4 +1,5 @@
 import { generateBoard } from '../../board/generation'
+import { applyCombatEvents } from '../../combat/applyCombatEvents'
 import { runOnRoundStarted, snapshotOf } from '../../relics/engine'
 import type { EnemyArchetype } from '../../../types'
 import type { StoreSet, StoreGet } from './types'
@@ -16,9 +17,14 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
       current.fight.player.hp,
     )
     const boardRoll = generateBoard(current.rng.board)
-    runOnRoundStarted(
+    const writeRelics = enemyRoll.fight.player.relics.map((r) => ({
+      ...r,
+      runFlags: { ...r.runFlags },
+      fightFlags: { ...r.fightFlags },
+    }))
+    const roundEvents = runOnRoundStarted(
       { fightId: 0 },
-      enemyRoll.fight.player.relics,
+      writeRelics,
       snapshotOf(
         enemyRoll.fight.player,
         enemyRoll.fight.enemies,
@@ -26,6 +32,15 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
         0,
       ),
     )
+    const roundApplied = applyCombatEvents(
+      roundEvents,
+      enemyRoll.fight.player,
+      enemyRoll.fight.enemies,
+      enemyRoll.fight.targetEnemyId,
+    )
+    enemyRoll.fight.player = { ...roundApplied.player, relics: writeRelics }
+    enemyRoll.fight.enemies = roundApplied.enemies
+    enemyRoll.fight.targetEnemyId = roundApplied.targetEnemyId
     set((s) => {
       s.fight = enemyRoll.fight
       s.rng.enemy = enemyRoll.rng

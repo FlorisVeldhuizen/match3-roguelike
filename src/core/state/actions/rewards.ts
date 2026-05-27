@@ -1,3 +1,4 @@
+import { applyCombatEvents } from '../../combat/applyCombatEvents'
 import { runOnRelicGained, snapshotOf, acquireRelic as engineAcquireRelic } from '../../relics/engine'
 import { getSpell } from '../../combat/spellRegistry'
 import type { GameEvent, SpellId } from '../../../types'
@@ -28,11 +29,17 @@ export function makeAcquireRelic(set: StoreSet, get: StoreGet) {
       ),
     )
     events.push(...gainEvents)
+    const healed = applyCombatEvents(
+      gainEvents,
+      { ...current.fight.player, relics: nextRelics },
+      current.fight.enemies,
+      current.fight.targetEnemyId,
+    )
 
     const goldDrop = current.pendingReward.gold
     set((s) => {
       s.pendingReward = null
-      s.fight.player.relics = nextRelics
+      s.fight.player = healed.player
       s.fight.player.gold += goldDrop
       s.runPhase = 'map'
     })

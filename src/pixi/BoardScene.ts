@@ -617,6 +617,8 @@ export class BoardScene {
         const gem = storeState.board.cells[cell.y]?.[cell.x]
         if (gem && targetingSpell === 'shatter') {
           void this.performShatter(gem.gemColor)
+        } else if (targetingSpell === 'frozen-wall') {
+          void this.performFrozenWall(cell.y)
         }
         storeState.cancelBoardTargeting()
         return
@@ -855,6 +857,16 @@ export class BoardScene {
     if (fightEnded && !prefersReducedMotion()) {
       await animator.sweepBoard()
     }
+    emitGameEvent({ kind: 'gameplay-settled' })
+  }
+
+  private async performFrozenWall(row: number): Promise<void> {
+    const animator = this.animator
+    if (!animator || animator.isAnimating) return
+    this.setHover(null)
+    const result = useGameStore.getState().castFrozenWall(row)
+    if (!result.ok) return
+    await animator.play(result.events)
     emitGameEvent({ kind: 'gameplay-settled' })
   }
 

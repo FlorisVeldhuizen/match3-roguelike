@@ -52,6 +52,7 @@ export type DamageSource =
   | 'burn'
   | 'riposte'
   | 'thornmail'
+  | 'relic-effect'
 
 export type StatusKind = 'burn' | 'vulnerable' | 'weak' | 'regen' | 'strength'
 
@@ -73,6 +74,10 @@ export type SpellId =
   | 'surge'
   | 'cinder-lash'
   | 'shatter'
+  | 'transmute'
+  | 'blessed-ground'
+  | 'frozen-wall'
+  | 'chain-lightning'
 export type UltimateId = 'riposte'
 export type PendingSpellId = SpellId | UltimateId
 
@@ -194,6 +199,28 @@ export type GameEvent =
     }
   | { kind: 'board-hover'; cell: Pos | null }
   | { kind: 'gameplay-settled' }
+  | { kind: 'enemy-enraged'; enemyId: string }
+  | { kind: 'color-drain-placed'; enemyId: string; color: GemColor }
+  | {
+      kind: 'color-drain-fired'
+      enemyId: string
+      color: GemColor
+      turnsLeft: number
+    }
+  | { kind: 'color-drain-ticked'; color: GemColor; remaining: number }
+  | {
+      kind: 'drain-triggered'
+      color: GemColor
+      healAmount: number
+      enemyId: string
+      cells: Pos[]
+    }
+  | {
+      kind: 'trick-swapped'
+      enemyId: string
+      telegraphed: IntentKind
+      actual: IntentKind
+    }
 
 export type CombatPhase =
   | 'player-acting'
@@ -212,6 +239,8 @@ export type IntentKind =
   | 'petrify-row'
   | 'color-hex'
   | 'cluster-shove'
+  | 'color-drain'
+  | 'trick'
 
 export type IntentOnHit = {
   status: StatusKind
@@ -229,6 +258,8 @@ export type Intent =
   | { kind: 'petrify-row'; row: number }
   | { kind: 'color-hex'; color: GemColor }
   | { kind: 'cluster-shove'; sources: Pos[]; destinations: Pos[] }
+  | { kind: 'color-drain'; color: GemColor }
+  | { kind: 'trick'; resolved: Intent }
 
 export type EnemyArchetype =
   | 'brute'
@@ -239,6 +270,9 @@ export type EnemyArchetype =
   | 'caster'
   | 'swarmer'
   | 'tyrant'
+  | 'leech'
+  | 'shade'
+  | 'trickster'
 
 export type PhasePools = {
   red: number
@@ -295,6 +329,7 @@ export type Player = {
   volleyTargets?: string[]
   skewerArmed?: boolean
   surgeArmed?: boolean
+  chainLightningArmed?: boolean
   carryBlockNextPhase: boolean
   relics: RelicInstance[]
   gold: number
@@ -346,7 +381,10 @@ export type Enemy = {
   currentIntent: Intent
   nextIntentIndex: number
   statuses: StatusInstance[]
+  enraged?: boolean
 }
+
+export type DrainedColor = { color: GemColor; enemyId: string; turnsLeft: number }
 
 export type FightState = {
   phase: CombatPhase
@@ -356,6 +394,7 @@ export type FightState = {
   isBoss?: boolean
   isElite?: boolean
   hexedColors?: HexedColor[]
+  drainedColors?: DrainedColor[]
 }
 
 export type HexedColor = { color: GemColor; turnsLeft: number }

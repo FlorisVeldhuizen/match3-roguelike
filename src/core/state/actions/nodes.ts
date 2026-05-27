@@ -1,5 +1,6 @@
 import { generateBoard } from '../../board/generation'
 import { getReachableFrom } from '../../map/paths'
+import { applyCombatEvents } from '../../combat/applyCombatEvents'
 import { runOnRoundStarted, snapshotOf } from '../../relics/engine'
 import type { RngStreams } from '../../rng/streams'
 import type {
@@ -61,9 +62,14 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     enemyRoll.fight.player.gold = current.fight.player.gold
     enemyRoll.fight.player.ownedSpellIds = current.fight.player.ownedSpellIds
     const boardRoll = generateBoard(current.rng.board)
-    runOnRoundStarted(
+    const writeRelics = enemyRoll.fight.player.relics.map((r) => ({
+      ...r,
+      runFlags: { ...r.runFlags },
+      fightFlags: { ...r.fightFlags },
+    }))
+    const roundEvents = runOnRoundStarted(
       { fightId: 0 },
-      enemyRoll.fight.player.relics,
+      writeRelics,
       snapshotOf(
         enemyRoll.fight.player,
         enemyRoll.fight.enemies,
@@ -71,6 +77,15 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
         0,
       ),
     )
+    const roundApplied = applyCombatEvents(
+      roundEvents,
+      enemyRoll.fight.player,
+      enemyRoll.fight.enemies,
+      enemyRoll.fight.targetEnemyId,
+    )
+    enemyRoll.fight.player = { ...roundApplied.player, relics: writeRelics }
+    enemyRoll.fight.enemies = roundApplied.enemies
+    enemyRoll.fight.targetEnemyId = roundApplied.targetEnemyId
 
     set((s) => {
       s.map.currentNodeId = nodeId
