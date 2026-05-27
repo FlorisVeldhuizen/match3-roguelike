@@ -20,6 +20,8 @@ import {
 } from '../debug/devControls'
 import { findAllValidSwaps } from '../core/board/generation'
 import { setHoveredCell } from '../ui/state/hoveredCell'
+import { registerBoardSpellPlayback } from '../ui/state/boardSpellPlayback'
+import type { GameEvent } from '../types'
 
 const NUDGE_TRIGGER_MS = 7000
 const NUDGE_PULSE_PERIOD_MS = 1000
@@ -153,6 +155,7 @@ export class BoardScene {
   private detachVisibility: (() => void) | null = null
   private detachTimeScale: (() => void) | null = null
   private detachDebugSwap: (() => void) | null = null
+  private detachBoardSpellPlayback: (() => void) | null = null
   private pendingIntroSprites: Sprite[][] | null = null
   private activePointer: PointerState | null = null
   private cachedCanvasRect: DOMRect | null = null
@@ -318,6 +321,7 @@ export class BoardScene {
       cellScreenCenter: (pos) => this.cellScreenCenter(pos),
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
+    this.wireBoardSpellPlayback()
     for (const row of sprites) for (const s of row) s.alpha = 0
     this.pendingIntroSprites = sprites
     this.playPendingIntro()
@@ -364,6 +368,8 @@ export class BoardScene {
     this.detachTimeScale = null
     this.detachDebugSwap?.()
     this.detachDebugSwap = null
+    this.detachBoardSpellPlayback?.()
+    this.detachBoardSpellPlayback = null
     this.cachedCanvasRect = null
     if (this.effectsTickerCb) Ticker.shared.remove(this.effectsTickerCb)
     this.effectsTickerCb = null
@@ -430,8 +436,29 @@ export class BoardScene {
       cellScreenCenter: (pos) => this.cellScreenCenter(pos),
     })
     if (this.overlay) this.animator.setOverlay(this.overlay)
+    this.wireBoardSpellPlayback()
     this.updateSelectionRing()
     void this.animator.playInitialFill()
+  }
+
+  private wireBoardSpellPlayback(): void {
+    this.detachBoardSpellPlayback?.()
+    this.detachBoardSpellPlayback = registerBoardSpellPlayback((events) =>
+      this.playBoardSpellEvents(events),
+    )
+  }
+
+  private async playBoardSpellEvents(events: GameEvent[]): Promise<void> {
+    const animator = this.animator
+    if (!animator || animator.isAnimating) return
+    this.setHover(null)
+    await animator.play(events)
+    const fightPhase = useGameStore.getState().fight.phase
+    const fightEnded = fightPhase === 'victory' || fightPhase === 'game-over'
+    if (fightEnded && !prefersReducedMotion()) {
+      await animator.sweepBoard()
+    }
+    emitGameEvent({ kind: 'gameplay-settled' })
   }
 
   private async loadGemTextures(): Promise<Record<GemColor, Texture>> {
@@ -852,13 +879,7 @@ export class BoardScene {
     this.setHover(null)
     const result = useGameStore.getState().castShatter(color)
     if (!result.ok) return
-    await animator.play(result.events)
-    const fightPhase = useGameStore.getState().fight.phase
-    const fightEnded = fightPhase === 'victory' || fightPhase === 'game-over'
-    if (fightEnded && !prefersReducedMotion()) {
-      await animator.sweepBoard()
-    }
-    emitGameEvent({ kind: 'gameplay-settled' })
+    await this.playBoardSpellEvents(result.events)
   }
 
   private async performFrozenWall(row: number): Promise<void> {
@@ -867,8 +888,7 @@ export class BoardScene {
     this.setHover(null)
     const result = useGameStore.getState().castFrozenWall(row)
     if (!result.ok) return
-    await animator.play(result.events)
-    emitGameEvent({ kind: 'gameplay-settled' })
+    await this.playBoardSpellEvents(result.events)
   }
 
   private buildHoverHalo(parent: Container): void {

@@ -284,13 +284,19 @@ export function resolveTransmute(
   if (fromColor === toColor) {
     return { board, rng, player, enemies, targetEnemyId, events: [] }
   }
-  let nextBoard = board.map((row) =>
-    row.map((cell) =>
-      cell.gemColor === fromColor ? { ...cell, gemColor: toColor } : cell,
-    ),
+  const transmuted: { at: Pos; color: GemColor }[] = []
+  const nextBoard = board.map((row, y) =>
+    row.map((cell, x) => {
+      if (cell.gemColor !== fromColor) return cell
+      transmuted.push({ at: { x, y }, color: toColor })
+      return { ...cell, gemColor: toColor }
+    }),
   )
+  const prelude: GameEvent[] =
+    transmuted.length > 0
+      ? [{ kind: 'gems-transmuted', cells: transmuted }]
+      : []
   const cascadeResult = runCascade(nextBoard, rng, detectMatches(nextBoard))
-  nextBoard = cascadeResult.board
   const processed = processCascadeEvents(
     cascadeResult.events,
     player,
@@ -300,12 +306,12 @@ export function resolveTransmute(
     drainedColors,
   )
   return {
-    board: nextBoard,
+    board: cascadeResult.board,
     rng: cascadeResult.rng,
     player: processed.player,
     enemies: processed.enemies,
     targetEnemyId: processed.targetEnemyId,
-    events: processed.events,
+    events: [...prelude, ...processed.events],
   }
 }
 

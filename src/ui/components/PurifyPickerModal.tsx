@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useGameStore } from '../../core/state/store'
-import { emitGameEvent } from '../../core/events/emitter'
 import type { StatusKind } from '../../types'
+import { playBoardSpellEvents } from '../state/boardSpellPlayback'
 
 const STATUS_LABELS: Record<StatusKind, string> = {
   burn: 'Burn',
@@ -32,9 +32,7 @@ export function PurifyPickerModal({ onClose }: { onClose: () => void }) {
 
   const pick = (kind: StatusKind) => {
     const res = castPurify(kind)
-    if (res.ok) {
-      for (const ev of res.events) emitGameEvent(ev)
-    }
+    if (res.ok) void playBoardSpellEvents(res.events)
     onClose()
   }
 

@@ -11,7 +11,6 @@ import {
   subscribeUnlockAllSpells,
 } from '../../debug/devControls'
 import { canAffordSpell } from '../../core/combat/mana'
-import { emitGameEvent } from '../../core/events/emitter'
 import { MANA_CAPS, type ManaCost, type SpellId, type StatusKind } from '../../types'
 import { HoverTooltip } from './HoverTooltip'
 import { PurifyPickerModal } from './PurifyPickerModal'
@@ -20,6 +19,7 @@ import { TransmutePickerModal } from './TransmutePickerModal'
 import { VolleyTargetModal } from './VolleyTargetModal'
 import { useBoardSettled } from '../hooks/useBoardSettled'
 import { primaryManaRgb, spellManaClassName } from '../spellManaTheme'
+import { playBoardSpellEvents } from '../state/boardSpellPlayback'
 
 const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
   'purify',
@@ -192,7 +192,7 @@ export function SpellTray() {
                 }
                 const res = castSpell(def.id)
                 if (res.ok) {
-                  for (const ev of res.events) emitGameEvent(ev)
+                  void playBoardSpellEvents(res.events)
                   flashCast(def.id)
                 }
               }}
@@ -242,7 +242,7 @@ export function SpellTray() {
                 if (blocked) return
                 const res = castUltimate(def.id)
                 if (res.ok) {
-                  for (const ev of res.events) emitGameEvent(ev)
+                  void playBoardSpellEvents(res.events)
                   flashCast(def.id)
                 }
               }}

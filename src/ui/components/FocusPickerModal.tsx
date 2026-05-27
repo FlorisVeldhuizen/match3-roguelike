@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
-import { emitGameEvent } from '../../core/events/emitter'
 import { FOCUS_TRANSFER } from '../../core/combat/spellResolvers'
 import { MANA_CAPS, type GemColor } from '../../types'
+import { playBoardSpellEvents } from '../state/boardSpellPlayback'
 
 const COLOURS: ReadonlyArray<'red' | 'blue' | 'green' | 'yellow'> = [
   'red',
@@ -34,9 +34,7 @@ export function FocusPickerModal({ onClose }: { onClose: () => void }) {
   const confirm = (to: GemColor) => {
     if (!from || from === to) return
     const res = castFocus(from, to)
-    if (res.ok) {
-      for (const ev of res.events) emitGameEvent(ev)
-    }
+    if (res.ok) void playBoardSpellEvents(res.events)
     onClose()
   }
 

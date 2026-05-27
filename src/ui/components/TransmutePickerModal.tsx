@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
-import { emitGameEvent } from '../../core/events/emitter'
+import { playBoardSpellEvents } from '../state/boardSpellPlayback'
 import type { GemColor } from '../../types'
 
 const COLOURS: ReadonlyArray<'red' | 'blue' | 'green' | 'yellow'> = [
@@ -36,9 +36,7 @@ export function TransmutePickerModal({ onClose }: { onClose: () => void }) {
   const confirm = (to: GemColor) => {
     if (!from || from === to) return
     const res = castTransmute(from, to)
-    if (res.ok) {
-      for (const ev of res.events) emitGameEvent(ev)
-    }
+    if (res.ok) void playBoardSpellEvents(res.events)
     onClose()
   }
 

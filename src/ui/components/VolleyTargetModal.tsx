@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
-import { emitGameEvent } from '../../core/events/emitter'
+import { playBoardSpellEvents } from '../state/boardSpellPlayback'
 
 const VOLLEY_HITS = 3
 
@@ -36,9 +36,7 @@ export function VolleyTargetModal({ onClose }: { onClose: () => void }) {
   const confirm = () => {
     if (allocation.length !== VOLLEY_HITS) return
     const res = castVolley(allocation)
-    if (res.ok) {
-      for (const ev of res.events) emitGameEvent(ev)
-    }
+    if (res.ok) void playBoardSpellEvents(res.events)
     onClose()
   }
 

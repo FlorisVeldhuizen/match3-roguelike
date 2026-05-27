@@ -6,7 +6,11 @@ export function useBoardSettled(): boolean {
 
   useEffect(() => {
     return subscribeGameEvents((event) => {
-      if (event.kind === 'swap' || event.kind === 'swap-reverted') {
+      if (
+        event.kind === 'swap' ||
+        event.kind === 'swap-reverted' ||
+        event.kind === 'gems-transmuted'
+      ) {
         setSettled(false)
       } else if (event.kind === 'gameplay-settled') {
         setSettled(true)

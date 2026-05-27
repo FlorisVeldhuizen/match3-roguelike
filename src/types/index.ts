@@ -124,6 +124,7 @@ export type GameEvent =
   | { kind: 'gems-cleared'; cells: Pos[] }
   | { kind: 'gems-fell'; movements: { from: Pos; to: Pos }[] }
   | { kind: 'gems-spawned'; spawns: { at: Pos; color: GemColor }[] }
+  | { kind: 'gems-transmuted'; cells: { at: Pos; color: GemColor }[] }
   | { kind: 'board-shuffled'; cells: { at: Pos; color: GemColor }[] }
   | { kind: 'board-swept' }
   | { kind: 'board-intro-landed'; column: number }

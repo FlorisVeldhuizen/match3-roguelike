@@ -555,6 +555,9 @@ export class AnimationController {
       case 'gems-spawned':
         await this.animateSpawn(event.spawns)
         return
+      case 'gems-transmuted':
+        await this.animateGemsTransmuted(event.cells)
+        return
       case 'board-shuffled':
         await this.animateShuffle(event.cells)
         return
@@ -918,6 +921,17 @@ export class AnimationController {
         spread: 0.9,
       })
     }
+  }
+
+  private async animateGemsTransmuted(
+    cells: { at: Pos; color: GemColor }[],
+  ): Promise<void> {
+    for (const { at, color } of cells) {
+      const sprite = this.getSprite(at)
+      if (!sprite) continue
+      sprite.texture = this.textures[color]
+    }
+    await wait(240)
   }
 
   private async animateShuffle(
