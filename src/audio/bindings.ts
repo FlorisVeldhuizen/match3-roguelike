@@ -9,6 +9,7 @@ import { playClackSfx } from './synths/match'
 import { playCascadeChimeSfx, playCascadeCelebrationSfx } from './synths/cascade'
 import { playAttackSfx } from './synths/attack'
 import { playHealSfx } from './synths/heal'
+import { playPlayerProcBlockSfx } from './procBlockSfx'
 import { playShieldThumpSfx, playShieldCrackSfx, playShieldParticleTickSfx } from './synths/shield'
 import { playStaggeredSfx } from './synths/staggered'
 import { playShuffleSfx } from './synths/shuffle'
@@ -69,12 +70,18 @@ export function installSfxBindings(): void {
           if (trail.target === 'player') {
             const kind = playerProcBlockSfx
             playerProcBlockSfx = null
-            scheduleAfterMs(() => {
-              if (kind === 'absorbed') playShieldThumpSfx(lastPlayerBlocked)
-              else if (kind === 'broken') {
-                playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
-              }
-            }, arrivalMs)
+            playerProcBlockPending = false
+            scheduleAfterMs(
+              () =>
+                playPlayerProcBlockSfx(
+                  kind,
+                  lastPlayerBlocked,
+                  lastPlayerUnblocked,
+                  playShieldThumpSfx,
+                  playShieldCrackSfx,
+                ),
+              arrivalMs,
+            )
           } else {
             scheduleAfterMs(() => playShieldThumpSfx(lastEnemyBlocked), arrivalMs)
           }
@@ -189,7 +196,12 @@ export function installSfxBindings(): void {
         lastPlayerBlocked = event.blocked
         lastPlayerUnblocked = event.amount
         if (procKind) {
-          if (event.blocked > 0) playerProcBlockPending = true
+          if (event.blocked > 0) {
+            playerProcBlockPending = true
+            playerProcBlockSfx = null
+          } else {
+            playerProcBlockPending = false
+          }
           return
         }
         if (event.amount > 0) playAttackSfx(event.amount)
@@ -200,6 +212,8 @@ export function installSfxBindings(): void {
           if (playerProcBlockPending) {
             playerProcBlockSfx = 'absorbed'
             playerProcBlockPending = false
+          } else {
+            playShieldThumpSfx(lastPlayerBlocked)
           }
         } else {
           scheduleAtTrailArrival(() => playShieldThumpSfx(lastEnemyBlocked))
