@@ -11,8 +11,8 @@ import {
   subscribeTimeScale,
 } from '../debug/devControls'
 import { findAllValidSwaps } from '../core/board/generation'
-import { setHoveredCell } from '../ui/state/hoveredCell'
-import { registerBoardSpellPlayback } from '../ui/state/boardSpellPlayback'
+import { registerBoardSpellPlayback } from '../core/board/spellPlayback'
+import { setHoveredCell } from '../core/state/hoveredCell'
 import type { GameEvent } from '../types'
 import { subscribeGemStyle } from '../gems/settings'
 import {

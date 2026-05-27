@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -19,8 +18,17 @@ type HexState = { turnsLeft: number; expiring: boolean }
 
 const FIZZLE_MS = 1200
 
+function readHexStatesFromStore(): Map<GemColor, HexState> {
+  const s = useGameStore.getState()
+  const next = new Map<GemColor, HexState>()
+  for (const h of s.fight.hexedColors ?? []) {
+    next.set(h.color, { turnsLeft: h.turnsLeft, expiring: false })
+  }
+  return next
+}
+
 export function ColorHexOverlay() {
-  const [hexStates, setHexStates] = useState<Map<GemColor, HexState>>(new Map())
+  const [hexStates, setHexStates] = useState(readHexStatesFromStore)
   const pendingHexRef = useRef<{
     color: GemColor
     turnsLeft: number
@@ -29,17 +37,8 @@ export function ColorHexOverlay() {
   const cells = useGameStore((s) => s.board.cells)
 
   const seedFromStore = useCallback(() => {
-    const s = useGameStore.getState()
-    const next = new Map<GemColor, HexState>()
-    for (const h of s.fight.hexedColors ?? []) {
-      next.set(h.color, { turnsLeft: h.turnsLeft, expiring: false })
-    }
-    setHexStates(next)
+    setHexStates(readHexStatesFromStore())
   }, [])
-
-  useLayoutEffect(() => {
-    seedFromStore()
-  }, [seedFromStore])
 
   useFightReset(
     useCallback(() => {

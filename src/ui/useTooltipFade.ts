@@ -12,30 +12,43 @@ export function useTooltipFade(open: boolean): {
   mounted: boolean
   visible: boolean
 } {
-  const [mounted, setMounted] = useState(open)
-  const [visible, setVisible] = useState(false)
+  const [holdMount, setHoldMount] = useState(false)
+  const [visible, setVisible] = useState(
+    () => open && prefersReducedMotion(),
+  )
+  const [prevOpen, setPrevOpen] = useState(open)
+
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) {
+      setHoldMount(false)
+      setVisible(prefersReducedMotion())
+    } else {
+      setHoldMount(true)
+      setVisible(false)
+    }
+  }
+
+  const mounted = open || holdMount
 
   useEffect(() => {
-    if (open) {
-      setMounted(true)
-      if (prefersReducedMotion()) {
-        setVisible(true)
-        return
-      }
-      let innerRaf = 0
-      const outerRaf = requestAnimationFrame(() => {
-        innerRaf = requestAnimationFrame(() => setVisible(true))
-      })
-      return () => {
-        cancelAnimationFrame(outerRaf)
-        cancelAnimationFrame(innerRaf)
-      }
+    if (!open || prefersReducedMotion()) return
+    let innerRaf = 0
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(() => setVisible(true))
+    })
+    return () => {
+      cancelAnimationFrame(outerRaf)
+      cancelAnimationFrame(innerRaf)
     }
-    setVisible(false)
-    const fadeMs = prefersReducedMotion() ? 0 : TOOLTIP_FADE_MS
-    const id = window.setTimeout(() => setMounted(false), fadeMs)
-    return () => window.clearTimeout(id)
   }, [open])
+
+  useEffect(() => {
+    if (!holdMount) return
+    const fadeMs = prefersReducedMotion() ? 0 : TOOLTIP_FADE_MS
+    const id = window.setTimeout(() => setHoldMount(false), fadeMs)
+    return () => window.clearTimeout(id)
+  }, [holdMount])
 
   return { mounted, visible }
 }

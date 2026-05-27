@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -17,9 +16,29 @@ type Active = { row: number; remaining: number }
 
 const DUST_PER_CELL = 2
 
+function readPetrifyFromStore(): { pending: Set<number>; active: Map<number, Active> } {
+  const s = useGameStore.getState()
+  const nextPending = new Set<number>()
+  for (const e of s.fight.enemies) {
+    if (e.hp <= 0) continue
+    if (e.currentIntent.kind === 'petrify-row') {
+      if ((s.board.petrifiedRows[e.currentIntent.row] ?? 0) === 0) {
+        nextPending.add(e.currentIntent.row)
+      }
+    }
+  }
+  const nextActive = new Map<number, Active>()
+  for (const [rowStr, remaining] of Object.entries(s.board.petrifiedRows)) {
+    if (remaining > 0) {
+      nextActive.set(Number(rowStr), { row: Number(rowStr), remaining })
+    }
+  }
+  return { pending: nextPending, active: nextActive }
+}
+
 export function PetrifyOverlay() {
-  const [pending, setPending] = useState<Set<number>>(new Set())
-  const [active, setActive] = useState<Map<number, Active>>(new Map())
+  const [pending, setPending] = useState(() => readPetrifyFromStore().pending)
+  const [active, setActive] = useState(() => readPetrifyFromStore().active)
   const w = useGameStore(
     (s) => s.board.cells[0]?.length ?? 0,
   )
@@ -30,30 +49,10 @@ export function PetrifyOverlay() {
   } | null>(null)
 
   const seedFromStore = useCallback(() => {
-    const s = useGameStore.getState()
-    const nextPending = new Set<number>()
-    for (const e of s.fight.enemies) {
-      if (e.hp <= 0) continue
-      if (e.currentIntent.kind === 'petrify-row') {
-        // Active visual takes precedence over pending
-        if ((s.board.petrifiedRows[e.currentIntent.row] ?? 0) === 0) {
-          nextPending.add(e.currentIntent.row)
-        }
-      }
-    }
-    const nextActive = new Map<number, Active>()
-    for (const [rowStr, remaining] of Object.entries(s.board.petrifiedRows)) {
-      if (remaining > 0) {
-        nextActive.set(Number(rowStr), { row: Number(rowStr), remaining })
-      }
-    }
+    const { pending: nextPending, active: nextActive } = readPetrifyFromStore()
     setPending(nextPending)
     setActive(nextActive)
   }, [])
-
-  useLayoutEffect(() => {
-    seedFromStore()
-  }, [seedFromStore])
 
   useFightReset(
     useCallback(() => {
@@ -172,11 +171,7 @@ function randomTrembleConfig(): TrembleConfig {
 }
 
 function WeakeningCell({ x, y }: { x: number; y: number }) {
-  const configRef = useRef<TrembleConfig | null>(null)
-  if (configRef.current === null) {
-    configRef.current = randomTrembleConfig()
-  }
-  const cfg = configRef.current
+  const [cfg] = useState(randomTrembleConfig)
   return (
     <>
       <CellAnchor
@@ -220,11 +215,7 @@ function randomDustConfig(): DustConfig {
 
 function PetrifyDust() {
   const ref = useRef<HTMLSpanElement>(null)
-  const configRef = useRef<DustConfig | null>(null)
-  if (configRef.current === null) {
-    configRef.current = randomDustConfig()
-  }
-  const initial = configRef.current
+  const [initial] = useState(randomDustConfig)
 
   useEffect(() => {
     const el = ref.current

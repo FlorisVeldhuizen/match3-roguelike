@@ -19,25 +19,31 @@ export function useParentTooltipOpen(
   enabled: boolean,
 ): boolean {
   const [open, setOpen] = useState(() => !enabled)
+  const [prevEnabled, setPrevEnabled] = useState(enabled)
+
+  if (enabled !== prevEnabled) {
+    setPrevEnabled(enabled)
+    if (!enabled) setOpen(true)
+  }
 
   useLayoutEffect(() => {
-    if (!enabled) {
-      setOpen(true)
-      return
-    }
+    if (!enabled) return
 
     const sync = () => setOpen(readParentTooltipOpen(anchorRef.current))
 
-    sync()
     const parent = anchorRef.current?.closest(PARENT_TOOLTIP_SELECTOR)
-    if (!parent) return
+    const raf = requestAnimationFrame(sync)
+    if (!parent) return () => cancelAnimationFrame(raf)
 
     const observer = new MutationObserver(sync)
     observer.observe(parent, {
       attributes: true,
       attributeFilter: ['class'],
     })
-    return () => observer.disconnect()
+    return () => {
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+    }
   }, [anchorRef, enabled])
 
   return open

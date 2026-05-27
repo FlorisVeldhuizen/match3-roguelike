@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useFightReset } from '../hooks/useFightReset'
@@ -7,28 +7,26 @@ import { CellAnchor } from './CellAnchor'
 
 const keyOf = (owner: string, column: number) => `${owner}|${column}`
 
+function readThreatsFromStore(): Map<string, { owner: string; column: number }> {
+  const enemies = useGameStore.getState().fight.enemies
+  const next = new Map<string, { owner: string; column: number }>()
+  for (const e of enemies) {
+    if (e.hp > 0 && e.currentIntent.kind === 'column-smash') {
+      next.set(keyOf(e.id, e.currentIntent.column), {
+        owner: e.id,
+        column: e.currentIntent.column,
+      })
+    }
+  }
+  return next
+}
+
 export function ColumnSmashOverlay() {
-  const [threats, setThreats] = useState<Map<string, { owner: string; column: number }>>(
-    new Map(),
-  )
+  const [threats, setThreats] = useState(readThreatsFromStore)
 
   const seedFromStore = useCallback(() => {
-    const enemies = useGameStore.getState().fight.enemies
-    const next = new Map<string, { owner: string; column: number }>()
-    for (const e of enemies) {
-      if (e.hp > 0 && e.currentIntent.kind === 'column-smash') {
-        next.set(keyOf(e.id, e.currentIntent.column), {
-          owner: e.id,
-          column: e.currentIntent.column,
-        })
-      }
-    }
-    setThreats(next)
+    setThreats(readThreatsFromStore())
   }, [])
-
-  useLayoutEffect(() => {
-    seedFromStore()
-  }, [seedFromStore])
 
   useFightReset(
     useCallback(() => {

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -55,6 +56,7 @@ export function HoverTooltip({
   const [autoShown, setAutoShown] = useState(
     () => Boolean(autoShow) && autoShowDelayMs <= 0,
   )
+  const [prevAuto, setPrevAuto] = useState({ autoShow, autoShowDelayMs })
 
   const wasQueuedRef = useRef(queued ?? false)
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -66,7 +68,7 @@ export function HoverTooltip({
     setAutoShown(false)
   }
 
-  const scheduleDismiss = () => {
+  const scheduleDismiss = useCallback(() => {
     if (dismissTimeoutRef.current) {
       window.clearTimeout(dismissTimeoutRef.current)
     }
@@ -79,7 +81,7 @@ export function HoverTooltip({
       dismissTimeoutRef.current = null
       dismiss()
     }, delay)
-  }
+  }, [])
 
   const canOpenFromMouse = () =>
     !coarsePointer && !ignoreMouseAfterTouch()
@@ -95,7 +97,7 @@ export function HoverTooltip({
   useEffect(() => {
     if (!closeTick) return
     scheduleDismiss()
-  }, [closeTick])
+  }, [closeTick, scheduleDismiss])
 
   useEffect(() => {
     if (queued === undefined) return
@@ -103,18 +105,24 @@ export function HoverTooltip({
       scheduleDismiss()
     }
     wasQueuedRef.current = queued
-  }, [queued])
+  }, [queued, scheduleDismiss])
 
-  useEffect(() => {
+  if (
+    autoShow !== prevAuto.autoShow ||
+    autoShowDelayMs !== prevAuto.autoShowDelayMs
+  ) {
+    setPrevAuto({ autoShow, autoShowDelayMs })
     if (!autoShow) {
       setAutoShown(false)
-      return
-    }
-    if (autoShowDelayMs <= 0) {
+    } else if (autoShowDelayMs <= 0) {
       setAutoShown(true)
-      return
+    } else {
+      setAutoShown(false)
     }
-    setAutoShown(false)
+  }
+
+  useEffect(() => {
+    if (!autoShow || autoShowDelayMs <= 0) return
     const id = window.setTimeout(() => setAutoShown(true), autoShowDelayMs)
     return () => window.clearTimeout(id)
   }, [autoShow, autoShowDelayMs])
@@ -125,15 +133,12 @@ export function HoverTooltip({
     : anchorHovered
   const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(hovered)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-  const tipRevealed = useTooltipReveal(pos !== null, tipVisible)
+  const displayPos = tipMounted ? pos : null
+  const tipRevealed = useTooltipReveal(displayPos !== null, tipVisible)
 
   useTooltipTouchAnchor(anchorHovered, setAnchorHovered, anchorRef, tipRef, {
     dismissOnOutside: !autoShow,
   })
-
-  useEffect(() => {
-    if (!tipMounted) setPos(null)
-  }, [tipMounted])
 
   useLayoutEffect(() => {
     if (!tipMounted) return
@@ -216,8 +221,8 @@ export function HoverTooltip({
             className={`hover-tooltip${variant ? ` tooltip-${variant}` : ''}${tipRevealed ? ' is-visible' : ''}`}
             role="tooltip"
             style={{
-              left: pos?.left ?? 0,
-              top: pos?.top ?? 0,
+              left: displayPos?.left ?? 0,
+              top: displayPos?.top ?? 0,
             }}
           >
             <div className="hover-tooltip-title">{title}</div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
-import { playBoardSpellEvents } from '../state/boardSpellPlayback'
+import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 import type { GemColor } from '../../types'
 
 const COLOURS: ReadonlyArray<'red' | 'blue' | 'green' | 'yellow'> = [

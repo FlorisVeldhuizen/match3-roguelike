@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useGameStore } from '../../core/state/store'
 import type { StatusKind } from '../../types'
-import { playBoardSpellEvents } from '../state/boardSpellPlayback'
+import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 
 const STATUS_LABELS: Record<StatusKind, string> = {
   burn: 'Burn',

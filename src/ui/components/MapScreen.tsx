@@ -101,8 +101,14 @@ export function MapScreen() {
   }, [runPhase])
 
   const hoveredNode = hovered ? map.nodes.find((n) => n.id === hovered) : null
-  const tooltipNodeRef = useRef<MapNode | null>(null)
-  if (hoveredNode) tooltipNodeRef.current = hoveredNode
+  const [stagedTipNode, setStagedTipNode] = useState<MapNode | null>(null)
+  const [prevHoveredId, setPrevHoveredId] = useState<string | null>(null)
+  const hoveredId = hoveredNode?.id ?? null
+  if (hoveredId !== prevHoveredId) {
+    setPrevHoveredId(hoveredId)
+    if (hoveredNode) setStagedTipNode(hoveredNode)
+  }
+  const tipNode = hoveredNode ?? stagedTipNode
   const tooltipOpen = runPhase === 'map' && hoveredNode != null
   const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(tooltipOpen)
   const tipRevealed = useTooltipReveal(tooltipOpen, tipVisible)
@@ -151,8 +157,6 @@ export function MapScreen() {
       label: floorLabel(c, lastColumn),
     })
   }
-
-  const tipNode = hoveredNode ?? tooltipNodeRef.current
 
   return (
     <div

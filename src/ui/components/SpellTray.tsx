@@ -20,7 +20,7 @@ import { TransmutePickerModal } from './TransmutePickerModal'
 import { VolleyTargetModal } from './VolleyTargetModal'
 import { useBoardSettled } from '../hooks/useBoardSettled'
 import { primaryManaRgb, spellManaClassName } from '../spellManaTheme'
-import { playBoardSpellEvents } from '../state/boardSpellPlayback'
+import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 
 const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
   'purify',

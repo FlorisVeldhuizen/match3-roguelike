@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useFightReset } from '../hooks/useFightReset'
@@ -11,7 +11,7 @@ import {
 import {
   getHoveredCell,
   subscribeHoveredCell,
-} from '../state/hoveredCell'
+} from '../../core/state/hoveredCell'
 import { SHOVE_HUES, shoveHueAtIndex, shoveHueFor } from '../../core/combat/shoveHues'
 
 type Threat = {
@@ -71,30 +71,30 @@ function clusterCenter(cells: Pos[]): { cx: number; cy: number } {
   return { cx: (sumX / n + 0.5) * 12.5, cy: (sumY / n + 0.5) * 12.5 }
 }
 
+function readThreatsFromStore(): Map<string, Threat> {
+  const enemies = useGameStore.getState().fight.enemies
+  const next = new Map<string, Threat>()
+  for (const e of enemies) {
+    if (e.hp <= 0) continue
+    if (e.currentIntent.kind !== 'cluster-shove') continue
+    next.set(e.id, {
+      enemyId: e.id,
+      sources: e.currentIntent.sources,
+      destinations: e.currentIntent.destinations,
+    })
+  }
+  return next
+}
+
 export function ClusterShoveOverlay() {
-  const [threats, setThreats] = useState<Map<string, Threat>>(new Map())
+  const [threats, setThreats] = useState(readThreatsFromStore)
   const hoveredEnemyId = useSyncExternalStore(subscribeHoveredEnemy, getHoveredEnemy)
   const hoveredCell = useSyncExternalStore(subscribeHoveredCell, getHoveredCell)
   const enemies = useGameStore((s) => s.fight.enemies)
 
   const seedFromStore = useCallback(() => {
-    const enemies = useGameStore.getState().fight.enemies
-    const next = new Map<string, Threat>()
-    for (const e of enemies) {
-      if (e.hp <= 0) continue
-      if (e.currentIntent.kind !== 'cluster-shove') continue
-      next.set(e.id, {
-        enemyId: e.id,
-        sources: e.currentIntent.sources,
-        destinations: e.currentIntent.destinations,
-      })
-    }
-    setThreats(next)
+    setThreats(readThreatsFromStore())
   }, [])
-
-  useLayoutEffect(() => {
-    seedFromStore()
-  }, [seedFromStore])
 
   useFightReset(
     useCallback(() => {

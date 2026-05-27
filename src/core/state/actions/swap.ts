@@ -34,14 +34,14 @@ import {
 } from '../../board/flags'
 import type { StoreSet, StoreGet } from './types'
 
-export function makeSelectCell(set: StoreSet, _get: StoreGet) {
+export function makeSelectCell(set: StoreSet) {
   return (pos: Pos | null): void =>
     set((s) => {
       s.board.selected = pos
     })
 }
 
-export function makeSetTargetEnemy(set: StoreSet, _get: StoreGet) {
+export function makeSetTargetEnemy(set: StoreSet) {
   return (id: string): void =>
     set((s) => {
       if (s.fight.phase !== 'player-acting') return
@@ -203,7 +203,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
 
         // Drain ticks: same pattern as hex ticks
         const drainTick = tickDrainedColors(current.fight.drainedColors ?? [])
-        let tickedDrainedColors = drainTick.drainedColors
+        tickedDrainedColors = drainTick.drainedColors
         tailEvents.push(...drainTick.events)
 
         const enemyResult = executeEnemyTurn(

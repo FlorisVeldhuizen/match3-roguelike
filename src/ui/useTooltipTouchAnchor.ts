@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, type RefObject } from 'react'
 
 /** Tap-to-open and tap-outside-to-close for portalled tooltips on touch devices. */
 export function useTooltipTouchAnchor(
@@ -8,21 +8,19 @@ export function useTooltipTouchAnchor(
   tipRef: RefObject<HTMLElement | null>,
   options?: { dismissOnOutside?: boolean },
 ): void {
-  const openRef = useRef(open)
-  openRef.current = open
   const dismissOnOutside = options?.dismissOnOutside ?? true
 
   useEffect(() => {
     const el = anchorRef.current
     if (!el) return
     const onTouchStart = (e: TouchEvent) => {
-      if (openRef.current) return
+      if (open) return
       e.preventDefault()
       setOpen(true)
     }
     el.addEventListener('touchstart', onTouchStart, { passive: false })
     return () => el.removeEventListener('touchstart', onTouchStart)
-  }, [anchorRef, setOpen])
+  }, [anchorRef, open, setOpen])
 
   useEffect(() => {
     if (!open || !dismissOnOutside) return

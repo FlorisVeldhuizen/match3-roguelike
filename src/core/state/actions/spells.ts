@@ -356,7 +356,7 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
       ),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
-    let playerWithCost: Player = {
+    const playerWithCost: Player = {
       ...current.fight.player,
       mana: nextMana,
       relics: writeRelics,
@@ -437,7 +437,7 @@ export function makeCastTransmute(set: StoreSet, get: StoreGet) {
       ),
     )
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
-    let playerWithCost: Player = {
+    const playerWithCost: Player = {
       ...current.fight.player,
       mana: nextMana,
       relics: writeRelics,

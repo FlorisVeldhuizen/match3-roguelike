@@ -124,8 +124,6 @@ export function useHudEventChannel(): HudEventChannel {
 
   const [displayedHp, setDisplayedHp] = useState(player.hp)
   const [displayedMana, setDisplayedMana] = useState(player.mana)
-  const displayedManaRef = useRef(player.mana)
-  displayedManaRef.current = displayedMana
   const [displayedCharge, setDisplayedCharge] = useState(player.skillCharge)
   const [displayedGold, setDisplayedGold] = useState(player.gold)
   const [stagedBlue, setStagedBlue] = useState(player.block)

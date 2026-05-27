@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
-import { playBoardSpellEvents } from '../state/boardSpellPlayback'
+import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 
 const VOLLEY_HITS = 3
 

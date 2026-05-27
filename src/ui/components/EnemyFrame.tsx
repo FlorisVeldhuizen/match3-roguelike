@@ -24,7 +24,7 @@ import { getStatusDef } from '../../content/statuses'
 import { intentDisplay } from '../../content/intentDisplays'
 import { StatusBar } from './StatusBar'
 import { setHoveredEnemy } from '../state/hoveredEnemy'
-import { getHoveredCell, subscribeHoveredCell } from '../state/hoveredCell'
+import { getHoveredCell, subscribeHoveredCell } from '../../core/state/hoveredCell'
 import { shoveHueFor } from '../../core/combat/shoveHues'
 import { useTooltipFade } from '../useTooltipFade'
 import { useTooltipReveal } from '../useTooltipReveal'
@@ -574,13 +574,10 @@ function IntentBadge({
   const [hovered, setHovered] = useState(false)
   const { mounted: tipMounted, visible: tipVisible } = useTooltipFade(hovered)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-  const tipRevealed = useTooltipReveal(pos !== null, tipVisible)
+  const displayPos = tipMounted ? pos : null
+  const tipRevealed = useTooltipReveal(displayPos !== null, tipVisible)
 
   useTooltipTouchAnchor(hovered, setHovered, anchorRef, tipRef)
-
-  useEffect(() => {
-    if (!tipMounted) setPos(null)
-  }, [tipMounted])
 
   useLayoutEffect(() => {
     if (!tipMounted) return
@@ -663,8 +660,8 @@ function IntentBadge({
             className={`intent-tooltip intent-${intent.kind}${tipRevealed ? ' is-visible' : ''}`}
             role="tooltip"
             style={{
-              left: pos?.left ?? 0,
-              top: pos?.top ?? 0,
+              left: displayPos?.left ?? 0,
+              top: displayPos?.top ?? 0,
             }}
           >
             <div className="intent-tooltip-title">{display.label}</div>

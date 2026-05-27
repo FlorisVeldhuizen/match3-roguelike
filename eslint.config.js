@@ -50,7 +50,11 @@ export default defineConfig([
           rules: [
             {
               from: { type: 'core' },
-              allow: [{ to: { type: 'core' } }, { to: { type: 'types' } }],
+              allow: [
+                { to: { type: 'core' } },
+                { to: { type: 'types' } },
+                { to: { type: 'timing' } },
+              ],
             },
             {
               from: { type: 'content' },
@@ -58,6 +62,8 @@ export default defineConfig([
                 { to: { type: 'content' } },
                 { to: { type: 'types' } },
                 { to: { type: 'core' } },
+                // Spell/intent copy uses <Keyword> tooltips from ui.
+                { to: { type: 'ui' } },
               ],
             },
             {
@@ -110,7 +116,7 @@ export default defineConfig([
             },
             {
               from: { type: 'timing' },
-              allow: [],
+              allow: [{ to: { type: 'types' } }],
             },
             // session/ holds cross-cutting page-lifetime flags (splash
             // dismissed, etc.). Leaf module — no imports of its own.

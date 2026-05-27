@@ -1,5 +1,5 @@
 import type { GameEvent } from '../../types'
-import { emitGameEvent } from '../../core/events/emitter'
+import { emitGameEvent } from '../events/emitter'
 
 type PlayFn = (events: GameEvent[]) => Promise<void>
 

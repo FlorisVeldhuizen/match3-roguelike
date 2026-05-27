@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { FOCUS_TRANSFER } from '../../core/combat/spellResolvers'
 import { MANA_CAPS, type GemColor } from '../../types'
-import { playBoardSpellEvents } from '../state/boardSpellPlayback'
+import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 
 const COLOURS: ReadonlyArray<'red' | 'blue' | 'green' | 'yellow'> = [
   'red',
