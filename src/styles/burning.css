@@ -434,10 +434,13 @@
     rgba(255, 190, 70, 0) 75%
   );
   mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.blessed-cell:not(.is-expiring)::before {
   animation:
     blessed-enter 560ms ease-out forwards,
     blessed-pulse 1.4s ease-in-out 560ms infinite;
-  pointer-events: none;
 }
 
 @keyframes blessed-enter {
@@ -460,6 +463,36 @@
   50% {
     opacity: 0.95;
     transform: scale(1.06);
+  }
+}
+
+.blessed-cell.is-expiring::before {
+  animation: blessed-expire 1.1s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.blessed-cell.is-expiring .blessed-spark {
+  animation: blessed-spark-expire 1.1s ease-out forwards !important;
+}
+
+@keyframes blessed-expire {
+  0% {
+    opacity: 0.95;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.12) translateY(-6%);
+    filter: blur(1px);
+  }
+}
+
+@keyframes blessed-spark-expire {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18%) scale(0.6);
   }
 }
 
@@ -604,4 +637,13 @@
 
 .intent-rider.rider-weak {
   filter: drop-shadow(0 0 5px rgba(201, 184, 150, 0.45));
+}
+
+.intent-rider.rider-lifesteal {
+  color: #e8a8b8;
+  filter: drop-shadow(0 0 5px rgba(190, 80, 110, 0.5));
+}
+
+.intent-rider-icon {
+  line-height: 1;
 }

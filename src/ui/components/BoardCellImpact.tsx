@@ -1,4 +1,4 @@
-export type BoardCellImpactVariant = 'stone' | 'flame' | 'hex' | 'smash'
+export type BoardCellImpactVariant = 'stone' | 'ice' | 'flame' | 'hex' | 'drain' | 'smash'
 
 export const BOARD_CELL_IMPACT_MS = 680
 

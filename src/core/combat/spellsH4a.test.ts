@@ -15,6 +15,7 @@ import {
   resolveIgnite,
   resolvePurify,
   resolveRegenerate,
+  resolveFrozenWall,
 } from './spellResolvers'
 import type { Enemy, Player } from '../../types'
 
@@ -390,5 +391,13 @@ describe('Volley (pending, red pool split across 3 targets)', () => {
     expect(res.enemies.find((e) => e.id === 'e1')?.hp).toBe(0)
     expect(res.events.some((e) => e.kind === 'enemy-killed' && e.enemyId === 'e1')).toBe(true)
     expect(res.targetEnemyId).toBe('e2')
+  })
+})
+
+describe('resolveFrozenWall', () => {
+  it('wards the chosen row for one phase tick without using petrifiedRows', () => {
+    const res = resolveFrozenWall(3, {})
+    expect(res.wardedRows[3]).toBe(1)
+    expect(res.events).toEqual([{ kind: 'frozen-wall-fired', row: 3, duration: 1 }])
   })
 })

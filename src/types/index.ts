@@ -26,6 +26,9 @@ export type CellFlags = {
 // Row index → turns remaining. Position-bound (doesn't travel with gems).
 export type PetrifiedRows = Record<number, number>
 
+/** Player Frozen Wall — blocks enemy board verbs on that row; does not lock swaps. */
+export type WardedRows = Record<number, number>
+
 export type Cell = {
   gemColor: GemColor
   flags?: CellFlags
@@ -134,7 +137,11 @@ export type TrailScheduledEvent = {
   spellId?: PendingSpellId
   /** spell-effect: which HUD slot the trail homed to */
   slot?: 'hp' | 'block' | 'status'
-  verb?: 'tile-burn' | 'color-hex' | 'petrify'
+  verb?: 'tile-burn' | 'color-hex' | 'color-drain' | 'petrify' | 'frozen-wall'
+  /** verb-to-board: board cell this trail burst targets */
+  at?: Pos
+  /** verb-to-board: play one-shot apply SFX when the slowest cell in the burst lands */
+  verbBurstEnd?: boolean
 }
 
 export type GameEvent =
@@ -222,6 +229,9 @@ export type GameEvent =
   | { kind: 'petrify-placed'; enemyId: string; row: number; cells: Pos[]; duration: number }
   | { kind: 'petrify-fired'; enemyId: string; row: number; duration: number }
   | { kind: 'petrify-row-ticked'; row: number; remaining: number }
+  | { kind: 'frozen-wall-fired'; row: number; duration: number }
+  | { kind: 'frozen-wall-ticked'; row: number; remaining: number }
+  | { kind: 'frozen-wall-blocked'; row: number; verb: IntentKind }
   | { kind: 'color-hex-placed'; enemyId: string; color: GemColor }
   | { kind: 'color-hex-fired'; enemyId: string; color: GemColor; turnsLeft: number }
   | { kind: 'color-hex-ticked'; color: GemColor; remaining: number }
@@ -318,7 +328,7 @@ export type IntentOnHit = {
 }
 
 export type Intent =
-  | { kind: 'attack'; amount: number; onHit?: IntentOnHit }
+  | { kind: 'attack'; amount: number; onHit?: IntentOnHit; lifesteal?: number }
   | { kind: 'block'; amount: number }
   | { kind: 'tile-burn'; count: number }
   | { kind: 'heal-ally'; amount: number; targetAllyId: string }

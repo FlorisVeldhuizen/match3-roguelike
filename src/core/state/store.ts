@@ -11,6 +11,7 @@ import {
   type MapState,
   type PendingReward,
   type PetrifiedRows,
+  type WardedRows,
   type Pos,
   type RunPhase,
   type ShopOffer,
@@ -52,6 +53,7 @@ export type BoardState = {
   cells: Cell[][]
   selected: Pos | null
   petrifiedRows: PetrifiedRows
+  wardedRows: WardedRows
 }
 
 export type GameStore = {

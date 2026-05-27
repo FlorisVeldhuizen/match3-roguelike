@@ -95,12 +95,16 @@ export function installSfxBindings(): void {
         return
       }
       case 'verb-to-board':
-        if (trail.verb === 'tile-burn' && lastTileBurnCellCount > 0) {
+        if (trail.verb === 'tile-burn' && trail.verbBurstEnd && lastTileBurnCellCount > 0) {
           scheduleAfterMs(() => playBurnIgniteSfx(lastTileBurnCellCount), arrivalMs)
-        } else if (trail.verb === 'color-hex') {
+        } else if (trail.verb === 'color-hex' && trail.verbBurstEnd) {
           scheduleAfterMs(playHexApplySfx, arrivalMs)
-        } else if (trail.verb === 'petrify') {
+        } else if (trail.verb === 'color-drain' && trail.verbBurstEnd) {
+          scheduleAfterMs(() => playHealSfx(1), arrivalMs)
+        } else if (trail.verb === 'petrify' && trail.verbBurstEnd) {
           scheduleAfterMs(() => playShieldThumpSfx(6), arrivalMs)
+        } else if (trail.verb === 'frozen-wall' && trail.verbBurstEnd) {
+          scheduleAfterMs(() => playShieldThumpSfx(4), arrivalMs)
         }
         return
       default:
@@ -231,10 +235,22 @@ export function installSfxBindings(): void {
       case 'color-hex-ticked':
         if (event.remaining === 0) playHexExpireSfx()
         return
+      case 'color-drain-ticked':
+        if (event.remaining === 0) playHexExpireSfx()
+        return
+      case 'drain-triggered':
+        if (event.healAmount > 0) playHealSfx(event.healAmount)
+        return
+      case 'ally-healed':
+        if (event.targetId !== 'player' && event.amount > 0) playHealSfx(event.amount)
+        return
       case 'cluster-shove-resolved':
         if (event.moves.length > 0) playShoveSfx(event.moves.length)
         return
       case 'petrify-row-ticked':
+        if (event.remaining === 0) playShieldCrackSfx(1)
+        return
+      case 'frozen-wall-ticked':
         if (event.remaining === 0) playShieldCrackSfx(1)
         return
       case 'tile-burn-placed':

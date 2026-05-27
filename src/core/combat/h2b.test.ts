@@ -218,6 +218,19 @@ describe('resolveColumnSmashIntent', () => {
 // resolvePetrifyRowIntent
 // ----------------------------------------------------------------------
 describe('resolvePetrifyRowIntent', () => {
+  it('is blocked when the row is warded by Frozen Wall', () => {
+    const res = resolvePetrifyRowIntent(
+      { kind: 'petrify-row', row: 3 },
+      makeDefender(),
+      {},
+      { 3: 1 },
+    )
+    expect(res.petrifiedRows[3]).toBeUndefined()
+    expect(res.events).toEqual([
+      { kind: 'frozen-wall-blocked', row: 3, verb: 'petrify-row' },
+    ])
+  })
+
   it('writes the row into petrifiedRows with the archetype duration', () => {
     const res = resolvePetrifyRowIntent({ kind: 'petrify-row', row: 5 }, makeDefender(), {})
     expect(res.petrifiedRows[5]).toBe(2)

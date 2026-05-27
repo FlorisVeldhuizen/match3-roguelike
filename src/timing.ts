@@ -6,6 +6,9 @@ export const SPEND_TRAIL_ARRIVAL_MS = 420
 /** Spell button → effect target (HP, status, etc.). */
 export const SPELL_EFFECT_TRAIL_ARRIVAL_MS = 380
 
+/** Board verb overlays (petrify, hex, frozen wall, column smash, etc.) fade out over this window before unmount. */
+export const BOARD_EFFECT_FIZZLE_MS = 1100
+
 /** Straight-line px → ms for bezier trails (~500px ≈ TRAIL_ARRIVAL_MS before purpose scale). */
 const TRAIL_MS_PER_PX = 0.92
 const TRAIL_MS_OFFSET = 130

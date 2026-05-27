@@ -9,9 +9,10 @@ import type {
   IntentKind,
   PetrifiedRows,
   Pos,
+  WardedRows,
 } from '../../types'
 import { BOARD_HEIGHT, BOARD_WIDTH } from '../../types'
-import { setFlag } from '../board/flags'
+import { isRowWarded, setFlag } from '../board/flags'
 import { getArchetype } from './archetypeRegistry'
 import {
   rollAttackIntent,
@@ -142,6 +143,7 @@ export function applyIntentTelegraph(
   intent: Intent,
   enemyId: string,
   archetype: EnemyArchetype,
+  wardedRows: WardedRows = {},
 ): {
   board: Cell[][]
   petrifiedRows: PetrifiedRows
@@ -187,6 +189,7 @@ export function applyIntentTelegraph(
       const src = intent.sources[i]
       const dst = intent.destinations[i]
       if (!src || !dst) continue
+      if (isRowWarded(wardedRows, src.y) || isRowWarded(wardedRows, dst.y)) continue
       const row = nextBoard[src.y]
       if (!row) continue
       const cell = row[src.x]

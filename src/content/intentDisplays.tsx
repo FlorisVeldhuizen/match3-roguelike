@@ -10,20 +10,42 @@ export type IntentDisplay = {
   description: ReactNode
 }
 
+/** Attack-intent rider for lifesteal (Leech color-drain uses 🩸 on its own intent). */
+export const LIFESTEAL_RIDER_ICON = '💔'
+
 export function intentDisplay(intent: Intent): IntentDisplay {
   switch (intent.kind) {
     case 'attack': {
       const onHit = intent.onHit
+      const stealPct =
+        intent.lifesteal != null && intent.lifesteal > 0
+          ? Math.round(intent.lifesteal * 100)
+          : null
+      const stealLine =
+        stealPct != null ? <> Heals itself for {stealPct}% of damage dealt.</> : null
       if (onHit) {
         const def = getStatusDef(onHit.status)
         return {
           icon: '⚔',
           number: intent.amount,
-          label: `Attacks for ${intent.amount} (applies ${onHit.stacks} ${def.name} on hit)`,
+          label: `Attacks for ${intent.amount} (applies ${onHit.stacks} ${def.name} on hit${stealPct != null ? ', lifesteal' : ''})`,
           description: (
             <>
               Will hit you for {intent.amount} next turn. If it lands, you also gain {onHit.stacks}{' '}
               <Keyword id={onHit.status} />.
+              {stealLine}
+            </>
+          ),
+        }
+      }
+      if (stealPct != null) {
+        return {
+          icon: '⚔',
+          number: intent.amount,
+          label: `Attacks for ${intent.amount} (lifesteal)`,
+          description: (
+            <>
+              Will hit you for {intent.amount} next turn.{stealLine}
             </>
           ),
         }
@@ -120,8 +142,9 @@ export function intentDisplay(intent: Intent): IntentDisplay {
         label: `Drains ${drainName}`,
         description: (
           <>
-            Next turn, {drainName} gems are cursed. Matching them while the drain is up heals this
-            enemy for every gem matched. Avoid the colour or kill the source.
+            Next turn, {drainName} gems are cursed for 2 player phases. Matching them while the
+            drain is active heals this enemy for 1 HP per gem cleared. Avoid the colour or kill the
+            source.
           </>
         ),
       }

@@ -10,13 +10,19 @@ import type {
   PetrifiedRows,
   Player,
   Pos,
+  WardedRows,
 } from '../../types'
 import { pickGemColorWeighted } from '../board/gemSpawn'
 import { applyCombatEvents } from './applyCombatEvents'
 import { applyDamage } from './damage'
 import { applyStatusToList, composeDamage } from './statuses'
 import { getArchetype } from './archetypeRegistry'
-import { applyFlagToCells, getFlag, pickClusterCellsWithoutFlag } from '../board/flags'
+import {
+  applyFlagToCells,
+  getFlag,
+  isRowWarded,
+  pickClusterCellsWithoutFlag,
+} from '../board/flags'
 import { applyGravity } from '../board/gravity'
 import {
   cloneRelicsForHooks,
@@ -190,10 +196,11 @@ export function resolveAttackIntent(
       source: { kind: 'enemy', enemyId: updatedEnemy.id },
     })
   }
-  // Shade lifesteal: heal self for a fraction of HP damage dealt.
-  const archDef = getArchetype(updatedEnemy.archetype)
-  if (archDef.onHitSelfHeal && res.hpDamage > 0 && updatedEnemy.hp > 0) {
-    const healAmount = Math.ceil(res.hpDamage * archDef.onHitSelfHeal)
+  // Lifesteal (e.g. Shade): heal for a fraction of total damage dealt (HP + blocked).
+  const stealFraction = intent.lifesteal
+  const damageDealt = res.hpDamage + res.blocked
+  if (stealFraction != null && stealFraction > 0 && damageDealt > 0 && updatedEnemy.hp > 0) {
+    const healAmount = Math.ceil(damageDealt * stealFraction)
     const healedHp = Math.min(updatedEnemy.maxHp, updatedEnemy.hp + healAmount)
     const actualHeal = healedHp - updatedEnemy.hp
     if (actualHeal > 0) {
@@ -221,10 +228,17 @@ export function resolveTileBurnIntent(
   source: Enemy,
   board: Cell[][],
   rng: RngState,
+  wardedRows: WardedRows = {},
 ): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
   const def = getArchetype(source.archetype)
   const duration = def.tileBurnDuration ?? 2
-  const { cells, rng: pickRng } = pickClusterCellsWithoutFlag(board, 'burning', intent.count, rng)
+  const { cells: picked, rng: pickRng } = pickClusterCellsWithoutFlag(
+    board,
+    'burning',
+    intent.count,
+    rng,
+  )
+  const cells = picked.filter((c) => !isRowWarded(wardedRows, c.y))
   if (cells.length === 0) return { board, rng: pickRng, events: [] }
   const nextBoard = applyFlagToCells(board, cells, 'burning', duration)
   return {
@@ -246,13 +260,14 @@ export function resolveColumnSmashIntent(
   source: Enemy,
   board: Cell[][],
   rng: RngState,
+  wardedRows: WardedRows = {},
 ): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
   const events: GameEvent[] = []
   const col = intent.column
   const cellsCleared: Pos[] = []
   const cleared: (Cell | null)[][] = board.map((row, y) =>
     row.map((cell, x) => {
-      if (x !== col) return cell
+      if (x !== col || isRowWarded(wardedRows, y)) return cell
       cellsCleared.push({ x, y })
       return null
     }),
@@ -288,7 +303,14 @@ export function resolvePetrifyRowIntent(
   intent: Extract<Intent, { kind: 'petrify-row' }>,
   source: Enemy,
   petrifiedRows: PetrifiedRows,
+  wardedRows: WardedRows = {},
 ): { petrifiedRows: PetrifiedRows; events: GameEvent[] } {
+  if (isRowWarded(wardedRows, intent.row)) {
+    return {
+      petrifiedRows,
+      events: [{ kind: 'frozen-wall-blocked', row: intent.row, verb: 'petrify-row' }],
+    }
+  }
   const def = getArchetype(source.archetype)
   const duration = def.petrifyDuration ?? 2
   const nextRows: PetrifiedRows = {
@@ -343,6 +365,7 @@ export function resolveClusterShoveIntent(
   source: Enemy,
   board: Cell[][],
   rng: RngState,
+  wardedRows: WardedRows = {},
 ): { board: Cell[][]; rng: RngState; events: GameEvent[] } {
   const events: GameEvent[] = []
   type Move = { src: Pos; dst: Pos; color: GemColor }
@@ -355,6 +378,7 @@ export function resolveClusterShoveIntent(
       const flag = getFlag(cell, 'pendingShove')
       if (!flag || !cell) continue
       if (flag.sourceEnemyId !== source.id) continue
+      if (isRowWarded(wardedRows, y) || isRowWarded(wardedRows, flag.dst.y)) continue
       moves.push({ src: { x, y }, dst: flag.dst, color: cell.gemColor })
     }
   }

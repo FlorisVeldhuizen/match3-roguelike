@@ -225,25 +225,26 @@
   }
 }
 
-/* Anchor wraps the banner in a fixed-position flex container so the banner
-   itself can be a normal layout element. Flex-based centering avoids the
-   sub-pixel rounding that transform-based centering produced on iOS. The
-   anchor's `top` is set inline from boardCenter.y; translateY(-50%) on the
-   anchor places its center at that line. */
+/* Anchor lives inside .board-mount (same box particles use via elementCenter).
+   Absolute inset + flex centering tracks board layout shifts — enemy frame
+   height changes, responsive chrome, etc. — without getBoundingClientRect
+   that could go stale (ResizeObserver only fires on size, not position). */
 .phase-banner-anchor {
-  position: fixed;
-  top: 50%;
-  left: 0;
-  right: 0;
-  transform: translateY(-50%);
+  position: absolute;
+  inset: 0;
   z-index: 9;
   pointer-events: none;
   display: flex;
+  align-items: center;
   justify-content: center;
+  /* .board-mount sets line-height: 0 for the canvas; don't inherit that here. */
+  line-height: normal;
 }
 
 .phase-banner {
+  position: relative;
   pointer-events: none;
+  line-height: 1.15;
   padding: clamp(0.6rem, 2vw, 1rem) clamp(1.1rem, 4.5vw, 2.8rem);
   border-radius: 0.4rem;
   font-family: 'MedievalSharp', cursive;

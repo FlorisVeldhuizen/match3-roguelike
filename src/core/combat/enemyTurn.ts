@@ -9,6 +9,7 @@ import type {
   Intent,
   PetrifiedRows,
   Player,
+  WardedRows,
 } from '../../types'
 import { applyIntentTelegraph, rollIntent } from './intents'
 import { getArchetype } from './archetypeRegistry'
@@ -37,6 +38,7 @@ export type EnemyTurnResult = {
   enemies: Enemy[]
   board: Cell[][]
   petrifiedRows: PetrifiedRows
+  wardedRows: WardedRows
   hexedColors: HexedColor[]
   drainedColors: DrainedColor[]
   rng: RngState
@@ -54,6 +56,7 @@ export function executeEnemyTurn(
   hexedColors: HexedColor[] = [],
   targetEnemyId: string | null = null,
   drainedColors: DrainedColor[] = [],
+  wardedRows: WardedRows = {},
 ): EnemyTurnResult {
   const events: GameEvent[] = []
   const telegraphEvents: GameEvent[] = []
@@ -65,6 +68,7 @@ export function executeEnemyTurn(
   let nextEnemies: Enemy[] = enemies
   let nextBoard: Cell[][] = board
   let nextPetrifiedRows: PetrifiedRows = petrifiedRows
+  let nextWardedRows: WardedRows = wardedRows
   let nextHexedColors: HexedColor[] = hexedColors
   let nextDrainedColors: DrainedColor[] = drainedColors
   let nextRng = rng
@@ -122,17 +126,17 @@ export function executeEnemyTurn(
       nextPlayer = r.player
       events.push(...r.events)
     } else if (intent.kind === 'tile-burn') {
-      const r = resolveTileBurnIntent(intent, updatedEnemy, nextBoard, nextRng)
+      const r = resolveTileBurnIntent(intent, updatedEnemy, nextBoard, nextRng, nextWardedRows)
       nextBoard = r.board
       nextRng = r.rng
       events.push(...r.events)
     } else if (intent.kind === 'column-smash') {
-      const r = resolveColumnSmashIntent(intent, updatedEnemy, nextBoard, nextRng)
+      const r = resolveColumnSmashIntent(intent, updatedEnemy, nextBoard, nextRng, nextWardedRows)
       nextBoard = r.board
       nextRng = r.rng
       events.push(...r.events)
     } else if (intent.kind === 'petrify-row') {
-      const r = resolvePetrifyRowIntent(intent, updatedEnemy, nextPetrifiedRows)
+      const r = resolvePetrifyRowIntent(intent, updatedEnemy, nextPetrifiedRows, nextWardedRows)
       nextPetrifiedRows = r.petrifiedRows
       events.push(...r.events)
     } else if (intent.kind === 'color-hex') {
@@ -140,7 +144,7 @@ export function executeEnemyTurn(
       nextHexedColors = r.hexedColors
       events.push(...r.events)
     } else if (intent.kind === 'cluster-shove') {
-      const r = resolveClusterShoveIntent(updatedEnemy, nextBoard, nextRng)
+      const r = resolveClusterShoveIntent(updatedEnemy, nextBoard, nextRng, nextWardedRows)
       nextBoard = r.board
       nextRng = r.rng
       events.push(...r.events)
@@ -243,6 +247,7 @@ export function executeEnemyTurn(
         rolled.intent,
         updatedEnemy.id,
         updatedEnemy.archetype,
+        nextWardedRows,
       )
       nextBoard = tele.board
       nextPetrifiedRows = tele.petrifiedRows
@@ -299,6 +304,7 @@ export function executeEnemyTurn(
     enemies: nextEnemies,
     board: nextBoard,
     petrifiedRows: nextPetrifiedRows,
+    wardedRows: nextWardedRows,
     hexedColors: nextHexedColors,
     drainedColors: nextDrainedColors,
     rng: nextRng,

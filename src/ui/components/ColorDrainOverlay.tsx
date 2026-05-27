@@ -11,15 +11,17 @@ import type { GemColor, Pos } from '../../types'
 import { BOARD_CELL_IMPACT_MS, BoardCellImpact } from './BoardCellImpact'
 import { CellAnchor } from './CellAnchor'
 
-type HexState = { turnsLeft: number; expiring: boolean }
+type DrainState = { turnsLeft: number; expiring: boolean }
 
 const cellKey = (x: number, y: number) => `${x},${y}`
 
-function readHexStatesFromStore(): Map<GemColor, HexState> {
+function readDrainStatesFromStore(): Map<GemColor, DrainState> {
   const s = useGameStore.getState()
-  const next = new Map<GemColor, HexState>()
-  for (const h of s.fight.hexedColors ?? []) {
-    next.set(h.color, { turnsLeft: h.turnsLeft, expiring: false })
+  const next = new Map<GemColor, DrainState>()
+  for (const d of s.fight.drainedColors ?? []) {
+    const cur = next.get(d.color)
+    const turnsLeft = cur ? Math.max(cur.turnsLeft, d.turnsLeft) : d.turnsLeft
+    next.set(d.color, { turnsLeft, expiring: false })
   }
   return next
 }
@@ -37,10 +39,10 @@ function cellsOfColor(color: GemColor): Pos[] {
   return hitCells
 }
 
-export function ColorHexOverlay() {
-  const [hexStates, setHexStates] = useState(readHexStatesFromStore)
+export function ColorDrainOverlay() {
+  const [drainStates, setDrainStates] = useState(readDrainStatesFromStore)
   const [applyReveal, setApplyReveal] = useState<Set<string>>(() => new Set())
-  const pendingHexRef = useRef<{
+  const pendingDrainRef = useRef<{
     color: GemColor
     turnsLeft: number
     fightCounter: number
@@ -51,12 +53,12 @@ export function ColorHexOverlay() {
   const impacts = useTransientCellFx(BOARD_CELL_IMPACT_MS)
 
   const seedFromStore = useCallback(() => {
-    setHexStates(readHexStatesFromStore())
+    setDrainStates(readDrainStatesFromStore())
   }, [])
 
   const wipeAll = useCallback(() => {
-    pendingHexRef.current = null
-    setHexStates(new Map())
+    pendingDrainRef.current = null
+    setDrainStates(new Map())
     setApplyReveal(new Set())
     impacts.clear()
   }, [impacts])
@@ -70,9 +72,9 @@ export function ColorHexOverlay() {
 
   useBoardWipe(wipeAll)
 
-  const commitHexApply = useCallback(
-    (pending: NonNullable<typeof pendingHexRef.current>) => {
-      setHexStates((prev) => {
+  const commitDrainApply = useCallback(
+    (pending: NonNullable<typeof pendingDrainRef.current>) => {
+      setDrainStates((prev) => {
         const next = new Map(prev)
         next.set(pending.color, {
           turnsLeft: pending.turnsLeft,
@@ -81,22 +83,22 @@ export function ColorHexOverlay() {
         return next
       })
       setApplyReveal(new Set())
-      pendingHexRef.current = null
+      pendingDrainRef.current = null
     },
     [],
   )
 
   useEffect(() => {
     const unsubTrail = subscribeTrailScheduled((trail) => {
-      if (trail.verb !== 'color-hex') return
-      const pending = pendingHexRef.current
+      if (trail.verb !== 'color-drain') return
+      const pending = pendingDrainRef.current
       if (!pending || !trail.at) return
       const at = trail.at
       const key = cellKey(at.x, at.y)
       if (!pending.cells.some((c) => c.x === at.x && c.y === at.y)) return
       const isBurstEnd = trail.verbBurstEnd === true
       scheduleAfterMs(() => {
-        const live = pendingHexRef.current
+        const live = pendingDrainRef.current
         if (!live || useGameStore.getState().fightCounter !== live.fightCounter) return
         impacts.spawn([at])
         setApplyReveal((prev) => {
@@ -105,24 +107,24 @@ export function ColorHexOverlay() {
           return next
         })
         live.landed.add(key)
-        if (live.landed.size >= live.cells.length || isBurstEnd) commitHexApply(live)
+        if (live.landed.size >= live.cells.length || isBurstEnd) commitDrainApply(live)
       }, trail.arrivalMs)
     })
     const unsub = subscribeGameEvents((event) => {
-      if (event.kind === 'color-hex-fired') {
+      if (event.kind === 'color-drain-fired') {
         const hitCells = cellsOfColor(event.color)
-        pendingHexRef.current = {
+        pendingDrainRef.current = {
           color: event.color,
           turnsLeft: event.turnsLeft,
           fightCounter: useGameStore.getState().fightCounter,
           cells: hitCells,
           landed: new Set(),
         }
-      } else if (event.kind === 'color-hex-ticked') {
+      } else if (event.kind === 'color-drain-ticked') {
         const color = event.color
         const remaining = event.remaining
         if (remaining > 0) {
-          setHexStates((prev) => {
+          setDrainStates((prev) => {
             const cur = prev.get(color)
             if (!cur || cur.expiring || cur.turnsLeft === remaining) return prev
             const next = new Map(prev)
@@ -131,7 +133,7 @@ export function ColorHexOverlay() {
           })
         } else {
           const scheduledFight = useGameStore.getState().fightCounter
-          setHexStates((prev) => {
+          setDrainStates((prev) => {
             if (!prev.has(color)) return prev
             const next = new Map(prev)
             next.set(color, { turnsLeft: 0, expiring: true })
@@ -139,7 +141,7 @@ export function ColorHexOverlay() {
           })
           scheduleAfterMs(() => {
             if (useGameStore.getState().fightCounter !== scheduledFight) return
-            setHexStates((prev) => {
+            setDrainStates((prev) => {
               if (!prev.has(color)) return prev
               const cur = prev.get(color)
               if (!cur?.expiring) return prev
@@ -149,15 +151,17 @@ export function ColorHexOverlay() {
             })
           }, BOARD_EFFECT_FIZZLE_MS)
         }
+      } else if (event.kind === 'drain-triggered' && event.cells.length > 0) {
+        impacts.spawn(event.cells)
       }
     })
     return () => {
       unsubTrail()
       unsub()
     }
-  }, [impacts, commitHexApply])
+  }, [impacts, commitDrainApply])
 
-  if (hexStates.size === 0 && applyReveal.size === 0) return null
+  if (drainStates.size === 0 && applyReveal.size === 0) return null
 
   const anchors: ReactNode[] = []
   for (let y = 0; y < BOARD_HEIGHT; y++) {
@@ -166,24 +170,29 @@ export function ColorHexOverlay() {
     for (let x = 0; x < BOARD_WIDTH; x++) {
       const cell = row[x]
       if (!cell) continue
-      const state = hexStates.get(cell.gemColor)
+      const state = drainStates.get(cell.gemColor)
       const revealing = applyReveal.has(cellKey(x, y))
       if (!state && !revealing) continue
       const cls = state?.expiring
-        ? 'color-hex-cell active is-expiring'
+        ? 'color-drain-cell active is-expiring'
         : state && state.turnsLeft <= 1
-          ? 'color-hex-cell active is-weakening'
-          : 'color-hex-cell active'
-      anchors.push(<CellAnchor key={`hex-${x}-${y}`} x={x} y={y} className={cls} />)
+          ? 'color-drain-cell active is-weakening'
+          : 'color-drain-cell active'
+      anchors.push(<CellAnchor key={`drain-${x}-${y}`} x={x} y={y} className={cls} />)
     }
   }
 
   return (
-    <div className="color-hex-overlay" aria-hidden>
+    <div className="color-drain-overlay" aria-hidden>
       {anchors}
       {impacts.items.map((hit) => (
-        <CellAnchor key={`hex-impact-${hit.id}`} x={hit.x} y={hit.y} className="board-cell-impact">
-          <BoardCellImpact variant="hex" />
+        <CellAnchor
+          key={`drain-impact-${hit.id}`}
+          x={hit.x}
+          y={hit.y}
+          className="board-cell-impact"
+        >
+          <BoardCellImpact variant="drain" />
         </CellAnchor>
       ))}
     </div>

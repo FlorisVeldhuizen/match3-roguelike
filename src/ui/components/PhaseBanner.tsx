@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import type { CombatPhase } from '../../types'
-import { BOARD_MOUNT_ID } from '../App'
 
 type BannerStyle = 'player' | 'enemy' | 'victory' | 'defeat' | 'bonus' | 'staggered'
 
@@ -28,27 +27,8 @@ function bannerFor(phase: CombatPhase): { label: string; style: BannerStyle } | 
 
 export function PhaseBanner() {
   const [active, setActive] = useState<BannerEntry | null>(null)
-  const [boardCenter, setBoardCenter] = useState<{ x: number; y: number } | null>(null)
   const idRef = useRef(0)
   const lastStyleRef = useRef<BannerStyle | null>(null)
-
-  useEffect(() => {
-    const el = document.getElementById(BOARD_MOUNT_ID)
-    if (!el) return
-    const update = () => {
-      const r = el.getBoundingClientRect()
-      if (r.width === 0 || r.height === 0) return
-      setBoardCenter({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
-    }
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    window.addEventListener('resize', update)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', update)
-    }
-  }, [])
 
   useEffect(() => {
     return subscribeGameEvents((event) => {
@@ -85,10 +65,7 @@ export function PhaseBanner() {
   if (!active) return null
 
   return (
-    <div
-      className="phase-banner-anchor"
-      style={boardCenter ? { top: `${boardCenter.y}px` } : undefined}
-    >
+    <div className="phase-banner-anchor">
       <div
         key={active.id}
         className={`phase-banner phase-banner-${active.style}`}

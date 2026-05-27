@@ -13,7 +13,9 @@ import { BurningOverlay } from './components/BurningOverlay'
 import { BlessedOverlay } from './components/BlessedOverlay'
 import { ColumnSmashOverlay } from './components/ColumnSmashOverlay'
 import { PetrifyOverlay } from './components/PetrifyOverlay'
+import { FrozenWallOverlay } from './components/FrozenWallOverlay'
 import { ColorHexOverlay } from './components/ColorHexOverlay'
+import { ColorDrainOverlay } from './components/ColorDrainOverlay'
 import { ClusterShoveOverlay } from './components/ClusterShoveOverlay'
 import { RelicTray } from './components/RelicTray'
 import { RewardScreen } from './components/RewardScreen'
@@ -72,8 +74,11 @@ export function App() {
               <BlessedOverlay />
               <ColumnSmashOverlay />
               <PetrifyOverlay />
+              <FrozenWallOverlay />
               <ColorHexOverlay />
+              <ColorDrainOverlay />
               <ClusterShoveOverlay />
+              <PhaseBanner />
             </div>
           </section>
         </div>
@@ -86,7 +91,6 @@ export function App() {
         <GameOverOverlay />
       </main>
       <MapScreen />
-      <PhaseBanner />
       <AriaLiveAnnouncer />
       <CRTOverlay />
     </>

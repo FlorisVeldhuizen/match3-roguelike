@@ -6,6 +6,7 @@ import type {
   HexedColor,
   PetrifiedRows,
   Pos,
+  WardedRows,
 } from '../../types'
 import { nextInt, type RngState } from '../rng/mulberry32'
 
@@ -106,6 +107,25 @@ export function tickPetrifiedRows(petrifiedRows: PetrifiedRows): {
     events.push({ kind: 'petrify-row-ticked', row, remaining: Math.max(0, remaining) })
   }
   return { petrifiedRows: next, expired, events }
+}
+
+export function isRowWarded(wardedRows: Readonly<WardedRows>, row: number): boolean {
+  return (wardedRows[row] ?? 0) > 0
+}
+
+export function tickWardedRows(wardedRows: WardedRows): {
+  wardedRows: WardedRows
+  events: GameEvent[]
+} {
+  const next: WardedRows = {}
+  const events: GameEvent[] = []
+  for (const [rowStr, turns] of Object.entries(wardedRows)) {
+    const remaining = turns - 1
+    const row = Number(rowStr)
+    if (remaining > 0) next[row] = remaining
+    events.push({ kind: 'frozen-wall-ticked', row, remaining: Math.max(0, remaining) })
+  }
+  return { wardedRows: next, events }
 }
 
 export function tickHexedColors(hexedColors: readonly HexedColor[]): {

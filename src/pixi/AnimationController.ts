@@ -66,6 +66,7 @@ const TELEGRAPH_BATCH_KINDS = new Set<GameEvent['kind']>([
   'enemy-block-gained',
   'column-smash-placed',
   'color-hex-placed',
+  'color-drain-placed',
   'cluster-shove-placed',
   'petrify-placed',
   'tile-burn-placed',
@@ -155,9 +156,13 @@ const FLAME_CORE_HEX = 0xffe39a
 
 const HEX_PALETTE: readonly number[] = [0x6b21a8, 0x9333ea, 0xa855f7, 0xd8b4fe] as const
 const HEX_CORE_HEX = 0xeed6ff
+const DRAIN_PALETTE: readonly number[] = [0x7f1d1d, 0xb91c1c, 0xdc2626, 0xf87171] as const
+const DRAIN_CORE_HEX = 0xffd6d6
 
 const STONE_PALETTE: readonly number[] = [0x4a5260, 0x6b7888, 0x96a4b8] as const
 const STONE_CORE_HEX = 0xd6dde7
+const FROZEN_WALL_PALETTE: readonly number[] = [0x2a6a8a, 0x4a9ec4, 0x8ed4f0] as const
+const FROZEN_WALL_CORE_HEX = 0xe8f8ff
 
 const BLESSED_CORE_HEX = 0xfff5d6
 // Keep in sync with OverlayScene's COLOR_HEX.
@@ -682,12 +687,47 @@ export class AnimationController {
         }
         return
       }
+      case 'color-drain-fired': {
+        const board = useGameStore.getState().board.cells
+        const cells: Pos[] = []
+        for (let y = 0; y < board.length; y++) {
+          const row = board[y]
+          if (!row) continue
+          for (let x = 0; x < row.length; x++) {
+            if (row[x]?.gemColor === event.color) cells.push({ x, y })
+          }
+        }
+        if (cells.length > 0) {
+          this.spawnVerbToCellsTrail(
+            event.enemyId,
+            cells,
+            DRAIN_PALETTE,
+            DRAIN_CORE_HEX,
+            'color-drain',
+          )
+        }
+        return
+      }
       case 'petrify-fired': {
         const cells: Pos[] = []
         for (let x = 0; x < BOARD_WIDTH; x++) {
           cells.push({ x, y: event.row })
         }
         this.spawnVerbToCellsTrail(event.enemyId, cells, STONE_PALETTE, STONE_CORE_HEX, 'petrify')
+        return
+      }
+      case 'frozen-wall-fired': {
+        const cells: Pos[] = []
+        for (let x = 0; x < BOARD_WIDTH; x++) {
+          cells.push({ x, y: event.row })
+        }
+        this.spawnVerbToCellsTrail(
+          'frozen-wall',
+          cells,
+          FROZEN_WALL_PALETTE,
+          FROZEN_WALL_CORE_HEX,
+          'frozen-wall',
+        )
         return
       }
       case 'column-smash-resolved':
@@ -1588,6 +1628,14 @@ export class AnimationController {
     }, 120)
   }
 
+  /** Enemy board verbs use `data-enemy-id`; player spells reuse the same id field with `data-spell-target`. */
+  private verbTrailOrigin(actorId: string): ScreenPoint | null {
+    const enemyEl = this.findEl(`[data-enemy-id="${actorId}"]`)
+    if (enemyEl) return elementCenter(enemyEl)
+    const spellEl = this.findEl(`[data-spell-target="${actorId}"]`)
+    return spellEl ? elementCenter(spellEl) : null
+  }
+
   private spawnVerbToCellsTrail(
     enemyId: string,
     cells: readonly Pos[],
@@ -1597,10 +1645,9 @@ export class AnimationController {
   ): void {
     const overlay = this.overlay
     if (!overlay) return
-    const el = this.findEl(`[data-enemy-id="${enemyId}"]`)
-    const from = el ? elementCenter(el) : null
+    const from = this.verbTrailOrigin(enemyId)
     if (!from) return
-    let maxArrival = 0
+    const trails: { cell: Pos; arrivalMs: number }[] = []
     for (const cell of cells) {
       const dest = this.cellScreenCenter(cell)
       if (!dest) continue
@@ -1608,14 +1655,21 @@ export class AnimationController {
       const arrivalMs = overlay.spawnTrail(from, attractor, palette, 5, innerHex, {
         purpose: 'verb-to-board',
       })
-      if (arrivalMs > maxArrival) maxArrival = arrivalMs
+      if (arrivalMs > 0) trails.push({ cell, arrivalMs })
     }
-    if (verb && maxArrival > 0) {
+    if (!verb || trails.length === 0) return
+    const maxArrival = Math.max(...trails.map((t) => t.arrivalMs))
+    let burstEndScheduled = false
+    for (const { cell, arrivalMs } of trails) {
+      const verbBurstEnd =
+        !burstEndScheduled && arrivalMs === maxArrival && (burstEndScheduled = true)
       emitTrailScheduled({
         purpose: 'verb-to-board',
-        arrivalMs: maxArrival,
+        arrivalMs,
         target: enemyId,
         verb,
+        at: cell,
+        verbBurstEnd,
       })
     }
   }

@@ -23,6 +23,7 @@ export function freshBoardState(cells: Cell[][]): BoardState {
     cells,
     selected: null,
     petrifiedRows: {},
+    wardedRows: {},
   }
 }
 

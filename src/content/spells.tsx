@@ -216,7 +216,7 @@ const frozenWall: SpellDef = {
   cost: { blue: 3 },
   resolution: 'immediate',
   description:
-    'Petrify a row of your choice for 1 turn. Blocks enemy board verbs from landing on that row.',
+    'Ward a row of your choice for 1 turn. Enemy board verbs cannot land on that row — you can still swap gems there.',
   pendingLabel: '',
   pendingDescription: '',
 }

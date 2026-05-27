@@ -24,6 +24,7 @@ import {
   type GemStyleVariant,
 } from '../../gems/settings'
 import { useGameStore } from '../../core/state/store'
+import type { EnemyArchetype } from '../../types'
 import {
   advanceStep,
   emitDebugSwap,
@@ -48,6 +49,20 @@ const DEV_SPEEDS: { value: number; label: string }[] = [
   { value: 1, label: '1×' },
   { value: 0.5, label: '½×' },
   { value: 0.25, label: '¼×' },
+]
+
+const DEV_FIGHT_ARCHETYPES: { id: EnemyArchetype; label: string }[] = [
+  { id: 'skirmisher', label: 'Skirm' },
+  { id: 'brute', label: 'Brute' },
+  { id: 'smolder', label: 'Smolder' },
+  { id: 'defender', label: 'Defender' },
+  { id: 'rallier', label: 'Rallier' },
+  { id: 'caster', label: 'Caster' },
+  { id: 'swarmer', label: 'Swarmer' },
+  { id: 'leech', label: 'Leech' },
+  { id: 'shade', label: 'Shade' },
+  { id: 'trickster', label: 'Trick' },
+  { id: 'tyrant', label: 'Tyrant' },
 ]
 
 export function SettingsPanel() {
@@ -108,9 +123,7 @@ export function SettingsPanel() {
     window.setTimeout(() => emitDebugSwap(swap.from, swap.to), 0)
   }
 
-  const forceFight = (
-    archetype: 'skirmisher' | 'brute' | 'smolder' | 'defender' | 'rallier' | 'caster' | 'swarmer',
-  ) => {
+  const forceFight = (archetype: EnemyArchetype) => {
     useGameStore.getState().debugForceFight(archetype)
     setOpen(false)
   }
@@ -217,55 +230,16 @@ export function SettingsPanel() {
               <div className="settings-row settings-row-chips">
                 <span className="settings-label">Force fight</span>
                 <div className="settings-chips">
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('skirmisher')}
-                  >
-                    Skirm
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('brute')}
-                  >
-                    Brute
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('smolder')}
-                  >
-                    Smolder
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('defender')}
-                  >
-                    Defender
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('rallier')}
-                  >
-                    Rallier
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('caster')}
-                  >
-                    Caster
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-chip"
-                    onClick={() => forceFight('swarmer')}
-                  >
-                    Swarmer
-                  </button>
+                  {DEV_FIGHT_ARCHETYPES.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="settings-chip"
+                      onClick={() => forceFight(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
                   <button type="button" className="settings-chip" onClick={forceTrio}>
                     Trio
                   </button>

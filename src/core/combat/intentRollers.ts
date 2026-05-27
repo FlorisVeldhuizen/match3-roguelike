@@ -11,10 +11,11 @@ export function rollAttackIntent(
   const onHit = def.onHitStatus
     ? { status: def.onHitStatus.kind, stacks: def.onHitStatus.stacks }
     : undefined
-  return {
-    intent: onHit ? { kind: 'attack', amount, onHit } : { kind: 'attack', amount },
-    rng: r2,
-  }
+  const lifesteal = def.onHitSelfHeal
+  const intent: Intent = { kind: 'attack', amount }
+  if (onHit) intent.onHit = onHit
+  if (lifesteal != null && lifesteal > 0) intent.lifesteal = lifesteal
+  return { intent, rng: r2 }
 }
 
 export function rollBlockIntent(

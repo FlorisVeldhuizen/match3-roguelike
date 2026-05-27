@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
-import { scheduleAfterMs } from '../../timing'
+import { BOARD_EFFECT_FIZZLE_MS, scheduleAfterMs } from '../../timing'
 import { subscribeTrailScheduled } from '../../trails/sync'
 import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
 import { useTransientCellFx } from '../hooks/useTransientCellFx'
@@ -16,7 +16,6 @@ import type { Pos } from '../../types'
 type FlameMeta = { remaining: number }
 
 const BURST_MS = 720
-const FIZZLE_MS = 1200
 
 const keyOf = (p: Pos) => `${p.x},${p.y}`
 
@@ -28,7 +27,7 @@ export function BurningOverlay() {
     metaRef.current = meta
   }, [meta])
   const bursts = useTransientCellFx(BURST_MS)
-  const fizzles = useTransientCellFx(FIZZLE_MS)
+  const fizzles = useTransientCellFx(BOARD_EFFECT_FIZZLE_MS)
   const impacts = useTransientCellFx(BOARD_CELL_IMPACT_MS)
   const hoveredKey = useHoveredCellKey()
   const flameIdRef = useRef(0)
@@ -36,6 +35,7 @@ export function BurningOverlay() {
     cells: Pos[]
     duration: number
     fightCounter: number
+    landed: Set<string>
   } | null>(null)
 
   useLayoutEffect(() => {
@@ -64,23 +64,24 @@ export function BurningOverlay() {
     const unsubTrail = subscribeTrailScheduled((trail) => {
       if (trail.verb !== 'tile-burn') return
       const pending = pendingPlaceRef.current
-      if (!pending) return
+      if (!pending || !trail.at) return
+      const at = trail.at
+      const key = keyOf(at)
+      if (!pending.cells.some((c) => c.x === at.x && c.y === at.y)) return
+      const isBurstEnd = trail.verbBurstEnd === true
       scheduleAfterMs(() => {
-        if (useGameStore.getState().fightCounter !== pending.fightCounter) return
-        pendingPlaceRef.current = null
-        const placed: { id: string; remaining: number }[] = []
-        for (const c of pending.cells) {
-          const id = `flame-${++flameIdRef.current}`
-          positions.set(id, c.x, c.y)
-          placed.push({ id, remaining: pending.duration })
-        }
-        if (placed.length === 0) return
-        impacts.spawn(pending.cells.map((c) => ({ x: c.x, y: c.y })))
+        const live = pendingPlaceRef.current
+        if (!live || useGameStore.getState().fightCounter !== live.fightCounter) return
+        const id = `flame-${++flameIdRef.current}`
+        positions.set(id, at.x, at.y)
+        impacts.spawn([at])
         setMeta((prev) => {
           const next = new Map(prev)
-          for (const p of placed) next.set(p.id, { remaining: p.remaining })
+          next.set(id, { remaining: live.duration })
           return next
         })
+        live.landed.add(key)
+        if (live.landed.size >= live.cells.length || isBurstEnd) pendingPlaceRef.current = null
       }, trail.arrivalMs)
     })
     const unsub = subscribeGameEvents((event) => {
@@ -89,6 +90,7 @@ export function BurningOverlay() {
           cells: event.cells,
           duration: event.duration,
           fightCounter: useGameStore.getState().fightCounter,
+          landed: new Set(),
         }
       } else if (event.kind === 'gems-cleared') {
         const removed = removeAnchorsAt(positions, event.cells)

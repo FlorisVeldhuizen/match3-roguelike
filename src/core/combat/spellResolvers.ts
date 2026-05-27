@@ -9,7 +9,7 @@ import {
   type HexedColor,
   type ManaPools,
   type Match,
-  type PetrifiedRows,
+  type WardedRows,
   type Player,
   type Pos,
   type StatusInstance,
@@ -350,22 +350,16 @@ export function resolveBlessedGround(
 }
 
 // ---------- Frozen Wall ----------
-// Petrify a player-chosen row for 1 turn (defensive counter).
+// Ward a player-chosen row for 1 turn — enemy board verbs cannot land there.
 export function resolveFrozenWall(
   row: number,
-  petrifiedRows: PetrifiedRows,
-): { petrifiedRows: PetrifiedRows; events: GameEvent[] } {
-  const next: PetrifiedRows = { ...petrifiedRows, [row]: 2 }
+  wardedRows: WardedRows,
+): { wardedRows: WardedRows; events: GameEvent[] } {
+  const duration = 1
+  const next: WardedRows = { ...wardedRows, [row]: duration }
   return {
-    petrifiedRows: next,
-    events: [
-      {
-        kind: 'petrify-fired',
-        enemyId: 'frozen-wall',
-        row,
-        duration: 2,
-      },
-    ],
+    wardedRows: next,
+    events: [{ kind: 'frozen-wall-fired', row, duration }],
   }
 }
 

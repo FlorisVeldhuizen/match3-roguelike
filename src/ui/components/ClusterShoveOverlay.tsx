@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { BOARD_EFFECT_FIZZLE_MS, scheduleAfterMs } from '../../timing'
 import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import type { Pos } from '../../types'
@@ -15,9 +16,6 @@ type Threat = {
   destinations: Pos[]
   expiring?: boolean
 }
-
-// Matches the 320ms fade-out in threats.css
-const FADE_OUT_MS = 320
 
 const CURVE_RATIO = 0.22
 function bezierPath(from: { cx: number; cy: number }, to: { cx: number; cy: number }): string {
@@ -111,7 +109,7 @@ export function ClusterShoveOverlay() {
         return next
       })
       const scheduledFight = useGameStore.getState().fightCounter
-      window.setTimeout(() => {
+      scheduleAfterMs(() => {
         if (useGameStore.getState().fightCounter !== scheduledFight) return
         setThreats((prev) => {
           const cur = prev.get(ownerId)
@@ -120,7 +118,7 @@ export function ClusterShoveOverlay() {
           next.delete(ownerId)
           return next
         })
-      }, FADE_OUT_MS)
+      }, BOARD_EFFECT_FIZZLE_MS)
     }
 
     return subscribeGameEvents((event) => {

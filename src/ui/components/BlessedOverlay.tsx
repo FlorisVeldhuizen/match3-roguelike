@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { BOARD_EFFECT_FIZZLE_MS, scheduleAfterMs } from '../../timing'
 import { useAnimatedCellPositions } from '../hooks/useAnimatedCellPositions'
 import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
@@ -13,6 +14,14 @@ type SparkConfig = {
   delay: number
   duration: number
 }
+
+type ExpiringBlessed = {
+  id: string
+  x: number
+  y: number
+  sparks: SparkConfig[]
+}
+
 const SPARKS_PER_CELL = 3
 
 function randomSparkPos(): { left: number; top: number } {
@@ -66,6 +75,7 @@ function BlessedSpark({ initial }: { initial: SparkConfig }) {
 export function BlessedOverlay() {
   const positions = useAnimatedCellPositions()
   const [sparks, setSparks] = useState<Map<string, SparkConfig[]>>(new Map())
+  const [expiring, setExpiring] = useState<ExpiringBlessed[]>([])
   const idCounterRef = useRef(0)
 
   useLayoutEffect(() => {
@@ -76,6 +86,7 @@ export function BlessedOverlay() {
   const wipeAll = useCallback(() => {
     positions.clear()
     setSparks(new Map())
+    setExpiring([])
   }, [positions])
 
   useFightReset(
@@ -88,6 +99,17 @@ export function BlessedOverlay() {
   useBoardWipe(wipeAll)
 
   useEffect(() => {
+    const fadeOutBlessed = (snapshots: ExpiringBlessed[]) => {
+      if (snapshots.length === 0) return
+      const fightCounter = useGameStore.getState().fightCounter
+      const ids = snapshots.map((s) => s.id)
+      setExpiring((prev) => [...prev, ...snapshots])
+      scheduleAfterMs(() => {
+        if (useGameStore.getState().fightCounter !== fightCounter) return
+        setExpiring((prev) => prev.filter((e) => !ids.includes(e.id)))
+      }, BOARD_EFFECT_FIZZLE_MS)
+    }
+
     return subscribeGameEvents((event) => {
       if (event.kind === 'tile-blessed-placed') {
         const placed: { id: string; sparks: SparkConfig[] }[] = []
@@ -105,25 +127,40 @@ export function BlessedOverlay() {
       } else if (event.kind === 'gems-cleared') {
         const removed = removeAnchorsAt(positions, event.cells)
         if (removed.length === 0) return
+        const snapshots: ExpiringBlessed[] = []
         setSparks((prev) => {
           const next = new Map(prev)
-          for (const r of removed) next.delete(r.id)
+          for (const r of removed) {
+            snapshots.push({
+              id: r.id,
+              x: r.at.x,
+              y: r.at.y,
+              sparks: prev.get(r.id) ?? randomSparks(),
+            })
+            next.delete(r.id)
+          }
           return next
         })
+        fadeOutBlessed(snapshots)
       } else if (event.kind === 'blessed-match-triggered') {
-        const removed: string[] = []
-        for (const c of event.cells) {
-          const id = positions.findIdAt(c.x, c.y)
-          if (!id) continue
-          positions.remove(id)
-          removed.push(id)
-        }
-        if (removed.length === 0) return
+        const snapshots: ExpiringBlessed[] = []
         setSparks((prev) => {
           const next = new Map(prev)
-          for (const id of removed) next.delete(id)
+          for (const c of event.cells) {
+            const id = positions.findIdAt(c.x, c.y)
+            if (!id) continue
+            positions.remove(id)
+            snapshots.push({
+              id,
+              x: c.x,
+              y: c.y,
+              sparks: prev.get(id) ?? randomSparks(),
+            })
+            next.delete(id)
+          }
           return next
         })
+        fadeOutBlessed(snapshots)
       }
     })
   }, [positions])
@@ -141,6 +178,13 @@ export function BlessedOverlay() {
           </CellAnchor>
         )
       })}
+      {expiring.map((e) => (
+        <CellAnchor key={e.id} x={e.x} y={e.y} className="blessed-cell is-expiring">
+          {e.sparks.map((s, i) => (
+            <BlessedSpark key={i} initial={s} />
+          ))}
+        </CellAnchor>
+      ))}
     </div>
   )
 }

@@ -23,6 +23,7 @@ import {
   type HexedColor,
   type PendingReward,
   type PetrifiedRows,
+  type WardedRows,
   type Pos,
   type RunPhase,
 } from '../../../types'
@@ -31,6 +32,7 @@ import {
   tickFlagDuration,
   tickHexedColors,
   tickPetrifiedRows,
+  tickWardedRows,
 } from '../../board/flags'
 import type { StoreSet, StoreGet } from './types'
 
@@ -118,6 +120,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
 
     const tailEvents: GameEvent[] = []
     let tickedPetrifiedRows: PetrifiedRows = current.board.petrifiedRows
+    let tickedWardedRows: WardedRows = current.board.wardedRows
     let tickedHexedColors: HexedColor[] = current.fight.hexedColors ?? []
     let tickedDrainedColors: DrainedColor[] = current.fight.drainedColors ?? []
 
@@ -195,11 +198,16 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
           tickedHexedColors,
           targetEnemyId,
           tickedDrainedColors,
+          tickedWardedRows,
         )
         player = enemyResult.player
         enemies = enemyResult.enemies
         finalBoard = enemyResult.board
         tickedPetrifiedRows = enemyResult.petrifiedRows
+        tickedWardedRows = enemyResult.wardedRows
+        const wardTick = tickWardedRows(tickedWardedRows)
+        tickedWardedRows = wardTick.wardedRows
+        tailEvents.push(...wardTick.events)
         tickedHexedColors = enemyResult.hexedColors
         tickedDrainedColors = enemyResult.drainedColors
         enemyRng = enemyResult.rng
@@ -279,6 +287,7 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
     set((s) => {
       s.board.cells = finalBoard
       s.board.petrifiedRows = tickedPetrifiedRows
+      s.board.wardedRows = tickedWardedRows
       s.rng.board = finalBoardRng
       s.rng.enemy = enemyRng
       s.rng.loot = nextLootRng

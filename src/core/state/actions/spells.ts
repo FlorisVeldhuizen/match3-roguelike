@@ -462,12 +462,12 @@ export function makeCastFrozenWall(set: StoreSet, get: StoreGet) {
       current.fight.enemies,
       current.fight.targetEnemyId,
     )
-    const r = resolveFrozenWall(row, current.board.petrifiedRows)
+    const r = resolveFrozenWall(row, current.board.wardedRows)
     set((s) => {
       s.fight.player = hooks.player
       s.fight.enemies = hooks.enemies
       s.fight.targetEnemyId = hooks.targetEnemyId
-      s.board.petrifiedRows = r.petrifiedRows
+      s.board.wardedRows = r.wardedRows
       s.boardTargetingSpell = null
     })
     return { ok: true, events: [event, ...hooks.events, ...r.events] }

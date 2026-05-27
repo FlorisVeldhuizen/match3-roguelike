@@ -18,7 +18,8 @@ import { subscribeTrailScheduled } from '../../trails/sync'
 import type { Enemy, Intent, StatusInstance, StatusKind } from '../../types'
 import { applyStatusToList, statusKindFromDamageSource } from '../../core/combat/statuses'
 import { getStatusDef } from '../../content/statuses'
-import { intentDisplay } from '../../content/intentDisplays'
+import { intentDisplay, LIFESTEAL_RIDER_ICON } from '../../content/intentDisplays'
+import { enemyPassiveTraitHint } from '../../content/enemyTraits'
 import { StatusBar } from './StatusBar'
 import { setHoveredEnemy } from '../state/hoveredEnemy'
 import { getHoveredCell, subscribeHoveredCell } from '../../core/state/hoveredCell'
@@ -31,6 +32,7 @@ const HIT_FLASH_MS = 280
 // Must match the longest .firing-* animation in index.css
 const INTENT_FIRE_MS = 460
 const KILL_PULSE_MS = 720
+const HEAL_PULSE_MS = 520
 
 export function EnemyFrame() {
   const enemies = useGameStore((s) => s.fight.enemies)
@@ -84,6 +86,7 @@ export function EnemyFrame() {
   const [trailPulse, setTrailPulse] = useState<Record<string, number>>({})
   const [killedPulse, setKilledPulse] = useState<Record<string, number>>({})
   const [staggered, setStaggered] = useState<Record<string, number>>({})
+  const [healing, setHealing] = useState<Record<string, number>>({})
   const [intentFiring, setIntentFiring] = useState<
     Record<string, { count: number; kind: 'attack' | 'block' }>
   >({})
@@ -96,6 +99,21 @@ export function EnemyFrame() {
     Record<string, { statusKind: StatusKind; remaining: number } | undefined>
   >({})
   const pendingEnemyStatusApplyRef = useRef<Record<string, StatusInstance | undefined>>({})
+
+  const applyEnemyHeal = (id: string, amount: number) => {
+    if (amount <= 0) return
+    const storeEnemy = useGameStore.getState().fight.enemies.find((e) => e.id === id)
+    if (storeEnemy) {
+      setDisplayedHp((prev) => ({ ...prev, [id]: storeEnemy.hp }))
+    }
+    setHealing((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+    window.setTimeout(() => {
+      setHealing((prev) => ({
+        ...prev,
+        [id]: Math.max(0, (prev[id] ?? 0) - 1),
+      }))
+    }, HEAL_PULSE_MS)
+  }
 
   const applyEnemyDamage = (id: string, amount: number, blocked: number) => {
     setDisplayedHp((prev) => {
@@ -290,6 +308,10 @@ export function EnemyFrame() {
             [id]: Math.max(0, (prev[id] ?? 0) - 1),
           }))
         }, 520)
+      } else if (event.kind === 'ally-healed') {
+        applyEnemyHeal(event.targetId, event.amount)
+      } else if (event.kind === 'drain-triggered') {
+        applyEnemyHeal(event.enemyId, event.healAmount)
       } else if (event.kind === 'intent-telegraphed') {
         setDisplayedIntent((prev) => ({ ...prev, [event.enemyId]: event.intent }))
         setIntentTick((prev) => ({
@@ -410,6 +432,9 @@ export function EnemyFrame() {
         const isHit = (flashing[enemy.id] ?? 0) > 0
         const isTrailHit = (trailPulse[enemy.id] ?? 0) > 0
         const isStaggered = (staggered[enemy.id] ?? 0) > 0
+        const isHealing = (healing[enemy.id] ?? 0) > 0
+        const isEnraged = enemy.enraged === true
+        const traitHint = enemyPassiveTraitHint(enemy.archetype)
         const isKilledPulse = (killedPulse[enemy.id] ?? 0) > 0
         const firingState = intentFiring[enemy.id]
         const isFiring = (firingState?.count ?? 0) > 0
@@ -441,6 +466,8 @@ export function EnemyFrame() {
               isTrailHit ? 'trail-pulsing' : '',
               isFiring ? `firing-${firingKind}` : '',
               isStaggered ? 'staggered' : '',
+              isHealing ? 'healing' : '',
+              isEnraged ? 'enraged' : '',
               shoveCellHovered ? 'shove-cell-hovered' : '',
             ]
               .filter(Boolean)
@@ -475,8 +502,13 @@ export function EnemyFrame() {
             <div className="enemy-sprite" aria-hidden>
               <span className="enemy-glyph">{dead ? '💀' : '👹'}</span>
             </div>
-            <div className="enemy-name">
+            <div className="enemy-name" title={traitHint}>
               {enemy.name}
+              {isEnraged && (
+                <span className="enemy-enraged-badge" title="Enraged — fighting more aggressively">
+                  ENRAGED
+                </span>
+              )}
               {isElite && (
                 <span
                   className="enemy-elite-badge"
@@ -593,6 +625,11 @@ function IntentBadge({
           <span className={`intent-rider rider-${intent.onHit.status}`} aria-hidden>
             {getStatusDef(intent.onHit.status).icon}
             <span className="intent-rider-amount">{intent.onHit.stacks}</span>
+          </span>
+        )}
+        {intent.kind === 'attack' && intent.lifesteal != null && intent.lifesteal > 0 && (
+          <span className="intent-rider rider-lifesteal" aria-hidden title="Lifesteal">
+            <span className="intent-rider-icon">{LIFESTEAL_RIDER_ICON}</span>
           </span>
         )}
         {allyTargetName && (
