@@ -15,6 +15,8 @@ export type KeywordId =
   | 'riposte'
   | 'bulwark'
   | 'reinforce'
+  | 'enrage'
+  | 'elite'
 
 export type KeywordDef = {
   id: KeywordId
@@ -122,6 +124,20 @@ const defs: Record<KeywordId, KeywordDef> = {
     icon: '🛡',
     body: 'Pending: at end of phase, your blue pool doubles into armor, and that armor carries over the next phase.',
     variant: 'block',
+  },
+  enrage: {
+    id: 'enrage',
+    name: 'Enrage',
+    icon: '💢',
+    body: 'Below 50% HP, switches to a more aggressive intent pattern for the rest of the fight. Their pattern resets when enrage triggers.',
+    variant: 'enrage',
+  },
+  elite: {
+    id: 'elite',
+    name: 'Elite',
+    icon: '☠',
+    body: 'Elite fight — 40% more HP and +1 to attack and block values. Better gold and reward odds than a normal fight.',
+    variant: 'elite',
   },
 }
 

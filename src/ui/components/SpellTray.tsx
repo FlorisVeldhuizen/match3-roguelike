@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import {
   getPendingMeta,
@@ -9,13 +9,26 @@ import {
 } from '../../core/combat/spellRegistry'
 import { isUnlockAllSpells, subscribeUnlockAllSpells } from '../../debug/devControls'
 import { canAffordSpell } from '../../core/combat/mana'
-import { MANA_CAPS, type ManaCost, type SpellId, type StatusKind } from '../../types'
+import {
+  MANA_CAPS,
+  type Enemy,
+  type ManaCost,
+  type ManaPools,
+  type PendingSpellId,
+  type SpellId,
+  type StatusInstance,
+  type StatusKind,
+} from '../../types'
+import type { SpellDef } from '../../core/combat/spellRegistry'
 import { HoverTooltip } from './HoverTooltip'
 import { PurifyPickerModal } from './PurifyPickerModal'
 import { FocusPickerModal } from './FocusPickerModal'
 import { TransmutePickerModal } from './TransmutePickerModal'
 import { VolleyTargetModal } from './VolleyTargetModal'
 import { useBoardSettled } from '../hooks/useBoardSettled'
+import { useHoldRepeat } from '../hooks/useHoldRepeat'
+import { useHorizontalScrollHints } from '../hooks/useHorizontalScrollHints'
+import { useSpellTrayScrollTouch } from '../hooks/useSpellTrayScrollTouch'
 import { primaryManaRgb, spellManaClassName } from '../spellManaTheme'
 import { playBoardSpellEvents } from '../../core/board/spellPlayback'
 
@@ -58,6 +71,106 @@ function ManaCostBadges({ cost }: { cost: ManaCost }) {
 // Matches the spell-btn.just-cast keyframe in index.css
 const CAST_FLASH_MS = 520
 
+function spellExtraBlock(
+  spellId: SpellId,
+  mana: ManaPools,
+  statuses: StatusInstance[],
+  enemies: Enemy[],
+): boolean {
+  const livingEnemy = enemies.some((e) => e.hp > 0)
+  if (spellId === 'purify' && !statuses.some((s) => PURIFIABLE.has(s.kind))) {
+    return true
+  }
+  if (spellId === 'focus') {
+    const haveSource = mana.red >= 1 || mana.blue >= 1 || mana.green >= 1 || mana.yellow >= 1
+    const haveTarget =
+      MANA_CAPS.red - mana.red >= 1 ||
+      MANA_CAPS.blue - mana.blue >= 1 ||
+      MANA_CAPS.green - mana.green >= 1 ||
+      MANA_CAPS.yellow - mana.yellow >= 1
+    return !haveSource || !haveTarget
+  }
+  if (
+    (spellId === 'volley' ||
+      spellId === 'ignite' ||
+      spellId === 'brittle' ||
+      spellId === 'cinder-lash') &&
+    !livingEnemy
+  ) {
+    return true
+  }
+  return false
+}
+
+function isSpellButtonBlocked(
+  def: SpellDef,
+  opts: {
+    onPlayerPhase: boolean
+    boardSettled: boolean
+    mana: ManaPools
+    pending: PendingSpellId[]
+    statuses: StatusInstance[]
+    enemies: Enemy[]
+  },
+): boolean {
+  const queued = opts.pending.includes(def.id)
+  const canPay = canAffordSpell(opts.mana, def.cost)
+  const extraBlock = spellExtraBlock(def.id, opts.mana, opts.statuses, opts.enemies)
+  return !opts.onPlayerPhase || !opts.boardSettled || !canPay || queued || extraBlock
+}
+
+function spellExtraReason(
+  spellId: SpellId,
+  mana: ManaPools,
+  statuses: StatusInstance[],
+  enemies: Enemy[],
+): string | null {
+  if (spellId === 'purify' && !statuses.some((s) => PURIFIABLE.has(s.kind))) {
+    return 'No curses to purify.'
+  }
+  if (spellId === 'focus') {
+    const haveSource = mana.red >= 1 || mana.blue >= 1 || mana.green >= 1 || mana.yellow >= 1
+    const haveTarget =
+      MANA_CAPS.red - mana.red >= 1 ||
+      MANA_CAPS.blue - mana.blue >= 1 ||
+      MANA_CAPS.green - mana.green >= 1 ||
+      MANA_CAPS.yellow - mana.yellow >= 1
+    if (!haveSource || !haveTarget) {
+      return 'Nothing useful to convert right now.'
+    }
+  }
+  if (
+    (spellId === 'volley' ||
+      spellId === 'ignite' ||
+      spellId === 'brittle' ||
+      spellId === 'cinder-lash') &&
+    !enemies.some((e) => e.hp > 0)
+  ) {
+    return 'No targets left.'
+  }
+  return null
+}
+
+function spellTouchActionHint(spellId: SpellId): string {
+  if (BOARD_TARGETING_SPELLS.has(spellId)) {
+    return 'Tap again, then tap a gem on the board.'
+  }
+  if (PICKER_SPELLS.has(spellId)) {
+    return 'Tap again to choose targets.'
+  }
+  return 'Tap again to cast.'
+}
+
+function spellTouchOpenAnnounce(name: string, spellId: SpellId): string {
+  if (BOARD_TARGETING_SPELLS.has(spellId)) {
+    return `${name}. Tap again, then choose a gem.`
+  }
+  if (PICKER_SPELLS.has(spellId)) {
+    return `${name}. Tap again to choose targets.`
+  }
+  return `${name}. Tap again to cast.`
+}
+
 export function SpellTray() {
   const phase = useGameStore((s) => s.fight.phase)
   const mana = useGameStore((s) => s.fight.player.mana)
@@ -76,6 +189,21 @@ export function SpellTray() {
   const onPlayerPhase = phase === 'player-acting'
   const boardSettled = useBoardSettled()
   const [pickerOpen, setPickerOpen] = useState<SpellId | null>(null)
+  const traySpells = listSpellsForTray(ownedSpellIds, unlockAll)
+  const trayUltimates = listUltimates()
+  const { ref: trayScrollRef, canScrollStart, canScrollEnd, hasOverflow, scrollByDirection } =
+    useHorizontalScrollHints([traySpells.length, trayUltimates.length, unlockAll])
+
+  const chevronScrollStart = useHoldRepeat(() => scrollByDirection(-1), !canScrollStart, {
+    onRepeat: () => scrollByDirection(-1, { behavior: 'auto' }),
+  })
+  const chevronScrollEnd = useHoldRepeat(() => scrollByDirection(1), !canScrollEnd, {
+    onRepeat: () => scrollByDirection(1, { behavior: 'auto' }),
+  })
+
+  const [trayDismissTick, setTrayDismissTick] = useState(0)
+  const bumpTrayDismiss = useCallback(() => setTrayDismissTick((t) => t + 1), [])
+  const { didDragRef } = useSpellTrayScrollTouch(trayScrollRef, bumpTrayDismiss)
 
   const [flashKey, setFlashKey] = useState<Record<string, number>>({})
   const [tooltipCloseTick, setTooltipCloseTick] = useState<Record<string, number>>({})
@@ -95,39 +223,45 @@ export function SpellTray() {
     }, CAST_FLASH_MS)
   }
 
+  const shellClass = [
+    'spell-tray-shell',
+    hasOverflow ? 'has-overflow' : '',
+    canScrollStart ? 'can-scroll-start' : '',
+    canScrollEnd ? 'can-scroll-end' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className="spell-tray" aria-label="Spells">
-      {listSpellsForTray(ownedSpellIds, unlockAll).map((def) => {
+    <div className={shellClass}>
+      <button
+        type="button"
+        className="spell-tray-chevron spell-tray-chevron-start"
+        aria-label="Scroll spells left"
+        disabled={!canScrollStart}
+        onContextMenu={(e) => e.preventDefault()}
+        {...chevronScrollStart}
+      />
+      <div className="spell-tray-viewport">
+        <div
+          ref={trayScrollRef}
+          className="spell-tray-scroll"
+          aria-describedby={hasOverflow ? 'spell-tray-more-hint' : undefined}
+        >
+          <div className="spell-tray" aria-label="Spells">
+      {traySpells.map((def) => {
+        const trayCtx = {
+          onPlayerPhase,
+          boardSettled,
+          mana,
+          pending,
+          statuses,
+          enemies,
+        }
         const queued = pending.includes(def.id)
         const canPay = canAffordSpell(mana, def.cost)
-        const livingEnemy = enemies.some((e) => e.hp > 0)
-        let extraBlock = false
-        let extraReason: string | null = null
-        if (def.id === 'purify' && !statuses.some((s) => PURIFIABLE.has(s.kind))) {
-          extraBlock = true
-          extraReason = 'No curses to purify.'
-        } else if (def.id === 'focus') {
-          const haveSource = mana.red >= 1 || mana.blue >= 1 || mana.green >= 1 || mana.yellow >= 1
-          const haveTarget =
-            MANA_CAPS.red - mana.red >= 1 ||
-            MANA_CAPS.blue - mana.blue >= 1 ||
-            MANA_CAPS.green - mana.green >= 1 ||
-            MANA_CAPS.yellow - mana.yellow >= 1
-          if (!haveSource || !haveTarget) {
-            extraBlock = true
-            extraReason = 'Nothing useful to convert right now.'
-          }
-        } else if (
-          (def.id === 'volley' ||
-            def.id === 'ignite' ||
-            def.id === 'brittle' ||
-            def.id === 'cinder-lash') &&
-          !livingEnemy
-        ) {
-          extraBlock = true
-          extraReason = 'No targets left.'
-        }
-        const blocked = !onPlayerPhase || !boardSettled || !canPay || queued || extraBlock
+        const blocked = isSpellButtonBlocked(def, trayCtx)
+        const extraReason = spellExtraReason(def.id, mana, statuses, enemies)
         const costSummary = describeCost(def.cost)
         const manaTheme = spellManaClassName(def.cost)
         const castRgb = primaryManaRgb(def.cost)
@@ -140,12 +274,16 @@ export function SpellTray() {
               : !canPay
                 ? `Not enough mana — needs ${costSummary}.`
                 : extraReason
+        const touchHint = !blocked ? spellTouchActionHint(def.id) : undefined
+        const touchAnnounce = !blocked ? spellTouchOpenAnnounce(def.name, def.id) : undefined
         return (
           <HoverTooltip
             key={def.id}
             variant="spell"
             queued={queued}
-            closeTick={tooltipCloseTick[def.id] ?? 0}
+            closeTick={(tooltipCloseTick[def.id] ?? 0) + trayDismissTick}
+            touchActionHint={touchHint}
+            touchOpenAnnounce={touchAnnounce}
             title={`${def.name} — ${costSummary} mana`}
             body={
               <>
@@ -167,7 +305,7 @@ export function SpellTray() {
               }
               aria-disabled={blocked}
               onClick={() => {
-                if (blocked) return
+                if (didDragRef.current || blocked) return
                 if (BOARD_TARGETING_SPELLS.has(def.id)) {
                   if (boardTargetingSpell === def.id) {
                     cancelBoardTargeting()
@@ -182,7 +320,19 @@ export function SpellTray() {
                 }
                 const res = castSpell(def.id)
                 if (res.ok) {
-                  bumpTooltipClose(def.id)
+                  const after = useGameStore.getState().fight
+                  if (
+                    isSpellButtonBlocked(def, {
+                      onPlayerPhase: after.phase === 'player-acting',
+                      boardSettled,
+                      mana: after.player.mana,
+                      pending: after.player.pendingSpells,
+                      statuses: after.player.statuses,
+                      enemies: after.enemies,
+                    })
+                  ) {
+                    bumpTooltipClose(def.id)
+                  }
                   void playBoardSpellEvents(res.events)
                   flashCast(def.id)
                 }
@@ -197,7 +347,7 @@ export function SpellTray() {
           </HoverTooltip>
         )
       })}
-      {listUltimates().map((def) => {
+      {trayUltimates.map((def) => {
         const queued = pending.includes(def.id)
         const canPay = charge >= def.chargeCost
         const blocked = !onPlayerPhase || !boardSettled || !canPay || queued
@@ -210,12 +360,16 @@ export function SpellTray() {
               : !canPay
                 ? `Not charged up yet — needs ${def.chargeCost}, you have ${charge}.`
                 : null
+        const ultimateTouchHint = !blocked ? 'Tap again to arm.' : undefined
+        const ultimateTouchAnnounce = !blocked ? `${def.name}. Tap again to arm.` : undefined
         return (
           <HoverTooltip
             key={def.id}
             variant="ultimate"
             queued={queued}
-            closeTick={tooltipCloseTick[def.id] ?? 0}
+            closeTick={(tooltipCloseTick[def.id] ?? 0) + trayDismissTick}
+            touchActionHint={ultimateTouchHint}
+            touchOpenAnnounce={ultimateTouchAnnounce}
             title={`${def.name} — ${def.chargeCost} charge`}
             body={
               <>
@@ -232,10 +386,18 @@ export function SpellTray() {
               data-spell-target={def.id}
               aria-disabled={blocked}
               onClick={() => {
-                if (blocked) return
+                if (didDragRef.current || blocked) return
                 const res = castUltimate(def.id)
                 if (res.ok) {
-                  bumpTooltipClose(def.id)
+                  const after = useGameStore.getState().fight
+                  const ultimateBlocked =
+                    after.phase !== 'player-acting' ||
+                    !boardSettled ||
+                    after.player.pendingSpells.includes(def.id) ||
+                    after.player.skillCharge < def.chargeCost
+                  if (ultimateBlocked) {
+                    bumpTooltipClose(def.id)
+                  }
                   void playBoardSpellEvents(res.events)
                   flashCast(def.id)
                 }
@@ -259,6 +421,22 @@ export function SpellTray() {
       {pickerOpen === 'focus' && <FocusPickerModal onClose={() => setPickerOpen(null)} />}
       {pickerOpen === 'transmute' && <TransmutePickerModal onClose={() => setPickerOpen(null)} />}
       {pickerOpen === 'volley' && <VolleyTargetModal onClose={() => setPickerOpen(null)} />}
+          </div>
+        </div>
+        {hasOverflow ? (
+          <span id="spell-tray-more-hint" className="spell-tray-scroll-hint sr-only">
+            Swipe sideways to see more spells
+          </span>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className="spell-tray-chevron spell-tray-chevron-end"
+        aria-label="Scroll spells right"
+        disabled={!canScrollEnd}
+        onContextMenu={(e) => e.preventDefault()}
+        {...chevronScrollEnd}
+      />
     </div>
   )
 }

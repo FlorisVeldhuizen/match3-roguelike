@@ -6,7 +6,8 @@
      override on narrow viewports. Input math (clientToCell) already
      normalises via getBoundingClientRect, so visual scaling is enough.
    - Collapse header chrome that's nice-to-have but consumes width.
-   - Let the spell tray and HUD rows wrap. Keep touch targets ≥ 40px high.
+   - Spell tray sizing tweaks at narrow widths (shell rules live in spells.css).
+     HUD rows may still wrap. Touch targets ≥ 40px.
 */
 
 /* Board sizing: the Pixi canvas is 528 logical px square, but we let CSS
@@ -27,7 +28,7 @@
 }
 
 /* Mobile portrait: budget for header (~36px) + enemy frame (~150px) +
-   HUD (~50px, now single-row since statuses float) + spell tray (~85px) +
+   HUD (~50px, now single-row since statuses float) + spell tray (~95px) +
    gaps (~30px) + safe-area bottom (~30px). Single-row HUD freed ~25px
    vs the earlier two-row layout, so the board can reclaim that. */
 @media (max-width: 760px) {
@@ -102,18 +103,83 @@
     font-size: 0.64rem;
     line-height: 12px;
   }
+  .spell-tray-shell {
+    /* Slim rim; chevrons float in the padding, viewport stays full width. */
+    --spell-tray-edge: 0.4rem;
+    --spell-tray-chevron-hit: 1.75rem;
+    --spell-tray-chevron-gap: 0.12rem;
+    padding: 0.42rem var(--spell-tray-edge) 0.38rem;
+    column-gap: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .spell-tray-shell.has-overflow .spell-tray-chevron {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 6;
+    width: var(--spell-tray-chevron-hit);
+    min-width: 0;
+    max-width: var(--spell-tray-chevron-hit);
+    min-height: 44px;
+    height: auto;
+    transform: none;
+  }
+  .spell-tray-shell.has-overflow .spell-tray-chevron-start {
+    left: var(--spell-tray-edge);
+    justify-content: flex-end;
+    padding-inline: 0 var(--spell-tray-chevron-gap);
+  }
+  .spell-tray-shell.has-overflow .spell-tray-chevron-end {
+    right: var(--spell-tray-edge);
+    justify-content: flex-start;
+    padding-inline: var(--spell-tray-chevron-gap) 0;
+  }
+  .spell-tray-chevron::before {
+    border-width: 9px 11px 9px 0;
+  }
+  .spell-tray-chevron:hover:not(:disabled) {
+    transform: none;
+  }
+  .spell-tray-chevron:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+  .spell-tray-viewport {
+    grid-column: 1;
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+  .spell-tray-scroll {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    padding-block: 0.4rem;
+  }
+  /* Peek room at scroll ends so cards are not trapped under rim chevrons. */
+  .spell-tray-shell.has-overflow .spell-tray-scroll {
+    scroll-padding-inline: calc(var(--spell-tray-chevron-hit) + var(--spell-tray-chevron-gap));
+  }
+  .spell-tray-viewport::before,
+  .spell-tray-viewport::after {
+    width: 4px;
+  }
   .spell-tray {
     gap: 0.4rem;
+    min-height: 80px;
   }
-  .spell-btn {
-    /* Mobile: keep the fixed-slot identity but a touch smaller. WCAG
-       44px touch target still satisfied by the 80px height. The row
-       wraps naturally when not enough cards fit. */
+  .spell-tray-shell:not(.has-overflow) .spell-tray {
+    min-height: 0;
+  }
+  .spell-tray-shell:not(.has-overflow) .spell-tray-scroll {
+    padding-block: 0.28rem;
+  }
+  /* Fixed tray slots — avoids % in custom props resolving to a tiny width. */
+  .spell-tray .spell-btn {
     padding: 0.45rem 0.5rem 0.4rem;
     font-size: 0.7rem;
-    width: 88px;
+    width: 80px;
     height: 80px;
-    flex: 0 0 88px;
+    flex: 0 0 80px;
   }
   .spell-label {
     font-size: 0.68rem;
@@ -214,12 +280,15 @@
   .game {
     gap: 0.4rem;
   }
-  .spell-btn {
+  .spell-tray {
+    min-height: 74px;
+  }
+  .spell-tray .spell-btn {
     font-size: 0.66rem;
     padding: 0.4rem 0.35rem 0.35rem;
-    width: 76px;
+    width: 72px;
     height: 74px;
-    flex: 0 0 76px;
+    flex: 0 0 72px;
   }
   /* At very-narrow widths the label competes with cost pips for vertical
      space; drop the label, the icon + cost pip are still legible. */

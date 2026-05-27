@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { subscribeScreenReaderPolite } from '../screenReaderAnnounce'
 
 // Trailing-space toggle: identical strings don't trigger re-announcement in most ATs
 const bump = (prev: string, text: string): string => (prev === text ? `${text} ` : text)
@@ -7,6 +8,14 @@ const bump = (prev: string, text: string): string => (prev === text ? `${text} `
 export function AriaLiveAnnouncer() {
   const [polite, setPolite] = useState('')
   const [assertive, setAssertive] = useState('')
+
+  useEffect(
+    () =>
+      subscribeScreenReaderPolite((text) => {
+        setPolite((p) => bump(p, text))
+      }),
+    [],
+  )
 
   useEffect(
     () =>

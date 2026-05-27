@@ -69,6 +69,14 @@
   color: #c9a8ff;
 }
 
+.kw.kw-enrage {
+  color: #ffc9c9;
+}
+
+.kw.kw-elite {
+  color: #efe8d0;
+}
+
 /* Keyword sub-tooltips: same shell as the regular hover-tooltip, but
    with a left-edge accent in the keyword's palette so the nested
    tooltip immediately reads as "extra info about that highlighted
@@ -117,6 +125,14 @@
 
 .hover-tooltip.tooltip-kw-ultimate {
   border-left-color: #c9a8ff;
+}
+
+.hover-tooltip.tooltip-kw-enrage {
+  border-left-color: #ee5e57;
+}
+
+.hover-tooltip.tooltip-kw-elite {
+  border-left-color: #c9a040;
 }
 
 /* When a fullscreen overlay (reward / victory / game-over) is mounted,
@@ -201,6 +217,16 @@ body:has(.game-over-overlay) .intent-tooltip {
   border-top: 1px dashed var(--stone-2);
   color: var(--ember-2);
   font-size: 0.72rem;
+}
+
+.hover-tooltip-action {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--stone-2);
+  color: var(--gold-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .hover-tooltip.tooltip-ultimate {

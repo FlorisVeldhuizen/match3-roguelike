@@ -1315,8 +1315,13 @@ export class AnimationController {
       }
       const chip = this.findEl(`${hud} [data-status-chip]`)
       const bar = this.findEl(`${hud} .status-bar`)
-      const el = chip ?? bar
-      return el ? () => elementCenter(el) : null
+      const hp = this.findEl(`${hud} [data-pool-target="green"]`)
+      const hudRoot = this.findEl(hud)
+      return () =>
+        (chip ? elementCenter(chip) : null) ??
+        (bar ? elementCenter(bar) : null) ??
+        (hp ? elementCenter(hp) : null) ??
+        (hudRoot ? elementCenter(hudRoot) : null)
     }
     if (dest.kind === 'enemy') {
       const root = `[data-enemy-id="${dest.enemyId}"]`

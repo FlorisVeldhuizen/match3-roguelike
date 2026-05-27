@@ -449,6 +449,13 @@
 /* Elite badge: small gold chip pinned next to the archetype name so the
    player sees "this is the tougher one" at first glance. Keeps the same
    parchment-and-gold accent palette as the rest of the HUD. */
+/* Keyword anchor around badges: keep chip look, not inline-keyword underline. */
+.enemy-name > .tooltip-anchor:has(> .enemy-enraged-badge),
+.enemy-name > .tooltip-anchor:has(> .enemy-elite-badge) {
+  border-bottom: none;
+  cursor: help;
+}
+
 .enemy-enraged-badge {
   font-size: 0.62rem;
   font-weight: 700;

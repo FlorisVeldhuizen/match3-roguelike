@@ -361,6 +361,6 @@
 .game-fight-hidden .game-header,
 .game-fight-hidden .enemy-frame,
 .game-fight-hidden .hud,
-.game-fight-hidden .spell-tray {
+.game-fight-hidden .spell-tray-shell {
   visibility: hidden;
 }

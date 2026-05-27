@@ -2,6 +2,9 @@
 
 .hud {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;

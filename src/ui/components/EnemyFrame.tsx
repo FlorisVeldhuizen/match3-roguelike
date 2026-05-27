@@ -20,6 +20,7 @@ import { applyStatusToList, statusKindFromDamageSource } from '../../core/combat
 import { getStatusDef } from '../../content/statuses'
 import { intentDisplay, LIFESTEAL_RIDER_ICON } from '../../content/intentDisplays'
 import { enemyPassiveTraitHint } from '../../content/enemyTraits'
+import { Keyword } from './Keyword'
 import { StatusBar } from './StatusBar'
 import { setHoveredEnemy } from '../state/hoveredEnemy'
 import { getHoveredCell, subscribeHoveredCell } from '../../core/state/hoveredCell'
@@ -505,17 +506,14 @@ export function EnemyFrame() {
             <div className="enemy-name" title={traitHint}>
               {enemy.name}
               {isEnraged && (
-                <span className="enemy-enraged-badge" title="Enraged — fighting more aggressively">
-                  ENRAGED
-                </span>
+                <Keyword id="enrage">
+                  <span className="enemy-enraged-badge">ENRAGED</span>
+                </Keyword>
               )}
               {isElite && (
-                <span
-                  className="enemy-elite-badge"
-                  title="Elite — tougher than the standard archetype"
-                >
-                  ELITE
-                </span>
+                <Keyword id="elite">
+                  <span className="enemy-elite-badge">ELITE</span>
+                </Keyword>
               )}
             </div>
             <div className="enemy-effects-row">

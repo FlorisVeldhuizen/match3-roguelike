@@ -1,15 +1,261 @@
 /* --- Phase F: spells, statuses, pending strip --- */
 
-/* H3-C: spell tray as a row of "card slots". Each spell is a vertical
-   card with icon ↑, name, cost pips at the bottom. The card metaphor
-   tells the player "here is your kit" — slots have presence even when
-   the spell is unaffordable or queued. */
+/* H3-C: spell tray — horizontal row of fixed-size card slots in a framed,
+   HUD-width shell; scrolls sideways when the kit overflows. */
+/* Tray shell: same column width as .hud, framed panel, horizontal scroll
+   when the spell kit overflows (desktop + mobile). */
+.spell-tray-shell {
+  --spell-tray-edge: 0.55rem;
+  --spell-tray-chevron-track: 2.5rem;
+  --spell-tray-chevron-gap: 0.2rem;
+  position: relative;
+  display: grid;
+  /* Fixed chevron columns (match 40px touch target) so layout stays symmetric. */
+  grid-template-columns: var(--spell-tray-chevron-track) minmax(0, 1fr) var(--spell-tray-chevron-track);
+  align-items: center;
+  column-gap: var(--spell-tray-chevron-gap);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-self: stretch;
+  padding: 0.55rem var(--spell-tray-edge) 0.5rem;
+  background:
+    linear-gradient(180deg, rgba(154, 125, 82, 0.11), transparent 48%),
+    linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--gold-3);
+  border-radius: 0.45rem;
+  box-shadow:
+    inset 0 0 0 1px rgba(154, 125, 82, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 4px 14px rgba(0, 0, 0, 0.42);
+}
+
+/* Starter kit (no overflow): chevrons hidden — full-width viewport, centered row. */
+.spell-tray-shell:not(.has-overflow) {
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+}
+
+.spell-tray-shell:not(.has-overflow) .spell-tray-viewport {
+  grid-column: 1;
+}
+
+.spell-tray-shell:not(.has-overflow) .spell-tray-scroll {
+  overflow-x: hidden;
+  padding-block: 0.3rem;
+}
+
+.spell-tray-shell:not(.has-overflow) .spell-tray {
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+
+.spell-tray-viewport {
+  grid-column: 2;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 0.3rem;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+/* Side rails — mirrored [ and ] brackets; spells scroll underneath. */
+.spell-tray-viewport::before,
+.spell-tray-viewport::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  box-sizing: border-box;
+}
+
+.spell-tray-viewport::before {
+  left: 0;
+  border: 2px solid var(--gold-3);
+  border-left: none;
+  box-shadow: inset -1px 0 0 rgba(154, 125, 82, 0.2);
+}
+
+.spell-tray-viewport::after {
+  right: 0;
+  border: 2px solid var(--gold-3);
+  border-right: none;
+  box-shadow: inset 1px 0 0 rgba(154, 125, 82, 0.2);
+}
+
+.spell-tray-shell.can-scroll-start .spell-tray-viewport::before {
+  border-color: var(--gold-2);
+  border-left: none;
+  box-shadow:
+    inset -1px 0 0 rgba(201, 168, 108, 0.35),
+    2px 0 8px -2px rgba(201, 168, 108, 0.25);
+}
+
+.spell-tray-shell.can-scroll-end .spell-tray-viewport::after {
+  border-color: var(--gold-2);
+  border-right: none;
+  box-shadow:
+    inset 1px 0 0 rgba(201, 168, 108, 0.35),
+    -2px 0 8px -2px rgba(201, 168, 108, 0.25);
+}
+
+.spell-tray-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  /* Room for hover lift + outer glow inside overflow-y clip. */
+  padding-block: 0.45rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.spell-tray-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spell-tray-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+.spell-tray-chevron {
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--spell-tray-chevron-track);
+  min-height: 44px;
+  align-self: stretch;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: transform 80ms ease;
+}
+
+.spell-tray-chevron:disabled {
+  visibility: hidden;
+  pointer-events: none;
+  cursor: default;
+}
+
+.spell-tray-shell:not(.has-overflow) .spell-tray-chevron {
+  /* Single-column grid otherwise reserves a row per chevron (bulky empty band). */
+  position: absolute;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.spell-tray-chevron-start {
+  grid-column: 1;
+  justify-content: flex-end;
+  padding-inline: 0 var(--spell-tray-chevron-gap);
+}
+
+.spell-tray-chevron-end {
+  grid-column: 3;
+  justify-content: flex-start;
+  padding-inline: var(--spell-tray-chevron-gap) 0;
+}
+
+/* One triangle shape; end chevron mirrors it. */
+.spell-tray-chevron::before {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 8px 10px 8px 0;
+  border-color: transparent var(--gold-2) transparent transparent;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+  transition:
+    filter 120ms ease,
+    transform 80ms ease;
+}
+
+.spell-tray-chevron-end::before {
+  transform: scaleX(-1);
+}
+
+.spell-tray-chevron:hover:not(:disabled)::before {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65)) brightness(1.2);
+}
+
+.spell-tray-chevron-start:hover:not(:disabled)::before {
+  transform: translateX(-1px);
+}
+
+.spell-tray-chevron-end:hover:not(:disabled)::before {
+  transform: scaleX(-1) translateX(1px);
+}
+
+.spell-tray-chevron:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.spell-tray-chevron:active:not(:disabled)::before {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65)) brightness(0.88);
+}
+
+.spell-tray-chevron-end:active:not(:disabled)::before {
+  transform: scaleX(-1);
+}
+
+.spell-tray-chevron:focus-visible {
+  outline: 2px solid var(--gold-2);
+  outline-offset: 2px;
+  border-radius: 0.2rem;
+}
+
 .spell-tray {
   display: flex;
   gap: 0.55rem;
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  min-height: 88px;
+  /* Inset from viewport side rails so cards slide under the border, not behind it. */
+  padding-inline: 0.15rem;
+  width: max-content;
+}
+
+.spell-tray .tooltip-anchor {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  touch-action: pan-x pinch-zoom;
 }
 
 .spell-btn {
@@ -60,6 +306,15 @@
     0 6px 14px rgba(0, 0, 0, 0.55);
 }
 
+/* Tray scroll clips vertically — keep the lift but avoid huge outer blooms. */
+.spell-tray .spell-btn:hover:not(:disabled),
+.spell-tray .spell-btn.ready:hover:not(:disabled) {
+  box-shadow:
+    inset 0 0 0 1px rgba(154, 125, 82, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
 .spell-btn:active:not(:disabled) {
   transform: translateY(0);
   filter: brightness(0.95);
@@ -77,6 +332,36 @@
     inset 0 0 0 1px rgba(201, 168, 108, 0.18),
     0 0 14px rgba(201, 168, 108, 0.22),
     0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Touch: spell tooltip pinned open — pulse so "tap again" reads as step 1 of 2. */
+@media (pointer: coarse), (hover: none) {
+  .tooltip-anchor.is-touch-open .spell-btn:not(.is-disabled):not(.queued) {
+    transform: translateY(-2px);
+    animation: spell-touch-armed-pulse 1.15s ease-in-out infinite;
+  }
+}
+
+@keyframes spell-touch-armed-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(201, 168, 108, 0.28),
+      0 0 12px rgba(201, 168, 108, 0.35),
+      0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px rgba(201, 168, 108, 0.45),
+      0 0 22px rgba(201, 168, 108, 0.55),
+      0 4px 10px rgba(0, 0, 0, 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip-anchor.is-touch-open .spell-btn:not(.is-disabled):not(.queued) {
+    animation: none;
+  }
 }
 
 /* Mana-themed spell cards: border + wash match the cost colour(s). */
@@ -198,8 +483,10 @@
 .spell-btn.queued::after {
   content: '✓';
   position: absolute;
-  top: -4px;
-  right: -4px;
+  /* Inset so the stamp stays inside the card — negative offsets clip in the
+     horizontal scroll tray (overflow-y: hidden on .spell-tray-scroll). */
+  top: 3px;
+  right: 3px;
   width: 18px;
   height: 18px;
   display: flex;
@@ -567,7 +854,10 @@
   top: -0.6rem;
   left: 0.9rem;
   z-index: 3;
-  min-height: 0;
+  /* Keep a hit target when empty — spell-effect trails home here before the
+     first chip exists; a collapsed bar is 0×0 and breaks Regenerate sync. */
+  min-height: 1.6rem;
+  min-width: 1.5rem;
   justify-content: flex-start;
 }
 
