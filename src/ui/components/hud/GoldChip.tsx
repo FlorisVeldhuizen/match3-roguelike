@@ -1,5 +1,6 @@
 import { HoverTooltip } from '../HoverTooltip'
 import { popClass, type PopState } from './popAnimation'
+import { hudGoldTooltipBody } from './hudTooltips'
 
 export function GoldChip({
   value,
@@ -14,15 +15,7 @@ export function GoldChip({
     <HoverTooltip
       variant="mana"
       title={`Gold — ${value}`}
-      body={
-        <>
-          <div>
-            From <strong>gold gems</strong> on the board and <strong>fight rewards</strong>. Spend
-            at shops.
-          </div>
-          <div className="hover-tooltip-aside">Kept for the whole run.</div>
-        </>
-      }
+      body={hudGoldTooltipBody()}
       ariaLabel={`Gold: ${value}`}
     >
       <span

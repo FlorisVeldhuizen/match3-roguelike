@@ -150,6 +150,16 @@ body:has(.game-over-overlay) .intent-tooltip {
   transition: opacity 90ms ease;
 }
 
+/* On touch / coarse-pointer devices we *do* want tooltips to be interactive so
+   nested Keyword anchors can be tapped to reveal their own tooltip. The
+   HoverTooltip component already closes on pointerdown outside, so letting
+   touch events hit the tooltip is safe. */
+@media (pointer: coarse), (hover: none) {
+  .hover-tooltip {
+    pointer-events: auto;
+  }
+}
+
 .hover-tooltip-title {
   font-family: 'MedievalSharp', cursive;
   font-weight: 700;

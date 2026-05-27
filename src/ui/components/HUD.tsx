@@ -2,12 +2,20 @@ import { useGameStore } from '../../core/state/store'
 import { MANA_CAPS, type GemColor } from '../../types'
 import { StatusBar } from './StatusBar'
 import { HoverTooltip } from './HoverTooltip'
-import { Keyword } from './Keyword'
 import { useHudEventChannel } from './hud/useHudEventChannel'
 import { usePopOnChange, popClass } from './hud/popAnimation'
 import { ManaChip } from './hud/ManaChip'
 import { ChargeChip } from './hud/ChargeChip'
 import { GoldChip } from './hud/GoldChip'
+import {
+  hudArmorTooltipBody,
+  hudArmorTooltipTitle,
+  hudBlueManaTooltipBody,
+  hudGreenManaTooltipBody,
+  hudHpTooltipBody,
+  hudRedManaTooltipBody,
+  hudWildManaTooltipBody,
+} from './hud/hudTooltips'
 
 export function HUD() {
   const player = useGameStore((s) => s.fight.player)
@@ -67,13 +75,7 @@ export function HUD() {
             className="tooltip-anchor-hp"
             variant="hp"
             title={`HP — ${displayedHp} / ${player.maxHp}`}
-            body={
-              <div>
-                Your <Keyword id="hp">HP</Keyword>. Restored by{' '}
-                <Keyword id="heal">healing</Keyword> and lost to enemy attacks and
-                effects.
-              </div>
-            }
+            body={hudHpTooltipBody()}
             ariaLabel={`HP ${displayedHp} of ${player.maxHp}`}
           >
             <div
@@ -92,29 +94,12 @@ export function HUD() {
           </HoverTooltip>
           <HoverTooltip
             variant="block"
-            title={
-              blockHasPending
-                ? `Staged block — ${badgeBlock}`
-                : `Armor — ${badgeBlock}`
-            }
-            body={
-              blockHasPending ? (
-                <div>
-                  Blue gems matched this turn. Becomes{' '}
-                  <Keyword id="block">armor</Keyword> when you end your turn.
-                </div>
-              ) : blockActive ? (
-                <div>
-                  Your <Keyword id="block">armor</Keyword> absorbs damage before{' '}
-                  <Keyword id="hp">HP</Keyword> until your next turn (unless carried).
-                </div>
-              ) : (
-                <div>
-                  Match blue gems to build block. It becomes{' '}
-                  <Keyword id="block">armor</Keyword> when you end your turn.
-                </div>
-              )
-            }
+            title={hudArmorTooltipTitle({ value: badgeBlock, hasPending: blockHasPending })}
+            body={hudArmorTooltipBody({
+              value: badgeBlock,
+              hasPending: blockHasPending,
+              isActive: blockActive,
+            })}
             ariaLabel={`Armor ${badgeBlock}`}
           >
             <div
@@ -139,12 +124,7 @@ export function HUD() {
             pulsing={pulse.red > 0}
             spending={spendPulse.red > 0}
             title="Red mana"
-            body={
-              <div>
-                <strong>Red gems</strong> damage enemies when matched and add{' '}
-                <Keyword id="mana">mana</Keyword> here for attack spells.
-              </div>
-            }
+            body={hudRedManaTooltipBody()}
           />
           <ManaChip
             color="blue"
@@ -154,13 +134,7 @@ export function HUD() {
             pulsing={pulse.blue > 0}
             spending={spendPulse.blue > 0}
             title="Blue mana"
-            body={
-              <div>
-                <strong>Blue gems</strong> build toward your{' '}
-                <Keyword id="block">armor</Keyword> (shield) and add{' '}
-                <Keyword id="mana">mana</Keyword> for defensive spells.
-              </div>
-            }
+            body={hudBlueManaTooltipBody()}
           />
           <ManaChip
             color="green"
@@ -170,12 +144,7 @@ export function HUD() {
             pulsing={pulse.green > 0}
             spending={spendPulse.green > 0}
             title="Green mana"
-            body={
-              <div>
-                <strong>Green gems</strong> <Keyword id="heal">heal</Keyword> you when matched and
-                add <Keyword id="mana">mana</Keyword> for healing spells.
-              </div>
-            }
+            body={hudGreenManaTooltipBody()}
           />
           <ManaChip
             color="yellow"
@@ -186,12 +155,7 @@ export function HUD() {
             spending={spendPulse.yellow > 0}
             wild
             title="Wild mana"
-            body={
-              <div>
-                <strong>Yellow gems</strong> only add <Keyword id="wildMana">wild mana</Keyword> —
-                no direct combat effect on match.
-              </div>
-            }
+            body={hudWildManaTooltipBody()}
           />
           <span className="hud-divider" aria-hidden />
           <ChargeChip

@@ -99,7 +99,7 @@ const defs: Record<KeywordId, KeywordDef> = {
     id: 'block',
     name: 'Armor',
     icon: '🛡',
-    body: 'Absorbs incoming damage before it hits HP. Zeroes at the start of your next turn unless carried.',
+    body: 'Absorbs incoming damage before it hits HP. Built mostly from matching blue gems. Clears at the start of your next turn unless an effect carries it.',
     variant: 'block',
   },
   riposte: {
