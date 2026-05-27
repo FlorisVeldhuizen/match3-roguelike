@@ -9,6 +9,7 @@ import { tweenShoveArc } from './animations/shove'
 import { emitGameEvent } from '../core/events/emitter'
 import { awaitStep, getTimeScale } from '../debug/devControls'
 import { statusKindFromDamageSource } from '../core/combat/statuses'
+import { shoveHueAtIndex, shoveHueFor } from '../core/combat/shoveHues'
 import {
   TRAIL_ARRIVAL_MS,
   scheduleAtTrailArrival,
@@ -872,11 +873,7 @@ export class AnimationController {
     const overlay = this.overlay
     if (!overlay) return
     const enemies = useGameStore.getState().fight.enemies
-    const idx = enemies.findIndex((e) => e.id === enemyId)
-    // Keep in sync with ClusterShoveOverlay's shoveHueFor.
-    const SHOVE_HUES = [170, 290, 38, 130] as const
-    const hue =
-      idx >= 0 ? SHOVE_HUES[idx % SHOVE_HUES.length] : SHOVE_HUES[0]
+    const hue = shoveHueFor(enemies, enemyId) ?? shoveHueAtIndex(0)
     const hex = this.hueToHex(hue)
     for (const dst of destinations) {
       const at = this.cellScreenCenter(dst)

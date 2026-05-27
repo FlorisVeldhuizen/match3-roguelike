@@ -12,7 +12,7 @@ import {
   getHoveredCell,
   subscribeHoveredCell,
 } from '../state/hoveredCell'
-import { SHOVE_HUES, shoveHueFor } from '../state/shoveHues'
+import { SHOVE_HUES, shoveHueAtIndex, shoveHueFor } from '../../core/combat/shoveHues'
 
 type Threat = {
   enemyId: string
@@ -43,7 +43,11 @@ function samePos(a: Pos, b: Pos): boolean {
 }
 
 function clusterOrientation(cells: Pos[]): 'horizontal' | 'vertical' {
-  return cells.length >= 2 && cells[0].y === cells[1].y ? 'horizontal' : 'vertical'
+  const a = cells[0]
+  const b = cells[1]
+  return cells.length >= 2 && a !== undefined && b !== undefined && a.y === b.y
+    ? 'horizontal'
+    : 'vertical'
 }
 
 function clusterOrigin(cells: Pos[]): Pos {
@@ -158,7 +162,7 @@ export function ClusterShoveOverlay() {
   const lines = threatList.flatMap((t) => {
     const revealed = cellHoverRevealsThreat(t) || enemyHoverRevealsThreat(t)
     if (!revealed) return []
-    const hue = shoveHueFor(enemies, t.enemyId) ?? SHOVE_HUES[0]
+    const hue = shoveHueFor(enemies, t.enemyId) ?? shoveHueAtIndex(0)
     const from = clusterCenter(t.sources)
     const to = clusterCenter(t.destinations)
     return [
@@ -179,7 +183,7 @@ export function ClusterShoveOverlay() {
   const chevronHiddenThreatIds = hoveredThreatIds
 
   const hueStyle = (enemyId: string): CSSProperties => ({
-    ['--shove-hue' as string]: String(shoveHueFor(enemies, enemyId) ?? SHOVE_HUES[0]),
+    ['--shove-hue' as string]: String(shoveHueFor(enemies, enemyId) ?? shoveHueAtIndex(0)),
   })
 
   const clusterSizeStyle = (cells: Pos[]): CSSProperties => {

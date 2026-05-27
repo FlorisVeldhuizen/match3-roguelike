@@ -23,7 +23,7 @@ import { intentDisplay } from '../../content/intentDisplays'
 import { StatusBar } from './StatusBar'
 import { setHoveredEnemy } from '../state/hoveredEnemy'
 import { getHoveredCell, subscribeHoveredCell } from '../state/hoveredCell'
-import { shoveHueFor } from '../state/shoveHues'
+import { shoveHueFor } from '../../core/combat/shoveHues'
 
 const HIT_FLASH_MS = 280
 // Must match the longest .firing-* animation in index.css
