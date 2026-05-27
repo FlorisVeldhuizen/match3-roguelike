@@ -11,6 +11,13 @@ export function useBoardWipe(onWipe: () => void): void {
     return subscribeGameEvents((event) => {
       if (event.kind === 'board-shuffled' || event.kind === 'board-swept') {
         cbRef.current()
+        return
+      }
+      if (
+        event.kind === 'phase-changed' &&
+        (event.phase === 'victory' || event.phase === 'game-over')
+      ) {
+        cbRef.current()
       }
     })
   }, [])

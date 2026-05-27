@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import { useTransientCellFx } from '../hooks/useTransientCellFx'
 import { BOARD_HEIGHT } from '../../types'
@@ -31,13 +32,19 @@ export function ColumnSmashOverlay() {
     setThreats(readThreatsFromStore())
   }, [])
 
+  const wipeAll = useCallback(() => {
+    setThreats(new Map())
+    impacts.clear()
+  }, [impacts])
+
   useFightReset(
     useCallback(() => {
-      setThreats(new Map())
-      impacts.clear()
+      wipeAll()
       seedFromStore()
-    }, [seedFromStore, impacts]),
+    }, [wipeAll, seedFromStore]),
   )
+
+  useBoardWipe(wipeAll)
 
   useEffect(() => {
     return subscribeGameEvents((event) => {

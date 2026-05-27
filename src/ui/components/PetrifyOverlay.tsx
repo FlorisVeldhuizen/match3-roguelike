@@ -3,6 +3,7 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { scheduleAfterMs } from '../../timing'
 import { subscribeTrailScheduled } from '../../trails/sync'
+import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import { useTransientCellFx } from '../hooks/useTransientCellFx'
 import { BOARD_CELL_IMPACT_MS, BoardCellImpact } from './BoardCellImpact'
@@ -55,14 +56,21 @@ export function PetrifyOverlay() {
     setActive(nextActive)
   }, [])
 
+  const wipeAll = useCallback(() => {
+    pendingFireRef.current = null
+    setPending(new Set())
+    setActive(new Map())
+    impacts.clear()
+  }, [impacts])
+
   useFightReset(
     useCallback(() => {
-      setPending(new Set())
-      setActive(new Map())
-      impacts.clear()
+      wipeAll()
       seedFromStore()
-    }, [seedFromStore, impacts]),
+    }, [wipeAll, seedFromStore]),
   )
+
+  useBoardWipe(wipeAll)
 
   useEffect(() => {
     const unsubTrail = subscribeTrailScheduled((trail) => {

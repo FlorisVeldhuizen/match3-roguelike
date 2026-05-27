@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
+import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import type { Pos } from '../../types'
 import { CellAnchor } from './CellAnchor'
@@ -87,12 +88,18 @@ export function ClusterShoveOverlay() {
     setThreats(readThreatsFromStore())
   }, [])
 
+  const wipeAll = useCallback(() => {
+    setThreats(new Map())
+  }, [])
+
   useFightReset(
     useCallback(() => {
-      setThreats(new Map())
+      wipeAll()
       seedFromStore()
-    }, [seedFromStore]),
+    }, [wipeAll, seedFromStore]),
   )
+
+  useBoardWipe(wipeAll)
 
   useEffect(() => {
     const markExpiring = (ownerId: string) => {

@@ -3,6 +3,7 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { scheduleAfterMs } from '../../timing'
 import { subscribeTrailScheduled } from '../../trails/sync'
+import { useBoardWipe } from '../hooks/useBoardWipe'
 import { useFightReset } from '../hooks/useFightReset'
 import { useTransientCellFx } from '../hooks/useTransientCellFx'
 import { BOARD_HEIGHT, BOARD_WIDTH } from '../../types'
@@ -37,13 +38,20 @@ export function ColorHexOverlay() {
     setHexStates(readHexStatesFromStore())
   }, [])
 
+  const wipeAll = useCallback(() => {
+    pendingHexRef.current = null
+    setHexStates(new Map())
+    impacts.clear()
+  }, [impacts])
+
   useFightReset(
     useCallback(() => {
-      setHexStates(new Map())
-      impacts.clear()
+      wipeAll()
       seedFromStore()
-    }, [seedFromStore, impacts]),
+    }, [wipeAll, seedFromStore]),
   )
+
+  useBoardWipe(wipeAll)
 
   useEffect(() => {
     const unsubTrail = subscribeTrailScheduled((trail) => {
