@@ -85,13 +85,17 @@ export function getStatusTemplate(kind: StatusKind): StatusInstance {
   return t
 }
 
-export function statusKindFromDamageSource(source: DamageSource): 'burn' | null {
-  switch (source) {
-    case 'burn':
-      return 'burn'
-    default:
-      return null
-  }
+/**
+ * Damage sources that use status-chip proc trails (HP + block facets).
+ * New DoTs: add here + STATUS_APPLY_SFX + STATUS_PROC_DAMAGE_SFX + AnimationController trails.
+ * @see src/audio/STATUS_AUDIO.md
+ */
+const PROC_DAMAGE_STATUS: Partial<Record<DamageSource, StatusKind>> = {
+  burn: 'burn',
+}
+
+export function statusKindFromDamageSource(source: DamageSource): StatusKind | null {
+  return PROC_DAMAGE_STATUS[source] ?? null
 }
 
 // Weak (source) ×0.5, Vulnerable (target) ×1.5, then Strength flat bonus

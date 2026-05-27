@@ -184,13 +184,15 @@ const STATUS_TRAIL: Record<StatusKind, StatusTrailLook> = {
   strength: { palette: [VISUAL.strengthGold], core: 0xffffff },
 }
 
-// Adding a new DoT: extend this union + DamageSource + statusKindFromDamageSource.
-type ProcStatusKind = 'burn'
+// Adding a new DoT: add to PROC_DAMAGE_STATUS + STATUS_TRAIL + procPopupTint.
+type ProcStatusKind = StatusKind
 
 function procPopupTint(kind: ProcStatusKind): number {
   switch (kind) {
     case 'burn':
       return VISUAL.burnEmber
+    default:
+      return 0xffffff
   }
 }
 

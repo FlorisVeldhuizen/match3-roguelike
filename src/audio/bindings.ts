@@ -9,7 +9,15 @@ import { playClackSfx } from './synths/match'
 import { playCascadeChimeSfx, playCascadeCelebrationSfx } from './synths/cascade'
 import { playAttackSfx } from './synths/attack'
 import { playHealSfx } from './synths/heal'
-import { playPlayerProcBlockSfx } from './procBlockSfx'
+import {
+  armProcBlockTrailBackup,
+  cancelProcBlockBackup,
+  createProcBlockAudioSlot,
+  playProcBlockSfx,
+  resetProcBlockSlot,
+  scheduleProcBlockTrailSfx,
+  type ProcBlockAudioSlot,
+} from './procBlockSfx'
 import { playShieldThumpSfx, playShieldCrackSfx, playShieldParticleTickSfx } from './synths/shield'
 import { playStaggeredSfx } from './synths/staggered'
 import { playShuffleSfx } from './synths/shuffle'
@@ -26,6 +34,19 @@ import { playHexApplySfx, playHexExpireSfx, playHexTriggerSfx } from './synths/h
 import { playShoveSfx } from './synths/shove'
 import { playSmashSfx } from './synths/smash'
 
+/**
+ * Status & shield combat audio routing.
+ *
+ * Three layers — keep separate:
+ * - Apply (`status-apply` trail / enemy status-applied): STATUS_APPLY_SFX
+ * - Proc HP facet (`status-proc` damage): STATUS_PROC_DAMAGE_SFX
+ * - Proc block facet (`status-proc` block): procBlockSfx + slot (thump/crack on trail + backup)
+ *
+ * Non-proc hits (enemy-attack): attack SFX on HP; block-absorbed/broken immediate thump/crack.
+ * Proc DoT ticks (burn): defer block/damage to trail arrivalMs; damage-taken clears slot on attacks.
+ *
+ * Full step-by-step flows: src/audio/STATUS_AUDIO.md
+ */
 // STANDIN entries reuse closest-semantic synths until dedicated ones land.
 const STATUS_APPLY_SFX: Partial<Record<StatusKind, () => void>> = {
   burn: playBurnApplySfx,
@@ -33,6 +54,23 @@ const STATUS_APPLY_SFX: Partial<Record<StatusKind, () => void>> = {
   vulnerable: playShieldCrackSfx,
   strength: playShieldThumpSfx,
   regen: playHealSfx,
+}
+
+const STATUS_PROC_DAMAGE_SFX: Partial<Record<StatusKind, (amount: number) => void>> = {
+  burn: playBurnImpactSfx,
+}
+
+const shieldThump = playShieldThumpSfx
+const shieldCrack = playShieldCrackSfx
+
+function armProcBlockFromEvent(
+  slot: ProcBlockAudioSlot,
+  kind: 'absorbed' | 'broken',
+  blocked: number,
+  hpDamage: number,
+): void {
+  slot.sfx = kind
+  armProcBlockTrailBackup(slot, kind, blocked, hpDamage, shieldThump, shieldCrack)
 }
 
 let installed = false
@@ -47,7 +85,9 @@ export function installSfxBindings(): void {
   let lastPoolBlueAmount = 0
   let lastTileBurnCellCount = 0
   let playerProcBlockPending = false
-  let playerProcBlockSfx: 'absorbed' | 'broken' | null = null
+  let enemyProcBlockPending = false
+  const playerProcBlock = createProcBlockAudioSlot()
+  const enemyProcBlock = createProcBlockAudioSlot()
 
   const FALL_MIN_MS = 150
   const FALL_PER_CELL_MS = 80
@@ -60,30 +100,40 @@ export function installSfxBindings(): void {
     const { arrivalMs, purpose } = trail
     switch (purpose) {
       case 'status-proc': {
-        if (trail.statusKind === 'burn' && trail.procFacet === 'damage') {
+        if (trail.procFacet === 'damage' && trail.statusKind != null) {
           const amt = trail.target === 'player' ? lastPlayerUnblocked : lastEnemyUnblocked
-          if (amt > 0) {
-            scheduleAfterMs(() => playBurnImpactSfx(amt), arrivalMs)
+          const playDamage = STATUS_PROC_DAMAGE_SFX[trail.statusKind]
+          if (amt > 0 && playDamage) {
+            scheduleAfterMs(() => playDamage(amt), arrivalMs)
           }
         }
         if (trail.procFacet === 'block') {
           if (trail.target === 'player') {
-            const kind = playerProcBlockSfx
-            playerProcBlockSfx = null
+            const kind = playerProcBlock.sfx
+            playerProcBlock.sfx = null
             playerProcBlockPending = false
-            scheduleAfterMs(
-              () =>
-                playPlayerProcBlockSfx(
-                  kind,
-                  lastPlayerBlocked,
-                  lastPlayerUnblocked,
-                  playShieldThumpSfx,
-                  playShieldCrackSfx,
-                ),
+            scheduleProcBlockTrailSfx(
+              playerProcBlock,
+              kind,
+              lastPlayerBlocked,
+              lastPlayerUnblocked,
               arrivalMs,
+              shieldThump,
+              shieldCrack,
             )
           } else {
-            scheduleAfterMs(() => playShieldThumpSfx(lastEnemyBlocked), arrivalMs)
+            const kind = enemyProcBlock.sfx
+            enemyProcBlock.sfx = null
+            enemyProcBlockPending = false
+            scheduleProcBlockTrailSfx(
+              enemyProcBlock,
+              kind,
+              lastEnemyBlocked,
+              lastEnemyUnblocked,
+              arrivalMs,
+              shieldThump,
+              shieldCrack,
+            )
           }
         }
         return
@@ -162,9 +212,20 @@ export function installSfxBindings(): void {
         if (procKind) {
           lastEnemyBlocked = event.blocked
           lastEnemyUnblocked = event.amount
+          if (event.blocked > 0) {
+            enemyProcBlockPending = true
+            enemyProcBlock.sfx = null
+            enemyProcBlock.claimed = false
+            cancelProcBlockBackup(enemyProcBlock)
+          } else {
+            enemyProcBlockPending = false
+            resetProcBlockSlot(enemyProcBlock)
+          }
           return
         }
         if (event.source === 'player-attack') {
+          enemyProcBlockPending = false
+          resetProcBlockSlot(enemyProcBlock)
           lastEnemyBlocked = event.blocked
           lastEnemyUnblocked = event.amount
           const beat = readSpellVisualBeat(event)
@@ -198,37 +259,76 @@ export function installSfxBindings(): void {
         if (procKind) {
           if (event.blocked > 0) {
             playerProcBlockPending = true
-            playerProcBlockSfx = null
+            playerProcBlock.sfx = null
+            playerProcBlock.claimed = false
+            cancelProcBlockBackup(playerProcBlock)
           } else {
             playerProcBlockPending = false
+            resetProcBlockSlot(playerProcBlock)
           }
           return
         }
+        playerProcBlockPending = false
+        resetProcBlockSlot(playerProcBlock)
         if (event.amount > 0) playAttackSfx(event.amount)
         return
       }
       case 'block-absorbed':
         if (event.targetId === 'player') {
           if (playerProcBlockPending) {
-            playerProcBlockSfx = 'absorbed'
             playerProcBlockPending = false
+            armProcBlockFromEvent(
+              playerProcBlock,
+              'absorbed',
+              lastPlayerBlocked,
+              lastPlayerUnblocked,
+            )
           } else {
+            resetProcBlockSlot(playerProcBlock)
             playShieldThumpSfx(lastPlayerBlocked)
           }
+        } else if (enemyProcBlockPending) {
+          enemyProcBlockPending = false
+          armProcBlockFromEvent(enemyProcBlock, 'absorbed', lastEnemyBlocked, lastEnemyUnblocked)
         } else {
-          scheduleAtTrailArrival(() => playShieldThumpSfx(lastEnemyBlocked))
+          scheduleAtTrailArrival(() =>
+            playProcBlockSfx(
+              'absorbed',
+              lastEnemyBlocked,
+              lastEnemyUnblocked,
+              shieldThump,
+              shieldCrack,
+            ),
+          )
         }
         return
       case 'block-broken':
         if (event.targetId === 'player') {
           if (playerProcBlockPending) {
-            playerProcBlockSfx = 'broken'
             playerProcBlockPending = false
-          } else if (playerProcBlockSfx == null) {
+            armProcBlockFromEvent(
+              playerProcBlock,
+              'broken',
+              lastPlayerBlocked,
+              lastPlayerUnblocked,
+            )
+          } else {
+            resetProcBlockSlot(playerProcBlock)
             playShieldCrackSfx(lastPlayerBlocked + lastPlayerUnblocked)
           }
+        } else if (enemyProcBlockPending) {
+          enemyProcBlockPending = false
+          armProcBlockFromEvent(enemyProcBlock, 'broken', lastEnemyBlocked, lastEnemyUnblocked)
         } else {
-          scheduleAtTrailArrival(() => playShieldCrackSfx(lastEnemyBlocked + lastEnemyUnblocked))
+          scheduleAtTrailArrival(() =>
+            playProcBlockSfx(
+              'broken',
+              lastEnemyBlocked,
+              lastEnemyUnblocked,
+              shieldThump,
+              shieldCrack,
+            ),
+          )
         }
         return
       case 'enemy-staggered':
