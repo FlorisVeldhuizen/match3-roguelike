@@ -6,6 +6,8 @@ import type {
   RelicInstance,
 } from '../../types'
 import {
+  cloneRelicsForHooks,
+  runOnBlockGained,
   runOnMatch,
   runOnDamageTaken,
   interceptFatalDamage,
@@ -98,6 +100,11 @@ describe('Iron Buckler', () => {
       snap(player),
     )
     expect(result.payload.deltas.blue).toBe(4)
+    expect(
+      result.events.some(
+        (e) => e.kind === 'relic-triggered' && e.relicId === 'iron-buckler',
+      ),
+    ).toBe(true)
   })
   it('does nothing on non-blue matches', () => {
     const player = makePlayer({ relics: [inst('iron-buckler')] })
@@ -128,6 +135,14 @@ describe('Sharp Edge', () => {
       snap(player),
     )
     expect(result.payload.deltas.red).toBe(5)
+    expect(
+      result.events.some(
+        (e) =>
+          e.kind === 'relic-triggered' &&
+          e.relicId === 'sharp-edge' &&
+          e.effect === '+1 red',
+      ),
+    ).toBe(true)
   })
 })
 
@@ -190,17 +205,18 @@ describe('Cascade Crystal', () => {
       snap(player),
     )
     expect(result.payload.deltas.red).toBe(7) // floor(5 * 1.5) = 7
+    expect(
+      result.events.some(
+        (e) => e.kind === 'relic-triggered' && e.relicId === 'cascade-crystal',
+      ),
+    ).toBe(true)
   })
 })
 
 describe('Stoneheart', () => {
   it('prevents fatal damage once per run', () => {
     const player = makePlayer({ relics: [inst('stoneheart')] })
-    const cloned = player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const cloned = cloneRelicsForHooks(player.relics)
     const r1 = interceptFatalDamage(
       { incoming: 100, source: 'enemy-attack' },
       cloned,
@@ -219,11 +235,7 @@ describe('Stoneheart', () => {
   })
   it('triggers regardless of source (burn, etc.)', () => {
     const player = makePlayer({ relics: [inst('stoneheart')] })
-    const cloned = player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const cloned = cloneRelicsForHooks(player.relics)
     const r = interceptFatalDamage(
       { incoming: 100, source: 'burn' },
       cloned,
@@ -263,6 +275,30 @@ describe('modifier acquisition order', () => {
       snap(player2),
     )
     expect(r2.payload.deltas.red).toBe(8)
+  })
+})
+
+describe('Fortified', () => {
+  it('can set fight flags when relics are cloned from frozen store snapshots', () => {
+    const frozen: RelicInstance = {
+      id: 'fortified',
+      runFlags: {},
+      fightFlags: {},
+    }
+    Object.freeze(frozen.fightFlags)
+    const player = makePlayer({ relics: [frozen] })
+    const writable = cloneRelicsForHooks(player.relics)
+    const events = runOnBlockGained(
+      { amount: 3, target: 'player' },
+      writable,
+      snap({ ...player, relics: writable }),
+    )
+    expect(
+      events.some(
+        (e) => e.kind === 'relic-triggered' && e.relicId === 'fortified',
+      ),
+    ).toBe(true)
+    expect(writable[0]!.fightFlags['fired-this-phase']).toBe(true)
   })
 })
 

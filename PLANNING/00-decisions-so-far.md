@@ -85,3 +85,17 @@ Canonical rules and architecture choices that emerged from the docs review. Each
 - **Board gen:** two-pass (de-match row-major → valid-swap check → fallback force-place pair, then de-match outside the forced segment). No shuffle loop.
 - **RelicInstance** carries `runFlags` (Stoneheart) and `fightFlags` (Mirror Plate); `fightFlags` cleared by `onRoundStarted`.
 - Player pools field renamed `pools` → `phasePools` for clarity (mana/charge live at top-level).
+
+## Mechanics expansion shipped (2026-05-27)
+
+Merged to `main`. Full roster: **`10-shipped-content-catalog.md`**.
+
+**Enemies:** Leech (color-drain → heals enemy when you match that color), Shade (lifesteal attacks), Trickster (trick intent). **Enrage** at ≤50% HP for Brute, Smolder, Defender, Tyrant — switches to `enragePattern`, resets pattern index.
+
+**Spells (discoverable):** Transmute, Blessed Ground, Frozen Wall, Chain Lightning — player-side board verbs + AOE red. Starters unchanged (Bulwark, Reinforce, Ignite).
+
+**Relics (+10):** Harvester, Morning Star, Afterburner, Avalanche, Fortified, Spite, Overcharge, War Drum, Collector's Eye, Battle Cry — uses previously-unused hooks (`onPhaseStart`, `onSpellCast`, `onBlockGained`, etc.).
+
+**Engine:** `applyCombatEvents` applies hook-emitted `damage-dealt` / `block-gained` / `healed` / `status-applied` to fight state (not FX-only). `DrainedColor` fight state + `tickDrainedColors` mirrors hex ticking.
+
+**Numbers:** still authoritative in `src/content/enemies.ts`, `relics.ts`, `spells.tsx`.

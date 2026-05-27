@@ -237,7 +237,9 @@ export class OverlayScene {
     colorOrHex: GemColor | number | readonly number[],
     count = 5,
     innerHex = 0xffffff,
+    opts?: { lifeBase?: number; lifeStep?: number },
   ): void {
+    if (reducedMotion) return
     const layer = this.layer
     if (!layer) return
     const initialEnd = attractor()
@@ -267,7 +269,9 @@ export class OverlayScene {
       head.y = start.y
       head.alpha = 0
       layer.addChild(head)
-      const life = 620 + i * 55
+      const lifeBase = opts?.lifeBase ?? 620
+      const lifeStep = opts?.lifeStep ?? 55
+      const life = lifeBase + i * lifeStep
       this.effects.push({
         kind: 'bezier',
         view: head,

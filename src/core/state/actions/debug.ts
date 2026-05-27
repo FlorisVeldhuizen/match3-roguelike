@@ -1,6 +1,10 @@
 import { generateBoard } from '../../board/generation'
 import { applyCombatEvents } from '../../combat/applyCombatEvents'
-import { runOnRoundStarted, snapshotOf } from '../../relics/engine'
+import {
+  cloneRelicsForHooks,
+  runOnRoundStarted,
+  snapshotOf,
+} from '../../relics/engine'
 import type { EnemyArchetype } from '../../../types'
 import type { StoreSet, StoreGet } from './types'
 import { freshBoardState, freshFight } from './helpers'
@@ -17,11 +21,7 @@ export function makeDebugForceFight(set: StoreSet, get: StoreGet) {
       current.fight.player.hp,
     )
     const boardRoll = generateBoard(current.rng.board)
-    const writeRelics = enemyRoll.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const writeRelics = cloneRelicsForHooks(enemyRoll.fight.player.relics)
     const roundEvents = runOnRoundStarted(
       { fightId: 0 },
       writeRelics,

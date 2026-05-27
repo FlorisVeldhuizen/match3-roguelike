@@ -11,6 +11,7 @@ import { getArchetype } from './archetypeRegistry'
 import { applyMultiplier } from './math'
 import { getCascadeMultiplier } from './multipliers'
 import {
+  cloneRelicsForHooks,
   runOnCascade,
   runOnEnemyKilled,
   runOnMatch,
@@ -47,7 +48,10 @@ export function processCascadeEvents(
   targetEnemyId: string | null
   events: GameEvent[]
 } {
-  let player = initialPlayer
+  let player = {
+    ...initialPlayer,
+    relics: cloneRelicsForHooks(initialPlayer.relics),
+  }
   let enemies = initialEnemies
   let targetEnemyId = initialTargetEnemyId
   const stream: GameEvent[] = []

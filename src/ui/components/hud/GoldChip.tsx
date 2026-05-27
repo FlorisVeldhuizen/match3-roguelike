@@ -16,8 +16,11 @@ export function GoldChip({
       title={`Gold — ${value}`}
       body={
         <>
-          <div>Earned from <strong>gold gem matches</strong> (~10% of board spawns) and from <strong>fight rewards</strong>.</div>
-          <div className="hover-tooltip-aside">No cap. Persists for the whole run; spent at shops.</div>
+          <div>
+            From <strong>gold gems</strong> on the board and <strong>fight rewards</strong>. Spend
+            at shops.
+          </div>
+          <div className="hover-tooltip-aside">Kept for the whole run.</div>
         </>
       }
       ariaLabel={`Gold: ${value}`}

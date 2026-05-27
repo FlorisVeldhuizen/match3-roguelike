@@ -83,6 +83,30 @@ export type PendingSpellId = SpellId | UltimateId
 
 export type SpellResolution = 'pending' | 'immediate'
 
+export type SpellVisualBeat = {
+  spellId: PendingSpellId
+  trailStartMs: number
+  arriveMs: number
+}
+
+export type SpellEffectPalette =
+  | 'burn'
+  | 'vulnerable'
+  | 'regen'
+  | 'weak'
+  | 'strength'
+  | 'attack'
+  | 'heal'
+
+export type SpellEffectLeg = {
+  palette: SpellEffectPalette
+  dest:
+    | { kind: 'enemy'; enemyId: string; slot: 'status' | 'hp' }
+    | { kind: 'player'; slot: 'hp' | 'status' | 'block' }
+    | { kind: 'board'; cells: Pos[] }
+  staggerMs?: number
+}
+
 export type GameEvent =
   | { kind: 'swap'; from: Pos; to: Pos }
   | { kind: 'swap-reverted'; from: Pos; to: Pos }
@@ -110,6 +134,7 @@ export type GameEvent =
       amount: number
       blocked: number
       source: DamageSource
+      spellVisual?: SpellVisualBeat
     }
   | {
       kind: 'damage-taken'
@@ -127,6 +152,7 @@ export type GameEvent =
         | { kind: 'enemy'; enemyId: string }
         | { kind: 'board-cells'; cells: Pos[] }
         | { kind: 'player' }
+      spellVisual?: SpellVisualBeat
     }
   | {
       kind: 'status-ticked'
@@ -134,9 +160,31 @@ export type GameEvent =
       statusKind: StatusKind
       remaining: number
     }
-  | { kind: 'status-expired'; target: 'player' | string; statusKind: StatusKind }
-  | { kind: 'spell-cast'; spellId: PendingSpellId }
+  | {
+      kind: 'status-expired'
+      target: 'player' | string
+      statusKind: StatusKind
+      spellVisual?: SpellVisualBeat
+    }
+  | {
+      kind: 'spell-cast'
+      spellId: PendingSpellId
+      spentColors: readonly (
+        | 'red'
+        | 'blue'
+        | 'green'
+        | 'yellow'
+        | 'purple'
+      )[]
+    }
   | { kind: 'pending-effect-resolved'; spellId: PendingSpellId }
+  | {
+      kind: 'spell-effect-trail'
+      spellId: PendingSpellId
+      legs: SpellEffectLeg[]
+      trailStartMs: number
+      arriveMs: number
+    }
   | { kind: 'riposte-counter'; targetId: string; amount: number }
   | {
       kind: 'tile-burn-placed'
@@ -173,11 +221,11 @@ export type GameEvent =
       expired: Pos[]
       flag: keyof CellFlags
     }
-  | { kind: 'block-gained'; amount: number }
+  | { kind: 'block-gained'; amount: number; spellVisual?: SpellVisualBeat }
   | { kind: 'enemy-block-gained'; enemyId: string; amount: number }
   | { kind: 'block-absorbed'; targetId: 'player' | string }
   | { kind: 'block-broken'; targetId: 'player' | string }
-  | { kind: 'healed'; amount: number }
+  | { kind: 'healed'; amount: number; spellVisual?: SpellVisualBeat }
   | { kind: 'enemy-killed'; enemyId: string }
   | { kind: 'ally-healed'; sourceId: string; targetId: string; amount: number }
   | { kind: 'ally-shielded'; sourceId: string; targetId: string; amount: number }

@@ -1,4 +1,5 @@
 import {
+  cloneRelicsForHooks,
   runOnSpellCast,
   runOnUltimateUsed,
   snapshotOf,
@@ -21,7 +22,12 @@ import { rollPostFightReward } from '../../relics/reward'
 import { rollGoldDrop } from '../../map/goldDrop'
 import { applyCombatEvents } from '../../combat/applyCombatEvents'
 import { getSpell, getUltimate } from '../../combat/spellRegistry'
-import { canAffordSpell, consumeSpellCost } from '../../combat/mana'
+import {
+  canAffordSpell,
+  consumeSpellCost,
+  makeSpellCastEvent,
+} from '../../combat/mana'
+import { withImmediateSpellVisuals } from '../../combat/spellVisual'
 import {
   resolveBlessedGround,
   resolveBrittle,
@@ -176,12 +182,8 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
         : undefined
       if (!t) return { ok: false, events: [] }
     }
-    const event: GameEvent = { kind: 'spell-cast', spellId: id }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent(id, current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: id },
       writeRelics,
@@ -242,7 +244,11 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
         })
         return {
           ok: true,
-          events: [event, ...hooks.events, ...effectEvents],
+          events: withImmediateSpellVisuals(id, [
+            event,
+            ...hooks.events,
+            ...effectEvents,
+          ]),
         }
       }
       set((s) => {
@@ -250,7 +256,14 @@ export function makeCastSpell(set: StoreSet, get: StoreGet) {
         s.fight.enemies = nextEnemies
         s.fight.targetEnemyId = fightTargetId
       })
-      return { ok: true, events: [event, ...hooks.events, ...effectEvents] }
+      return {
+        ok: true,
+        events: withImmediateSpellVisuals(id, [
+          event,
+          ...hooks.events,
+          ...effectEvents,
+        ]),
+      }
     }
     set((s) => {
       s.fight.player = playerWithCost
@@ -282,12 +295,8 @@ export function makeCastPurify(set: StoreSet, get: StoreGet) {
     if (!current.fight.player.statuses.some((s) => s.kind === statusKind)) {
       return { ok: false, events: [] }
     }
-    const event: GameEvent = { kind: 'spell-cast', spellId: 'purify' }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent('purify', current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: 'purify' },
       writeRelics,
@@ -306,7 +315,14 @@ export function makeCastPurify(set: StoreSet, get: StoreGet) {
     set((s) => {
       s.fight.player = r.player
     })
-    return { ok: true, events: [event, ...hookEvents, ...r.events] }
+    return {
+      ok: true,
+      events: withImmediateSpellVisuals('purify', [
+        event,
+        ...hookEvents,
+        ...r.events,
+      ]),
+    }
   }
 }
 
@@ -327,12 +343,8 @@ export function makeCastShatter(set: StoreSet, get: StoreGet) {
       return { ok: false, events: [] }
     }
 
-    const event: GameEvent = { kind: 'spell-cast', spellId: 'shatter' }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent('shatter', current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: 'shatter' },
       writeRelics,
@@ -412,12 +424,8 @@ export function makeCastTransmute(set: StoreSet, get: StoreGet) {
     )
     if (!hasFrom) return { ok: false, events: [] }
 
-    const event: GameEvent = { kind: 'spell-cast', spellId: 'transmute' }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent('transmute', current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: 'transmute' },
       writeRelics,
@@ -490,12 +498,8 @@ export function makeCastFrozenWall(set: StoreSet, get: StoreGet) {
       return { ok: false, events: [] }
     }
 
-    const event: GameEvent = { kind: 'spell-cast', spellId: 'frozen-wall' }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent('frozen-wall', current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: 'frozen-wall' },
       writeRelics,
@@ -541,12 +545,8 @@ export function makeCastFocus(set: StoreSet, get: StoreGet) {
     if (from === 'purple' || to === 'purple') {
       return { ok: false, events: [] }
     }
-    const event: GameEvent = { kind: 'spell-cast', spellId: 'focus' }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent('focus', current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: 'focus' },
       writeRelics,
@@ -592,12 +592,8 @@ export function makeCastVolley(set: StoreSet, get: StoreGet) {
     if (!targets.every((id) => living.has(id))) {
       return { ok: false, events: [] }
     }
-    const event: GameEvent = { kind: 'spell-cast', spellId: 'volley' }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent('volley', current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnSpellCast(
       { spellId: 'volley' },
       writeRelics,
@@ -633,12 +629,8 @@ export function makeCastUltimate(set: StoreSet, get: StoreGet) {
     if (current.fight.player.skillCharge < def.chargeCost) {
       return { ok: false, events: [] }
     }
-    const event: GameEvent = { kind: 'spell-cast', spellId: id }
-    const writeRelics = current.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const event = makeSpellCastEvent(id, current.fight.player.mana)
+    const writeRelics = cloneRelicsForHooks(current.fight.player.relics)
     const hookEvents = runOnUltimateUsed(
       { spellId: id },
       writeRelics,

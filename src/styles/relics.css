@@ -41,13 +41,129 @@
 }
 
 .relic-slot.pulse {
-  box-shadow: 0 0 18px rgba(154, 125, 82, 0.95);
-  transform: translateY(-1px) scale(1.08);
+  animation: relic-trigger-pulse 600ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  z-index: 32;
+}
+
+.relic-slot.pulse .relic-icon {
+  animation: relic-icon-pop 600ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes relic-trigger-pulse {
+  0% {
+    box-shadow: 0 0 0 rgba(154, 125, 82, 0);
+    transform: scale(1);
+    border-color: var(--gold-1);
+  }
+  35% {
+    box-shadow:
+      0 0 22px rgba(217, 156, 92, 0.95),
+      0 0 8px rgba(255, 240, 200, 0.45) inset;
+    transform: translateY(-2px) scale(1.14);
+    border-color: var(--gold-2);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(154, 125, 82, 0.35);
+    transform: translateY(-1px) scale(1.04);
+  }
+}
+
+@keyframes relic-icon-pop {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.2);
+    filter: brightness(1.35) drop-shadow(0 0 6px rgba(255, 220, 140, 0.8));
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.relic-slot.rarity-uncommon.pulse {
+  animation-name: relic-trigger-pulse-uncommon;
+}
+
+.relic-slot.rarity-rare.pulse {
+  animation-name: relic-trigger-pulse-rare;
+}
+
+@keyframes relic-trigger-pulse-uncommon {
+  0% {
+    box-shadow: 0 0 0 rgba(126, 168, 209, 0);
+    transform: scale(1);
+  }
+  35% {
+    box-shadow:
+      0 0 22px rgba(126, 168, 209, 0.95),
+      0 0 8px rgba(200, 230, 255, 0.4) inset;
+    transform: translateY(-2px) scale(1.14);
+    border-color: #a8c8e8;
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(126, 168, 209, 0.35);
+    transform: translateY(-1px) scale(1.04);
+  }
+}
+
+@keyframes relic-trigger-pulse-rare {
+  0% {
+    box-shadow: 0 0 0 rgba(217, 156, 92, 0);
+    transform: scale(1);
+  }
+  35% {
+    box-shadow:
+      0 0 24px rgba(217, 156, 92, 1),
+      0 0 10px rgba(255, 200, 120, 0.5) inset;
+    transform: translateY(-2px) scale(1.16);
+    border-color: #f0c080;
+  }
+  100% {
+    box-shadow: 0 0 12px rgba(217, 156, 92, 0.45);
+    transform: translateY(-1px) scale(1.05);
+  }
 }
 
 .relic-icon {
   font-size: 1.3rem;
   line-height: 1;
+}
+
+/* Brief callout when a relic fires (synced to relic-trigger-pulse). */
+.relic-flash {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.25rem;
+  background: rgba(12, 10, 8, 0.92);
+  border: 1px solid var(--gold-1);
+  color: var(--gold-2);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: relic-flash-rise 600ms ease-out forwards;
+  z-index: 33;
+}
+
+@keyframes relic-flash-rise {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
 }
 
 .relic-tooltip {

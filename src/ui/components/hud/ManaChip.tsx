@@ -9,6 +9,7 @@ export function ManaChip({
   cap,
   pop,
   pulsing,
+  spending,
   wild,
   title,
   body,
@@ -18,6 +19,7 @@ export function ManaChip({
   cap: number
   pop: PopState
   pulsing: boolean
+  spending?: boolean
   wild?: boolean
   title: string
   body: ReactNode
@@ -30,7 +32,7 @@ export function ManaChip({
       ariaLabel={`${title}: ${value} of ${cap}`}
     >
       <span
-        className={`mana-chip mana-${color}${wild ? ' mana-wild' : ''}${pulsing ? ' pulsing' : ''}${value >= cap ? ' is-capped' : ''}`}
+        className={`mana-chip mana-${color}${wild ? ' mana-wild' : ''}${pulsing ? ' pulsing' : ''}${spending ? ' spending' : ''}${value >= cap ? ' is-capped' : ''}`}
         data-mana-target={color}
         data-pool-target={color === 'yellow' ? 'yellow' : undefined}
       >

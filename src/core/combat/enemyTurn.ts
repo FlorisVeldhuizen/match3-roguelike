@@ -29,6 +29,7 @@ import {
 } from './intentResolvers'
 import { detectMatches } from '../board/detectMatches'
 import { runCascade } from '../board/cascade'
+import { cloneRelicsForHooks } from '../relics/engine'
 import { processCascadeEvents } from './cascadeProcessor'
 
 export type EnemyTurnResult = {
@@ -57,7 +58,10 @@ export function executeEnemyTurn(
   const events: GameEvent[] = []
   const telegraphEvents: GameEvent[] = []
   const siblingNextIntents: Intent[] = []
-  let nextPlayer: Player = player
+  let nextPlayer: Player = {
+    ...player,
+    relics: cloneRelicsForHooks(player.relics),
+  }
   let nextEnemies: Enemy[] = enemies
   let nextBoard: Cell[][] = board
   let nextPetrifiedRows: PetrifiedRows = petrifiedRows

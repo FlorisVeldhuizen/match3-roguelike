@@ -76,6 +76,89 @@
     0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
+/* Mana-themed spell cards: border + wash match the cost colour(s). */
+.spell-btn.spell-mana-red {
+  border-color: rgba(215, 84, 82, 0.42);
+  background:
+    linear-gradient(180deg, rgba(215, 84, 82, 0.14), transparent 58%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+}
+.spell-btn.spell-mana-red.ready {
+  border-color: rgba(238, 94, 87, 0.78);
+  box-shadow:
+    inset 0 0 0 1px rgba(215, 84, 82, 0.22),
+    0 0 16px rgba(215, 84, 82, 0.38),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.spell-mana-blue {
+  border-color: rgba(74, 143, 207, 0.42);
+  background:
+    linear-gradient(180deg, rgba(74, 143, 207, 0.14), transparent 58%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+}
+.spell-btn.spell-mana-blue.ready {
+  border-color: rgba(80, 150, 220, 0.78);
+  box-shadow:
+    inset 0 0 0 1px rgba(74, 143, 207, 0.22),
+    0 0 16px rgba(74, 143, 207, 0.38),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.spell-mana-green {
+  border-color: rgba(108, 181, 108, 0.42);
+  background:
+    linear-gradient(180deg, rgba(108, 181, 108, 0.14), transparent 58%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+}
+.spell-btn.spell-mana-green.ready {
+  border-color: rgba(115, 198, 138, 0.78);
+  box-shadow:
+    inset 0 0 0 1px rgba(108, 181, 108, 0.22),
+    0 0 16px rgba(108, 181, 108, 0.38),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.spell-mana-yellow {
+  border-color: rgba(232, 198, 81, 0.45);
+  background:
+    linear-gradient(180deg, rgba(232, 198, 81, 0.16), transparent 58%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+}
+.spell-btn.spell-mana-yellow.ready {
+  border-color: rgba(232, 198, 81, 0.82);
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 198, 81, 0.24),
+    0 0 16px rgba(232, 198, 81, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.spell-mana-mixed {
+  border-color: rgba(154, 125, 82, 0.55);
+  background:
+    linear-gradient(135deg, rgba(215, 84, 82, 0.1) 0%, transparent 42%),
+    linear-gradient(225deg, rgba(74, 143, 207, 0.1) 0%, transparent 42%),
+    linear-gradient(315deg, rgba(108, 181, 108, 0.1) 0%, transparent 42%),
+    linear-gradient(45deg, rgba(232, 198, 81, 0.08) 0%, transparent 42%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+}
+.spell-btn.spell-mana-mixed.ready {
+  border-color: var(--gold-2);
+  box-shadow:
+    inset 0 0 0 1px rgba(201, 168, 108, 0.2),
+    0 0 14px rgba(201, 168, 108, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.spell-btn.spell-mana-free {
+  border-color: rgba(154, 125, 82, 0.35);
+  opacity: 0.92;
+}
+
+.spell-btn.spell-mana-purple {
+  border-color: rgba(130, 100, 180, 0.45);
+}
+
 .spell-btn.ultimate {
   background:
     linear-gradient(180deg, rgba(130, 100, 180, 0.12), transparent 60%),
@@ -181,6 +264,22 @@
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
 }
 
+.pending-pip.spell-mana-red {
+  filter: drop-shadow(0 0 5px rgba(215, 84, 82, 0.75));
+}
+.pending-pip.spell-mana-blue {
+  filter: drop-shadow(0 0 5px rgba(74, 143, 207, 0.75));
+}
+.pending-pip.spell-mana-green {
+  filter: drop-shadow(0 0 5px rgba(108, 181, 108, 0.75));
+}
+.pending-pip.spell-mana-yellow {
+  filter: drop-shadow(0 0 5px rgba(232, 198, 81, 0.8));
+}
+.pending-pip.spell-mana-mixed {
+  filter: drop-shadow(0 0 4px var(--gold-2));
+}
+.pending-pip.spell-mana-purple,
 .pending-pip.pending-riposte {
   filter: drop-shadow(0 0 4px var(--royal-2));
 }

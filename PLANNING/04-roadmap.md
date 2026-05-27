@@ -1,6 +1,8 @@
 # Implementation roadmap
 
-Status: **Phase I complete.** Working on J1 (Boss gimmick — Corruptor) next. H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26** — the gap was real but not hero-power-shaped; parked verbs become discoverable-spell candidates instead; see H4c section). H2 was split into H2a/H2b/H2c (see the H2 section for the split note + rationale). After a long design exploration about multi-enemy fights, AP, AOE gems, and multi-hit attacks (see `07-action-points-proposal.md`, now parked), the actual answer was **(H3) multi-color mana economy** followed by **(H4) spell expansion + ally-target intents** — see `08-multi-color-mana-proposal.md`. H2b/H2c (board verbs) remain queued and now run next because the spell-economy + ally-intent work is in.
+Status: **Phase I complete.** **Mechanics expansion merged 2026-05-27** — enrage, Leech/Shade/Trickster, 4 board spells, 10 relics, `applyCombatEvents`; catalog in **`10-shipped-content-catalog.md`**.
+
+Working on J1 (boss polish) next. Shipped boss archetype is **Tyrant** (not the early "Corruptor" cursed-gem doc). H4 was split into H4a (spells, shipped) / H4b (ally-target intents + new compositions, shipped) / H4c (hero power, **DROPPED 2026-05-26**). H2 was split into H2a/H2b/H2c. After design exploration (`07-action-points-proposal.md`, parked), shipped: **(H3) multi-color mana** + **(H4) spell expansion + ally intents** + **mechanics expansion** (`08-multi-color-mana-proposal.md`).
 
 > **Phase G note (2026-05-23):** `MatchPayload` ended up *per-match* (single `Match` + cascade level), not the per-swap aggregated shape originally sketched in the architecture doc. Reason: Cascade Crystal needs cascade-level awareness *per match*, since a single swap can produce matches at different cascade levels (only level ≥1 multiplies). The change is engine-internal; the relic-author surface didn't shift.
 

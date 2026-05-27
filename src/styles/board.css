@@ -15,9 +15,6 @@
   position: relative;
 }
 
-/* Celtic knotwork corner flourishes for the board frame. Each pseudo-element
-   draws a triple-arc spiral motif using radial gradients — gives the
-   standing-stone frame its carved interlace feel. */
 .board-shell::before,
 .board-shell::after {
   content: '';
@@ -99,4 +96,3 @@
      vertical drag would be treated as a page scroll instead of a swap. */
   touch-action: none;
 }
-

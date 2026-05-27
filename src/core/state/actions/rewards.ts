@@ -1,5 +1,10 @@
 import { applyCombatEvents } from '../../combat/applyCombatEvents'
-import { runOnRelicGained, snapshotOf, acquireRelic as engineAcquireRelic } from '../../relics/engine'
+import {
+  cloneRelicsForHooks,
+  runOnRelicGained,
+  snapshotOf,
+  acquireRelic as engineAcquireRelic,
+} from '../../relics/engine'
 import { getSpell } from '../../combat/spellRegistry'
 import type { GameEvent, SpellId } from '../../../types'
 import type { StoreSet, StoreGet } from './types'
@@ -16,7 +21,10 @@ export function makeAcquireRelic(set: StoreSet, get: StoreGet) {
     if (!current.pendingReward.offeredRelicIds.includes(id)) {
       return { ok: false, events: [] }
     }
-    const nextRelics = engineAcquireRelic(current.fight.player.relics, id)
+    const nextRelics = engineAcquireRelic(
+      cloneRelicsForHooks(current.fight.player.relics),
+      id,
+    )
     const events: GameEvent[] = [{ kind: 'relic-gained', relicId: id }]
     const gainEvents = runOnRelicGained(
       { relicId: id },

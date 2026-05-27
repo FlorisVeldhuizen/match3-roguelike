@@ -13,6 +13,7 @@ import { useGameStore } from '../../core/state/store'
 import { subscribeGameEvents } from '../../core/events/emitter'
 import { useAnimatedPhase } from '../hooks/useAnimatedPhase'
 import { TRAIL_ARRIVAL_MS, scheduleAtTrailArrival } from '../../timing'
+import { eventHudDelayMs } from '../eventTiming'
 import type { Enemy, Intent, StatusInstance, StatusKind } from '../../types'
 import {
   applyStatusToList,
@@ -104,7 +105,10 @@ export function EnemyFrame() {
             },
           }))
         }
-        const delay = isPlayerAttack || procKind ? TRAIL_ARRIVAL_MS : 0
+        const delay =
+          isPlayerAttack || procKind
+            ? eventHudDelayMs(event, TRAIL_ARRIVAL_MS)
+            : 0
         window.setTimeout(() => {
           setDisplayedHp((prev) => {
             const before = prev[id] ?? 0
@@ -184,10 +188,17 @@ export function EnemyFrame() {
       } else if (event.kind === 'status-applied' && event.target !== 'player') {
         const enemyId = event.target
         const incoming = event.status
-        setDisplayedStatuses((prev) => ({
-          ...prev,
-          [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
-        }))
+        const defaultDelay =
+          event.source?.kind === 'board-cells' ? TRAIL_ARRIVAL_MS : 0
+        const delay = eventHudDelayMs(event, defaultDelay)
+        const apply = () => {
+          setDisplayedStatuses((prev) => ({
+            ...prev,
+            [enemyId]: applyStatusToList(prev[enemyId] ?? [], incoming),
+          }))
+        }
+        if (delay > 0) window.setTimeout(apply, delay)
+        else apply()
       } else if (event.kind === 'status-ticked' && event.target !== 'player') {
         const enemyId = event.target
         const { statusKind, remaining } = event

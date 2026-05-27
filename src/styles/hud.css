@@ -42,11 +42,15 @@
   flex-wrap: wrap;
 }
 
-.hp-bar {
-  position: relative;
+.tooltip-anchor-hp {
   flex: 0 1 240px;
   min-width: 180px;
   max-width: 280px;
+}
+
+.hp-bar {
+  position: relative;
+  width: 100%;
   height: 20px;
   background: var(--ink-0);
   border: 1px solid var(--gold-3);
@@ -276,6 +280,46 @@
   }
 }
 
+/* Spell cast: pool drains — brief squeeze + coloured drain flash. */
+.mana-chip.spending {
+  animation: mana-pip-spend 480ms cubic-bezier(0.4, 0, 0.7, 1);
+}
+.mana-chip.mana-red.spending .mana-dot {
+  filter: drop-shadow(0 0 10px rgba(215, 84, 82, 0.95))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+.mana-chip.mana-blue.spending .mana-dot {
+  filter: drop-shadow(0 0 10px rgba(74, 143, 207, 0.95))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+.mana-chip.mana-green.spending .mana-dot {
+  filter: drop-shadow(0 0 10px rgba(108, 181, 108, 0.95))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+.mana-chip.mana-yellow.spending .mana-dot,
+.mana-chip.mana-wild.spending .mana-dot {
+  filter: drop-shadow(0 0 10px rgba(232, 198, 81, 0.95))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
+}
+@keyframes mana-pip-spend {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  22% {
+    transform: scale(0.9);
+    filter: brightness(0.72);
+  }
+  48% {
+    transform: scale(1.06);
+    filter: brightness(1.25);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
 /* Capped state: a continuous slow brightness pulse so the player
    notices "spend me — I won't grow further." Soft nudge, not a warning. */
 .mana-chip.is-capped {
@@ -346,6 +390,13 @@
 }
 .charge-chip.pulsing {
   animation: mana-pip-pulse 540ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.charge-chip.spending {
+  animation: mana-pip-spend 480ms cubic-bezier(0.4, 0, 0.7, 1);
+}
+.charge-chip.spending .charge-icon {
+  filter: drop-shadow(0 0 12px rgba(140, 116, 190, 0.95))
+    drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55));
 }
 .charge-chip.is-ready {
   animation: charge-ready-breathe 1800ms ease-in-out infinite;
@@ -507,3 +558,11 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .mana-chip.pulsing,
+  .mana-chip.spending,
+  .charge-chip.pulsing,
+  .charge-chip.spending {
+    animation: none;
+  }
+}

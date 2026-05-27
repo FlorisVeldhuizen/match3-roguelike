@@ -18,6 +18,12 @@ function setMana(red: number, blue: number, green: number, yellow: number) {
   })
 }
 
+function setSkillCharge(charge: number) {
+  useGameStore.setState((s) => {
+    s.fight.player.skillCharge = charge
+  })
+}
+
 describe('mana resets on each new fight', () => {
   it('zeros mana when entering a fight node', () => {
     // Reset to a clean run.
@@ -36,12 +42,30 @@ describe('mana resets on each new fight', () => {
 
     const mana = useGameStore.getState().fight.player.mana
     expect(mana).toEqual({ red: 0, blue: 0, green: 0, yellow: 0 })
+    expect(useGameStore.getState().fight.player.skillCharge).toBe(0)
   })
 
-  it('wipes mana on restart', () => {
+  it('zeros skill charge when entering a fight node', () => {
+    useGameStore.getState().restart()
+    setSkillCharge(6)
+
+    const map = useGameStore.getState().map
+    const startFight = map.nodes.find(
+      (n) => n.column === 0 && n.kind === 'fight',
+    )
+    expect(startFight).toBeDefined()
+
+    useGameStore.getState().enterNode(startFight!.id)
+
+    expect(useGameStore.getState().fight.player.skillCharge).toBe(0)
+  })
+
+  it('wipes mana and skill charge on restart', () => {
     setMana(3, 5, 2, 4)
+    setSkillCharge(6)
     useGameStore.getState().restart()
     const mana = useGameStore.getState().fight.player.mana
     expect(mana).toEqual({ red: 0, blue: 0, green: 0, yellow: 0 })
+    expect(useGameStore.getState().fight.player.skillCharge).toBe(0)
   })
 })

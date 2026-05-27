@@ -8,7 +8,12 @@ import {
 import type { PoolDeltas } from './pools'
 import { applyDamage } from './damage'
 import { composeDamage, tickStatuses } from './statuses'
-import { interceptFatalDamage, snapshotOf } from '../relics/engine'
+import { withPendingSpellVisuals } from './spellVisual'
+import {
+  cloneRelicsForHooks,
+  interceptFatalDamage,
+  snapshotOf,
+} from '../relics/engine'
 
 export function applyPoolDeltas(player: Player, deltas: PoolDeltas): Player {
   const m = player.mana
@@ -70,18 +75,21 @@ export function resolveEndOfPhase(
             ? { ...e, block: res.blockAfter, hp: res.hpAfter }
             : e,
         )
-        events.push({
-          kind: 'damage-dealt',
-          targetId: target.id,
-          amount: res.hpDamage,
-          blocked: res.blocked,
-          source: 'player-attack',
-        })
+        const bulwarkFx: GameEvent[] = [
+          {
+            kind: 'damage-dealt',
+            targetId: target.id,
+            amount: res.hpDamage,
+            blocked: res.blocked,
+            source: 'player-attack',
+          },
+        ]
         if (res.blockBroken) {
-          events.push({ kind: 'block-broken', targetId: target.id })
+          bulwarkFx.push({ kind: 'block-broken', targetId: target.id })
         } else if (res.blockAbsorbed) {
-          events.push({ kind: 'block-absorbed', targetId: target.id })
+          bulwarkFx.push({ kind: 'block-absorbed', targetId: target.id })
         }
+        events.push(...withPendingSpellVisuals('bulwark', bulwarkFx))
         if (res.killed) {
           events.push({ kind: 'enemy-killed', enemyId: target.id })
           const nextLiving = nextEnemies.find(
@@ -106,6 +114,7 @@ export function resolveEndOfPhase(
       const base = Math.floor(total / 3)
       const last = total - base * 2
       const chunks = [base, base, last]
+      const volleyFx: GameEvent[] = []
       for (let i = 0; i < 3; i++) {
         const chunk = chunks[i]
         const targetIdAt = player.volleyTargets[i]
@@ -122,7 +131,7 @@ export function resolveEndOfPhase(
             ? { ...e, block: res.blockAfter, hp: res.hpAfter }
             : e,
         )
-        events.push({
+        volleyFx.push({
           kind: 'damage-dealt',
           targetId: enemy.id,
           amount: res.hpDamage,
@@ -130,9 +139,9 @@ export function resolveEndOfPhase(
           source: 'player-attack',
         })
         if (res.blockBroken) {
-          events.push({ kind: 'block-broken', targetId: enemy.id })
+          volleyFx.push({ kind: 'block-broken', targetId: enemy.id })
         } else if (res.blockAbsorbed) {
-          events.push({ kind: 'block-absorbed', targetId: enemy.id })
+          volleyFx.push({ kind: 'block-absorbed', targetId: enemy.id })
         }
         if (res.killed) {
           events.push({ kind: 'enemy-killed', enemyId: enemy.id })
@@ -144,12 +153,20 @@ export function resolveEndOfPhase(
           }
         }
       }
+      if (volleyFx.length > 0) {
+        events.push(...withPendingSpellVisuals('volley', volleyFx))
+      }
     }
     events.push({ kind: 'pending-effect-resolved', spellId: 'volley' })
   }
 
   if (nextBlock > 0) {
-    events.push({ kind: 'block-gained', amount: nextBlock })
+    const blockEv: GameEvent = { kind: 'block-gained', amount: nextBlock }
+    if (hasReinforce) {
+      events.push(...withPendingSpellVisuals('reinforce', [blockEv]))
+    } else {
+      events.push(blockEv)
+    }
   }
 
   const nextPending = player.pendingSpells.filter(
@@ -203,11 +220,7 @@ export function beginPlayerPhase(
     let finalHp = res.hpAfter
     if (res.killed) {
       const snap = snapshotOf(player, enemies, targetEnemyId, 0)
-      const writeRelics = relics.map((r) => ({
-        ...r,
-        runFlags: { ...r.runFlags },
-        fightFlags: { ...r.fightFlags },
-      }))
+      const writeRelics = cloneRelicsForHooks(relics)
       const intercept = interceptFatalDamage(
         { incoming: ticked.burnDamage, source: 'burn' },
         writeRelics,

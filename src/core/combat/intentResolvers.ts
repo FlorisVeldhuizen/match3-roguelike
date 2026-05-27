@@ -23,6 +23,7 @@ import {
 } from '../board/flags'
 import { applyGravity } from '../board/gravity'
 import {
+  cloneRelicsForHooks,
   interceptFatalDamage,
   runOnBlockBroken,
   runOnDamageTaken,
@@ -100,11 +101,7 @@ export function resolveAttackIntent(
   )
   const res = applyDamage(nextPlayer.block, nextPlayer.hp, finalDamage)
   let finalHp = res.hpAfter
-  const writeRelics = nextPlayer.relics.map((r) => ({
-    ...r,
-    runFlags: { ...r.runFlags },
-    fightFlags: { ...r.fightFlags },
-  }))
+  const writeRelics = cloneRelicsForHooks(nextPlayer.relics)
   if (res.killed) {
     const intercept = interceptFatalDamage(
       { incoming: finalDamage, source: 'enemy-attack' },

@@ -373,6 +373,7 @@ export class BoardScene {
       this.app.destroy(true, { children: true, texture: false })
       this.app = null
     }
+    this.animator?.dispose()
     this.animator = null
     this.selectionRing = null
     this.ghostRing = null

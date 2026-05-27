@@ -238,6 +238,8 @@ type Listener = (event: GameEvent, state: GameState, ctx: HookContext) => void;
 // e.g. onEnemyKilled: heal 5 HP — emits a state-update action
 ```
 
+**Listener emissions → state (2026-05-27):** hooks that `ctx.emit` combat events (`damage-dealt` with `source: 'relic-effect'`, `block-gained`, `healed`, `status-applied`) do not mutate state by themselves. Call sites run `applyCombatEvents` (`src/core/combat/applyCombatEvents.ts`) on the emitted batch after hooks return — swap (phase start/end, block gained), cascade (Avalanche, Harvester chain), fight start (War Drum), relic pickup (Collector's Eye). Thornmail remains special-cased in `resolveAttackIntent` (reflect applied inline). See `10-shipped-content-catalog.md`.
+
 **Modifier hooks** (filter chain on a payload):
 ```ts
 type Modifier<T> = (payload: T, state: GameState, ctx: HookContext) => T;

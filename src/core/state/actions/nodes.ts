@@ -1,7 +1,11 @@
 import { generateBoard } from '../../board/generation'
 import { getReachableFrom } from '../../map/paths'
 import { applyCombatEvents } from '../../combat/applyCombatEvents'
-import { runOnRoundStarted, snapshotOf } from '../../relics/engine'
+import {
+  cloneRelicsForHooks,
+  runOnRoundStarted,
+  snapshotOf,
+} from '../../relics/engine'
 import type { RngStreams } from '../../rng/streams'
 import type {
   FightState,
@@ -62,11 +66,7 @@ export function makeEnterNode(set: StoreSet, get: StoreGet) {
     enemyRoll.fight.player.gold = current.fight.player.gold
     enemyRoll.fight.player.ownedSpellIds = current.fight.player.ownedSpellIds
     const boardRoll = generateBoard(current.rng.board)
-    const writeRelics = enemyRoll.fight.player.relics.map((r) => ({
-      ...r,
-      runFlags: { ...r.runFlags },
-      fightFlags: { ...r.fightFlags },
-    }))
+    const writeRelics = cloneRelicsForHooks(enemyRoll.fight.player.relics)
     const roundEvents = runOnRoundStarted(
       { fightId: 0 },
       writeRelics,

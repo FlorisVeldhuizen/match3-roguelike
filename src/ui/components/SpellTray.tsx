@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import {
   getPendingMeta,
+  isUltimateId,
   listSpellsForTray,
   listUltimates,
 } from '../../core/combat/spellRegistry'
@@ -18,6 +19,7 @@ import { FocusPickerModal } from './FocusPickerModal'
 import { TransmutePickerModal } from './TransmutePickerModal'
 import { VolleyTargetModal } from './VolleyTargetModal'
 import { useBoardSettled } from '../hooks/useBoardSettled'
+import { primaryManaRgb, spellManaClassName } from '../spellManaTheme'
 
 const PICKER_SPELLS: ReadonlySet<SpellId> = new Set([
   'purify',
@@ -139,6 +141,8 @@ export function SpellTray() {
         const blocked =
           !onPlayerPhase || !boardSettled || !canPay || queued || extraBlock
         const costSummary = describeCost(def.cost)
+        const manaTheme = spellManaClassName(def.cost)
+        const castRgb = primaryManaRgb(def.cost)
         const reason = queued
           ? 'Already cast this turn.'
           : !onPlayerPhase
@@ -163,8 +167,14 @@ export function SpellTray() {
           >
             <button
               type="button"
-              className={`spell-btn${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}${(flashKey[def.id] ?? 0) > 0 ? ' just-cast' : ''}${boardTargetingSpell === def.id ? ' is-targeting' : ''}`}
+              className={`spell-btn ${manaTheme}${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}${(flashKey[def.id] ?? 0) > 0 ? ' just-cast' : ''}${boardTargetingSpell === def.id ? ' is-targeting' : ''}`}
               key={`${def.id}-${flashKey[def.id] ?? 0}`}
+              data-spell-target={def.id}
+              style={
+                {
+                  '--spell-cast-rgb': castRgb,
+                } as CSSProperties
+              }
               aria-disabled={blocked}
               onClick={() => {
                 if (blocked) return
@@ -224,13 +234,16 @@ export function SpellTray() {
           >
             <button
               type="button"
-              className={`spell-btn ultimate${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}`}
+              className={`spell-btn ultimate spell-mana-purple${queued ? ' queued' : ''}${canPay && onPlayerPhase && !queued ? ' ready' : ''}${blocked ? ' is-disabled' : ''}${(flashKey[def.id] ?? 0) > 0 ? ' just-cast' : ''}`}
+              key={`${def.id}-${flashKey[def.id] ?? 0}`}
+              data-spell-target={def.id}
               aria-disabled={blocked}
               onClick={() => {
                 if (blocked) return
                 const res = castUltimate(def.id)
                 if (res.ok) {
                   for (const ev of res.events) emitGameEvent(ev)
+                  flashCast(def.id)
                 }
               }}
             >
@@ -271,6 +284,9 @@ export function PendingStrip() {
     <div className="pending-strip" aria-label="Pending spell effects">
       {pending.map((id) => {
         const meta = getPendingMeta(id)
+        const manaTheme = isUltimateId(id)
+          ? 'spell-mana-purple'
+          : spellManaClassName(getSpell(id).cost)
         return (
           <HoverTooltip
             key={id}
@@ -278,7 +294,9 @@ export function PendingStrip() {
             title={`${meta.name} — ${meta.pendingLabel}`}
             body={meta.pendingDescription}
           >
-            <span className={`pending-pip pending-${id}`}>{meta.icon}</span>
+            <span className={`pending-pip pending-${id} ${manaTheme}`}>
+              {meta.icon}
+            </span>
           </HoverTooltip>
         )
       })}

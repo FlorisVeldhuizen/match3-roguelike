@@ -5,7 +5,8 @@ import {
   applyStatusToList,
   statusKindFromDamageSource,
 } from '../../../core/combat/statuses'
-import { TRAIL_ARRIVAL_MS } from '../../../timing'
+import { SPEND_TRAIL_ARRIVAL_MS, TRAIL_ARRIVAL_MS } from '../../../timing'
+import { eventHudDelayMs } from '../../eventTiming'
 import {
   MANA_CAPS,
   type GemColor,
@@ -21,6 +22,7 @@ import {
 } from '../../../core/combat/spellRegistry'
 
 const PULSE_MS = 380
+const SPEND_PULSE_MS = 480
 
 const STATUS_VIGNETTE_RGB: Record<StatusKind, string> = {
   burn: '255, 133, 64',
@@ -43,6 +45,7 @@ export type HudEventChannel = {
   statusCueMarks: Partial<Record<StatusKind, number>>
   expiringStatusKinds: Set<StatusKind>
   pulse: Record<GemColor, number>
+  spendPulse: Record<GemColor, number>
   hpGlow: boolean
   hpHit: boolean
   hpBurnHit: boolean
@@ -71,6 +74,25 @@ export function useHudEventChannel(): HudEventChannel {
     purple: 0,
     gold: 0,
   })
+  const [spendPulse, setSpendPulse] = useState<Record<GemColor, number>>({
+    red: 0,
+    blue: 0,
+    green: 0,
+    yellow: 0,
+    purple: 0,
+    gold: 0,
+  })
+  const bumpSpendPulse = (colors: GemColor[]) => {
+    for (const color of colors) {
+      setSpendPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
+      window.setTimeout(() => {
+        setSpendPulse((prev) => ({
+          ...prev,
+          [color]: Math.max(0, prev[color] - 1),
+        }))
+      }, SPEND_PULSE_MS)
+    }
+  }
   const shakeTimerRef = useRef<number | null>(null)
   const triggerShake = (magnitude: number, durationMs: number) => {
     const el = document.querySelector('.game-scene') as HTMLElement | null
@@ -96,6 +118,8 @@ export function useHudEventChannel(): HudEventChannel {
 
   const [displayedHp, setDisplayedHp] = useState(player.hp)
   const [displayedMana, setDisplayedMana] = useState(player.mana)
+  const displayedManaRef = useRef(player.mana)
+  displayedManaRef.current = displayedMana
   const [displayedCharge, setDisplayedCharge] = useState(player.skillCharge)
   const [displayedGold, setDisplayedGold] = useState(player.gold)
   const [stagedBlue, setStagedBlue] = useState(player.block)
@@ -123,9 +147,16 @@ export function useHudEventChannel(): HudEventChannel {
           if (color === 'blue') setStagedBlue((s) => s + amount)
         }, TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'block-gained') {
-        setBlockCommitted(true)
+        const delay = eventHudDelayMs(event, 0)
+        const apply = () => {
+          setStagedBlue(event.amount)
+          setBlockCommitted(true)
+        }
+        if (delay > 0) window.setTimeout(apply, delay)
+        else apply()
       } else if (event.kind === 'healed') {
         const amount = event.amount
+        const delay = eventHudDelayMs(event, TRAIL_ARRIVAL_MS)
         window.setTimeout(() => {
           setDisplayedHp((h) =>
             Math.min(
@@ -133,7 +164,7 @@ export function useHudEventChannel(): HudEventChannel {
               h + amount,
             ),
           )
-        }, TRAIL_ARRIVAL_MS)
+        }, delay)
       } else if (event.kind === 'damage-taken') {
         const proc = statusKindFromDamageSource(event.source)
         const isProc = proc !== null
@@ -180,13 +211,17 @@ export function useHudEventChannel(): HudEventChannel {
         if (delay > 0) window.setTimeout(apply, delay)
         else apply()
       } else if (event.kind === 'spell-cast') {
-        if (isUltimateId(event.spellId)) {
-          const cost = getUltimate(event.spellId).chargeCost
-          setDisplayedCharge((c) => Math.max(0, c - cost))
-        } else {
-          const cost = getSpell(event.spellId).cost
-          setDisplayedMana((m) => consumeSpellCost(m, cost))
-        }
+        const spentColors = event.spentColors
+        window.setTimeout(() => {
+          bumpSpendPulse(spentColors)
+          if (isUltimateId(event.spellId)) {
+            const cost = getUltimate(event.spellId).chargeCost
+            setDisplayedCharge((c) => Math.max(0, c - cost))
+          } else {
+            const cost = getSpell(event.spellId).cost
+            setDisplayedMana((m) => consumeSpellCost(m, cost))
+          }
+        }, SPEND_TRAIL_ARRIVAL_MS)
       } else if (event.kind === 'phase-changed') {
         if (event.phase === 'player-acting') {
           setStagedBlue(0)
@@ -202,13 +237,26 @@ export function useHudEventChannel(): HudEventChannel {
         triggerShake(event.magnitude, dur)
       }
       if (event.kind === 'healed') {
-        setHpGlow(true)
-        window.setTimeout(() => setHpGlow(false), 500)
+        const glowDelay = eventHudDelayMs(event, 0)
+        window.setTimeout(() => {
+          setHpGlow(true)
+          window.setTimeout(() => setHpGlow(false), 500)
+        }, glowDelay)
       } else if (event.kind === 'block-gained') {
-        setBlockPulse(true)
-        window.setTimeout(() => setBlockPulse(false), 500)
+        const pulseDelay = eventHudDelayMs(event, 0)
+        window.setTimeout(() => {
+          setBlockPulse(true)
+          window.setTimeout(() => setBlockPulse(false), 500)
+        }, pulseDelay)
       } else if (event.kind === 'status-applied' && event.target === 'player') {
-        setDisplayedStatuses((prev) => applyStatusToList(prev, event.status))
+        const defaultDelay =
+          event.source?.kind === 'board-cells' ? TRAIL_ARRIVAL_MS : 0
+        const delay = eventHudDelayMs(event, defaultDelay)
+        const apply = () => {
+          setDisplayedStatuses((prev) => applyStatusToList(prev, event.status))
+        }
+        if (delay > 0) window.setTimeout(apply, delay)
+        else apply()
         const applySource = event.source
         if (applySource?.kind !== 'player') {
           const fire = () => {
@@ -223,7 +271,7 @@ export function useHudEventChannel(): HudEventChannel {
             )
           }
           if (applySource && applySource.kind !== 'enemy') {
-            window.setTimeout(fire, TRAIL_ARRIVAL_MS)
+            window.setTimeout(fire, eventHudDelayMs(event, TRAIL_ARRIVAL_MS))
           } else {
             fire()
           }
@@ -244,6 +292,7 @@ export function useHudEventChannel(): HudEventChannel {
       } else if (event.kind === 'status-expired' && event.target === 'player') {
         const { statusKind } = event
         const FIZZLE_MS = 480
+        const baseDelay = eventHudDelayMs(event, TRAIL_ARRIVAL_MS)
         window.setTimeout(() => {
           setExpiringStatusKinds((prev) => {
             if (prev.has(statusKind)) return prev
@@ -251,7 +300,7 @@ export function useHudEventChannel(): HudEventChannel {
             next.add(statusKind)
             return next
           })
-        }, TRAIL_ARRIVAL_MS)
+        }, baseDelay)
         window.setTimeout(() => {
           setDisplayedStatuses((prev) =>
             prev.filter((s) => s.kind !== statusKind),
@@ -262,7 +311,7 @@ export function useHudEventChannel(): HudEventChannel {
             next.delete(statusKind)
             return next
           })
-        }, TRAIL_ARRIVAL_MS + FIZZLE_MS)
+        }, baseDelay + FIZZLE_MS)
       }
     })
     return unsub
@@ -320,6 +369,7 @@ export function useHudEventChannel(): HudEventChannel {
     statusCueMarks,
     expiringStatusKinds,
     pulse,
+    spendPulse,
     hpGlow,
     hpHit,
     hpBurnHit,

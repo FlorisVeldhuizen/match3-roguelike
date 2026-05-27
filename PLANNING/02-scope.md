@@ -1,6 +1,6 @@
 # Vertical slice scope
 
-Status: **Phase 1 complete.** Content list and structure locked. Ready for Phase 2 (architecture).
+Status: **Phase I complete.** Mechanics expansion catalogued in **`10-shipped-content-catalog.md`** (2026-05-27).
 
 This doc nails down **exactly what ships** in the playable vertical slice. The rule: if it's not listed here, it's not in v1.
 
@@ -10,8 +10,8 @@ This doc nails down **exactly what ships** in the playable vertical slice. The r
 
 The slice is complete when:
 - A player can start a fresh run, navigate the branching map, fight 6-8 encounters including a boss, pick relics between fights, visit a shop, die or win, and start over.
-- All systems in `01-design.md` are functional: turn structure, 5 gem pools, cascade multipliers, Knight class with 2 spells + 1 ultimate, telegraphed enemy intents, relic event-hook system.
-- ~20 relics, ~6 enemy types + 1 boss, 1 player class (Knight).
+- All systems in `01-design.md` are functional: turn structure, gem pools (incl. gold), cascade multipliers, Knight starters + discoverable spell pool, telegraphed enemy intents, relic event-hook system.
+- **15 relics**, **9 fight archetypes + Tyrant (boss)**, 1 player class (Knight). See `10-shipped-content-catalog.md` for the live roster.
 - Stylized-simple visuals: custom SVG gems, simple enemy sprites, match animations (squash/stretch + particles).
 - Runs reproduce from a seed (RNG is seeded).
 - Auto-save at phase boundaries — closing the tab mid-run, then returning, resumes the run from the last completed phase (post-fight, post-pick, post-shop, post-node-entry).
@@ -36,62 +36,45 @@ Red / Blue / Green / Yellow / Purple, each with a **unique SVG silhouette** so c
 
 This is an asset-level accessibility shim — no toggle, no color-blind mode (still a non-goal). The board just *happens* to be legible without color. Silhouettes also carry a faint thematic nod to each gem's function (a shield-shape for block, a leaf for heal) — cryptic enough to not feel like clip-art, legible enough that a new player picks it up subliminally alongside the trail-routing visuals. Costs an afternoon of SVG work at Phase B and pays for itself forever.
 
-### Enemies: 6 archetypes (locked, numbers + verbs TBD)
-Per *Enemies share the board* (`01-design.md`), identity archetypes have a **board verb** in addition to (or instead of) direct damage. Verbs below are **candidates** — locked when each archetype's build phase opens (Brute already shipped in Phase E without a verb; see roadmap note).
+### Enemies: 9 archetypes + boss (shipped)
 
-| Enemy | Lesson | Board verb (candidate) | Behavior sketch |
-|-------|--------|------------------------|------------------|
-| **Brute** | Block on telegraph | **Column smash** — destroys all gems in one telegraphed column (no payout, refills from top); player gets one phase warning to clear/match that column for value first | High HP, alternates column-smash and big single-target attack |
-| **Skirmisher** | Sustained damage | *(none — connective tissue)* | Low HP, attacks every turn for small damage. The "pure stat" archetype that keeps the early curve gentle |
-| **Caster** | Priority targeting | **Color hex** — marks one gem color as hexed for 2 turns; matching hexed gems applies 1 stack of Weak per cell (telegraphed: the player can see which color is about to become a trap) | Fragile, alternates hex with Weak/Vulnerable direct debuffs |
-| **Defender** | Breakthrough matters | **Petrify row** — locks one row from being matched for 2 turns (gems still cascade through; just can't be the anchor of a match) | Gains block each turn; petrify forces the player to route matches around the wall |
-| **Swarmer** | AOE + target switch | **Cluster shove** — slides a 2-cell run of one color across the board to clump with another (creates a match the player didn't plan; can be useful, can ruin a set-up — telegraphed enough to react) | Appears in groups of 2-3, weak individually |
-| **Smolder** | Status fx threat | **Tile burn** — flags 1-2 cells as burning for 2 turns; matching a burning cell applies 1 stack of Burn per cell | Attacks also apply Burn directly — the verb amplifies, doesn't replace |
+All archetypes below are **implemented** with board verbs where noted. Patterns, HP, and ranges: `src/content/enemies.ts`. Full behavior summary: **`10-shipped-content-catalog.md`**.
 
-**Architectural note:** every board verb reads/writes the existing `Cell.flags` bag (`cursed` is the prototype; add `petrified`, `hexed`, `burning`, `pending-smash` as needed). Match algorithm and cascade loop stay unchanged — verbs only affect generation, resolution, or matchability checks. See `03-architecture.md` §Cell.
+| Enemy | Board verb | Notes |
+|-------|------------|-------|
+| Skirmisher | — | Pure attack; early-curve filler |
+| Brute | Column smash | Enrage: more smashes, drops block phase |
+| Smolder | Tile burn + Burn on hit | Enrage: faster burn alternation |
+| Rallier | buff-ally (Strength) | Multi-enemy only |
+| Defender | Petrify row | Enrage: trades one petrify for attacks |
+| Caster | Color hex → Weak | — |
+| Swarmer | Cluster shove | Groups of 2–3 |
+| **Leech** | Color drain → heals Leech | Mid/late map |
+| **Shade** | Lifesteal (50% of damage dealt) | Mid/late map |
+| **Trickster** | Trick (`???` → attack or block) | Mid/late map |
 
-### Boss: Corruptor (locked, numbers TBD)
-- High HP, multi-phase intents.
-- Every 2nd turn: converts 2 random gems to **cursed** (visually distinct overlay).
-- Cursed gems match normally, but each cursed cell in a resolved match deals **1 self-damage** to the player. A 3-match with 1 cursed gem costs 1 HP; a 5-line with 3 cursed costs 3 HP. Damage scales with how much corruption the player chose to swallow, not with match size, so clearing the board is always *possible* — just costly.
-- **Self-damage bypasses Vulnerable.** Cursed self-damage is a fixed 1 HP per cursed cell regardless of player statuses — Vulnerable amplifies only `enemy-attack` sources (see `DamageSource` in `03-architecture.md`). Same reason Thornmail doesn't reflect on cursed matches: the source is `self-curse`, not the enemy.
-- Forces player to plan around the board, build block on corruption turns, and accept some self-damage.
-- ⚠ Architecture note: cursed-state is a per-cell flag, not a new gem color. Match algorithm is unchanged — only the resolution step reads the flag and sums `cursedCellsInMatch` to compute self-damage.
+**Architectural note:** board verbs use `Cell.flags`, `FightState.hexedColors` / `drainedColors`, and `petrifiedRows` as appropriate. Match/cascade core unchanged.
 
-### Relics: ~20 total — 10 specced now, 10 designed during execution
+### Boss: Tyrant (shipped)
 
-**Common (5 of ~10 specced):**
-| Name | Style | Hook | Effect |
-|------|-------|------|--------|
-| Iron Buckler | Scoring | onMatch(blue) | Blue matches give +1 block |
-| Sharp Edge | Scoring | onMatch(red) | Red matches give +1 attack |
-| Focus Crystal | Scoring | onMatch(yellow) | Yellow matches give +1 mana |
-| Thornmail | Combat | onDamageTaken | When you take damage, deal 1 back |
-| First Aid | Scoring | onMatch(green) | Green matches give +1 heal |
+> **Doc rename:** early scope called this fight "Corruptor" (cursed-gem gimmick). Shipped boss is **Tyrant** — column smash, petrify, tile burn, block, enrage at 50% HP. Numbers in `enemies.ts`.
 
-**Uncommon (3 of ~7 specced):**
-| Name | Style | Hook | Effect |
-|------|-------|------|--------|
-| Cascade Crystal | Scoring | onCascade(n≥2) | 2nd+ cascades give +50% payout |
-| Vampiric Sigil | Combat | onEnemyKilled | On kill, heal 5 HP |
-| Stoic Plate | Scoring | onPhaseEnd | Unused block converts: every 5 block → +1 attack next phase |
+### Relics: 15 shipped (full hook coverage)
 
-**Rare (2 of ~3 specced):**
-| Name | Style | Hook | Effect |
-|------|-------|------|--------|
-| Stoneheart | Combat | onFatalDamage | First time you'd die per run, survive at 1 HP |
-| Mirror Plate | Combat | onDamageTaken | First enemy hit each fight: counter for blocked amount |
+Original scope listed ~20 with many TBD. **15 relics** are in `src/content/relics.ts`, including the mechanics-expansion batch (Harvester, Morning Star, Afterburner, Avalanche, Fortified, Spite, Overcharge, War Drum, Collector's Eye, Battle Cry).
 
-**Hook coverage check:** onMatch(color), onCascade, onDamageTaken, onEnemyKilled, onPhaseEnd, onFatalDamage — covers the main hooks the architecture needs to support. Remaining 10 relics fill in onPhaseStart, onSpellCast, onBlockGained, onRoundStarted, onRelicGained, etc. The unused hooks (onRoundStarted, onRelicGained, onPhaseStart, onSpellCast, onUltimateUsed, onBlockGained, onBlockBroken, onDamageDealt, onEnemyIntent) are still wired by the engine in Phase G so the J2 content fill can plug into them without architecture churn.
+Hook emissions that change combat state go through **`applyCombatEvents`** (see `03-architecture.md` / catalog). Modifier hooks (`onMatch`, `onFatalDamage`) unchanged.
 
-Remaining ~10 relics designed during execution alongside playtest feedback.
+**Catalog table:** `10-shipped-content-catalog.md` §Relics.
 
-### Status effects: 3 (locked)
+### Status effects: 5 (shipped)
 | Status | Type | Effect | Re-application |
 |--------|------|--------|----------------|
 | **Burn** | DoT | At **start of owner's phase/turn**, deals `stacks` damage, then `stacks -= 1` (decay-while-damaging) | **`stacks += incoming.stacks`** (accumulates both damage AND remaining turns) |
 | **Vulnerable** | Debuff | Owner takes +50% damage from attacks while `stacks > 0`; each tick `stacks -= 1` | **`stacks = max(current, incoming.stacks)`** (refresh; multiplier stays binary on/off) |
 | **Weak** | Debuff | Owner deals -50% damage with attacks while `stacks > 0`; each tick `stacks -= 1` | **`stacks = max(current, incoming.stacks)`** (refresh; binary multiplier) |
+| **Regen** | HoT | Heals `stacks` at owner phase start, then decays | Accumulates stacks |
+| **Strength** | Buff | Flat bonus to outgoing damage; no per-tick decay | Refreshed via `max` where applicable |
 
 All three share the same shape: `{ stacks: int }`. **One number per status (StS pattern)** — `stacks` is both the magnitude and the turns-remaining; each tick decays it by 1. 3 Burn → ticks 3, 2, 1 → expires (6 damage over 3 turns). 2 Vulnerable → multiplier active for 2 turns, then expires.
 

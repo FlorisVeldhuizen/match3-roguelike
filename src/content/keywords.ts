@@ -6,6 +6,11 @@ export type KeywordId =
   | 'weak'
   | 'regen'
   | 'strength'
+  | 'hp'
+  | 'heal'
+  | 'mana'
+  | 'wildMana'
+  | 'ultimate'
   | 'block'
   | 'riposte'
   | 'bulwark'
@@ -54,6 +59,41 @@ const defs: Record<KeywordId, KeywordDef> = {
     icon: getStatusDef('strength').icon,
     body: 'Attacks deal extra damage equal to current stacks. Sticks until removed.',
     variant: 'strength',
+  },
+  hp: {
+    id: 'hp',
+    name: 'HP',
+    icon: '♥',
+    body: 'Your health. At 0 in a fight, you lose. Carries between fights until you rest or take damage.',
+    variant: 'hp',
+  },
+  heal: {
+    id: 'heal',
+    name: 'Heal',
+    icon: '💚',
+    body: 'Restores HP. Green gems heal as you match them; spells and effects can heal too.',
+    variant: 'heal',
+  },
+  mana: {
+    id: 'mana',
+    name: 'Mana',
+    icon: '◆',
+    body: 'Fuel for casting spells. Filled by matching gems of the same colour. Clears between fights.',
+    variant: 'mana',
+  },
+  wildMana: {
+    id: 'wildMana',
+    name: 'Wild mana',
+    icon: '✦',
+    body: 'From yellow gems only. When you cast a spell, covers missing colours one-for-one.',
+    variant: 'wildMana',
+  },
+  ultimate: {
+    id: 'ultimate',
+    name: 'Ultimate',
+    icon: '⚡',
+    body: 'Built from purple gems. Spend the full bar to unleash your ultimate ability once.',
+    variant: 'ultimate',
   },
   block: {
     id: 'block',

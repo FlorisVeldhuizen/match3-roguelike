@@ -1,7 +1,15 @@
 export const TRAIL_ARRIVAL_MS = 700
+/** Mana spend trails: pool → spell (shorter than board → pool earn). */
+export const SPEND_TRAIL_ARRIVAL_MS = 420
+/** Spell button → effect target (HP, status, etc.). */
+export const SPELL_EFFECT_TRAIL_ARRIVAL_MS = 380
 
 export function scheduleAtTrailArrival(fn: () => void): number {
   return window.setTimeout(fn, TRAIL_ARRIVAL_MS)
+}
+
+export function scheduleAtSpendTrailArrival(fn: () => void): number {
+  return window.setTimeout(fn, SPEND_TRAIL_ARRIVAL_MS)
 }
 
 export const STATUS_APPLY_AFTER_HIT_MS = 350

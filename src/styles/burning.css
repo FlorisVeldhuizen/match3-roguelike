@@ -463,17 +463,17 @@
 @keyframes spell-cast-flash {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(201, 168, 108, 0);
+    box-shadow: 0 0 0 0 rgba(var(--spell-cast-rgb, 201, 168, 108), 0);
     filter: brightness(1);
   }
   30% {
     transform: scale(1.08);
-    box-shadow: 0 0 22px 4px rgba(201, 168, 108, 0.55);
+    box-shadow: 0 0 22px 4px rgba(var(--spell-cast-rgb, 201, 168, 108), 0.55);
     filter: brightness(1.45);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(201, 168, 108, 0);
+    box-shadow: 0 0 0 0 rgba(var(--spell-cast-rgb, 201, 168, 108), 0);
     filter: brightness(1);
   }
 }

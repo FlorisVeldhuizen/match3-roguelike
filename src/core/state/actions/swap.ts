@@ -9,6 +9,7 @@ import { processCascadeEvents } from '../../combat/cascadeProcessor'
 import { rollPostFightReward } from '../../relics/reward'
 import { rollGoldDrop } from '../../map/goldDrop'
 import {
+  cloneRelicsForHooks,
   runOnBlockGained,
   runOnPhaseStart,
   runOnPhaseEnd,
@@ -62,7 +63,10 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
     }
 
     let phase: CombatPhase = current.fight.phase
-    let player = current.fight.player
+    let player = {
+      ...current.fight.player,
+      relics: cloneRelicsForHooks(current.fight.player.relics),
+    }
 
     if (phase !== 'player-acting') {
       return { valid: false, events: [] }

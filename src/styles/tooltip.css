@@ -44,6 +44,26 @@
   color: #c9a8ff;
 }
 
+.kw.kw-hp {
+  color: #7fd4a0;
+}
+
+.kw.kw-heal {
+  color: #7fd4a0;
+}
+
+.kw.kw-mana {
+  color: #e8d4a8;
+}
+
+.kw.kw-wildMana {
+  color: #f0d060;
+}
+
+.kw.kw-ultimate {
+  color: #c9a8ff;
+}
+
 /* Keyword sub-tooltips: same shell as the regular hover-tooltip, but
    with a left-edge accent in the keyword's palette so the nested
    tooltip immediately reads as "extra info about that highlighted
@@ -71,6 +91,26 @@
 }
 
 .hover-tooltip.tooltip-kw-riposte {
+  border-left-color: #c9a8ff;
+}
+
+.hover-tooltip.tooltip-kw-hp {
+  border-left-color: #7fd4a0;
+}
+
+.hover-tooltip.tooltip-kw-heal {
+  border-left-color: #7fd4a0;
+}
+
+.hover-tooltip.tooltip-kw-mana {
+  border-left-color: #e8d4a8;
+}
+
+.hover-tooltip.tooltip-kw-wildMana {
+  border-left-color: #f0d060;
+}
+
+.hover-tooltip.tooltip-kw-ultimate {
   border-left-color: #c9a8ff;
 }
 

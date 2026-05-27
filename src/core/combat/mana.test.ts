@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { canAffordSpell, consumeSpellCost, totalCost } from './mana'
+import '../../content/spells'
+import {
+  canAffordSpell,
+  consumeSpellCost,
+  makeSpellCastEvent,
+  manaColorsSpentOnCast,
+  totalCost,
+} from './mana'
 import type { ManaPools } from '../../types'
 
 const pools = (over: Partial<ManaPools> = {}): ManaPools => ({
@@ -84,6 +91,25 @@ describe('consumeSpellCost', () => {
     const start = pools({ red: 3, blue: 2 })
     const after = consumeSpellCost(start, {})
     expect(after).toEqual(start)
+  })
+})
+
+describe('manaColorsSpentOnCast', () => {
+  it('includes yellow when wild covers a shortfall', () => {
+    expect(
+      manaColorsSpentOnCast(pools({ red: 0, yellow: 2 }), { red: 2 }),
+    ).toEqual(['red', 'yellow'])
+  })
+})
+
+describe('makeSpellCastEvent', () => {
+  it('tags spent colours for HUD trails', () => {
+    expect(
+      makeSpellCastEvent('ignite', pools({ red: 3 })).spentColors,
+    ).toEqual(['red'])
+    expect(makeSpellCastEvent('riposte', pools()).spentColors).toEqual([
+      'purple',
+    ])
   })
 })
 

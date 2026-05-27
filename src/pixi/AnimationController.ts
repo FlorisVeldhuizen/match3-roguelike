@@ -1,12 +1,23 @@
 import { Sprite, type Container, type Texture } from 'pixi.js'
-import type { GameEvent, GemColor, MatchShape, Pos, StatusKind } from '../types'
+import type {
+  GameEvent,
+  GemColor,
+  MatchShape,
+  PendingSpellId,
+  Pos,
+  SpellEffectLeg,
+  SpellEffectPalette,
+  StatusKind,
+} from '../types'
 import { BOARD_WIDTH } from '../types'
 import { useGameStore } from '../core/state/store'
 import { tweenSwap } from './animations/swap'
 import { tweenClear } from './animations/clear'
 import { tweenDrop } from './animations/drop'
 import { tweenShoveArc } from './animations/shove'
-import { emitGameEvent } from '../core/events/emitter'
+import { emitGameEvent, subscribeGameEvents } from '../core/events/emitter'
+import type { ManaSpendColor } from '../core/combat/mana'
+import { readSpellVisualBeat } from '../core/combat/spellVisual'
 import { awaitStep, getTimeScale } from '../debug/devControls'
 import { statusKindFromDamageSource } from '../core/combat/statuses'
 import { shoveHueAtIndex, shoveHueFor } from '../core/combat/shoveHues'
@@ -21,6 +32,7 @@ import {
   elementCenter,
   type Attractor,
   type OverlayScene,
+  type ScreenPoint,
 } from './OverlayScene'
 
 const CLEAR_MS = 280
@@ -291,6 +303,7 @@ export class AnimationController {
   // Shoved source cells suppress burst FX in the following gems-cleared
   // (the gem visibly flew off — a burst on top would double-read).
   private shovedSources = new Set<string>()
+  private spellCastUnsub: (() => void) | null = null
 
   constructor(opts: {
     parent: Container
@@ -308,6 +321,22 @@ export class AnimationController {
 
   setOverlay(overlay: OverlayScene): void {
     this.overlay = overlay
+    this.spellCastUnsub?.()
+    this.spellCastUnsub = subscribeGameEvents((event) => {
+      if (event.kind === 'spell-cast') {
+        this.spawnSpellSpendTrails(event.spellId, event.spentColors)
+      } else if (event.kind === 'spell-effect-trail') {
+        this.scheduleSpellEffectTrails(event)
+      } else if (event.kind === 'status-applied') {
+        this.scheduleStatusApplyImpact(event)
+      }
+    })
+  }
+
+  dispose(): void {
+    this.spellCastUnsub?.()
+    this.spellCastUnsub = null
+    this.overlay = null
   }
 
   get isAnimating(): boolean {
@@ -1255,6 +1284,130 @@ export class AnimationController {
     })
   }
 
+  private scheduleSpellEffectTrails(
+    event: GameEvent & { kind: 'spell-effect-trail' },
+  ): void {
+    window.setTimeout(() => {
+      this.spawnSpellEffectTrails(event.spellId, event.legs)
+    }, event.trailStartMs)
+  }
+
+  private paletteForSpellEffect(
+    palette: SpellEffectPalette,
+  ): { colors: readonly number[]; core: number } {
+    switch (palette) {
+      case 'burn':
+        return { colors: STATUS_TRAIL.burn.palette, core: STATUS_TRAIL.burn.core }
+      case 'vulnerable':
+        return {
+          colors: STATUS_TRAIL.vulnerable.palette,
+          core: STATUS_TRAIL.vulnerable.core,
+        }
+      case 'regen':
+        return { colors: STATUS_TRAIL.regen.palette, core: STATUS_TRAIL.regen.core }
+      case 'weak':
+        return { colors: STATUS_TRAIL.weak.palette, core: STATUS_TRAIL.weak.core }
+      case 'strength':
+        return {
+          colors: STATUS_TRAIL.strength.palette,
+          core: STATUS_TRAIL.strength.core,
+        }
+      case 'attack':
+        return { colors: [POOL_TRAIL_HEX.red], core: 0xffffff }
+      case 'heal':
+        return { colors: [POOL_TRAIL_HEX.green], core: 0xffffff }
+    }
+  }
+
+  private attractorForSpellLeg(leg: SpellEffectLeg): Attractor | null {
+    const { dest } = leg
+    if (dest.kind === 'player') {
+      const hud = '[data-player-hud]'
+      if (dest.slot === 'hp') {
+        const el = this.findEl(`${hud} [data-pool-target="green"]`)
+        return el ? () => elementCenter(el) : null
+      }
+      if (dest.slot === 'block') {
+        const el = this.findEl(`${hud} [data-pool-target="blue"]`)
+        return el ? () => elementCenter(el) : null
+      }
+      const chip = this.findEl(`${hud} [data-status-chip]`)
+      const bar = this.findEl(`${hud} .status-bar`)
+      const el = chip ?? bar
+      return el ? () => elementCenter(el) : null
+    }
+    if (dest.kind === 'enemy') {
+      const root = `[data-enemy-id="${dest.enemyId}"]`
+      if (dest.slot === 'hp') {
+        const el = this.findEl(`${root} .enemy-hp-bar`)
+        const frame = this.findEl(root)
+        const target = el ?? frame
+        return target ? () => elementCenter(target) : null
+      }
+      const chip = this.findEl(`${root} [data-status-chip]`)
+      const frame = this.findEl(root)
+      const target = chip ?? frame
+      return target ? () => elementCenter(target) : null
+    }
+    return null
+  }
+
+  /** Spell card releases particles toward HP, status, block, etc. */
+  private spawnSpellEffectTrails(
+    spellId: PendingSpellId,
+    legs: readonly SpellEffectLeg[],
+  ): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const spellEl = this.findEl(`[data-spell-target="${spellId}"]`)
+    const from = spellEl ? elementCenter(spellEl) : null
+    if (!from) return
+
+    for (const leg of legs) {
+      const run = () => {
+        const attractor = this.attractorForSpellLeg(leg)
+        if (!attractor || !attractor()) return
+        const { colors, core } = this.paletteForSpellEffect(leg.palette)
+        overlay.spawnTrail(from, attractor, colors, 4, core, {
+          lifeBase: 340,
+          lifeStep: 40,
+        })
+      }
+      const stagger = leg.staggerMs ?? 0
+      if (stagger > 0) window.setTimeout(run, stagger)
+      else run()
+    }
+  }
+
+  /** Mana / charge leaves HUD pools and flows into the cast spell button. */
+  private spawnSpellSpendTrails(
+    spellId: PendingSpellId,
+    spentColors: readonly ManaSpendColor[],
+  ): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const spellAttractor: Attractor = () => {
+      const el = this.findEl(`[data-spell-target="${spellId}"]`)
+      return el ? elementCenter(el) : null
+    }
+    if (!spellAttractor()) return
+
+    for (const color of spentColors) {
+      const sourceSelector =
+        color === 'purple'
+          ? '[data-pool-target="purple"]'
+          : `[data-mana-target="${color}"]`
+      const sourceEl = this.findEl(sourceSelector)
+      const from = sourceEl ? elementCenter(sourceEl) : null
+      if (!from) continue
+      const trailColor: GemColor = color === 'purple' ? 'purple' : color
+      overlay.spawnTrail(from, spellAttractor, trailColor, 3, 0xffffff, {
+        lifeBase: 360,
+        lifeStep: 42,
+      })
+    }
+  }
+
   private spawnPoolTrail(color: GemColor, blessed = false): void {
     const overlay = this.overlay
     if (!overlay) return
@@ -1451,13 +1604,100 @@ export class AnimationController {
     }
   }
 
+  private statusApplyImpactDelay(
+    event: GameEvent & { kind: 'status-applied' },
+  ): number {
+    const beat = readSpellVisualBeat(event)
+    if (beat) return beat.arriveMs
+    if (event.source?.kind === 'enemy') return 0
+    return TRAIL_ARRIVAL_MS
+  }
+
+  private statusApplyAnchor(
+    target: 'player' | string,
+    statusKind: StatusKind,
+  ): ScreenPoint | null {
+    const parentSel =
+      target === 'player' ? '[data-player-hud]' : `[data-enemy-id="${target}"]`
+    const chipEl = this.findEl(
+      `${parentSel} [data-status-chip="${statusKind}"]`,
+    )
+    const statusBarEl = this.findEl(`${parentSel} .status-bar`)
+    const parentEl = this.findEl(parentSel)
+    return (
+      (chipEl ? elementCenter(chipEl) : null) ??
+      (statusBarEl ? elementCenter(statusBarEl) : null) ??
+      (parentEl ? elementCenter(parentEl) : null)
+    )
+  }
+
+  private scheduleStatusApplyImpact(
+    event: GameEvent & { kind: 'status-applied' },
+  ): void {
+    const delay = this.statusApplyImpactDelay(event)
+    window.setTimeout(() => {
+      this.spawnStatusApplyImpact(
+        event.target,
+        event.status.kind,
+        event.status.stacks,
+      )
+    }, delay)
+  }
+
+  /** Impact pop when a status lands (spells, hex, enemy riders, etc.). */
+  private spawnStatusApplyImpact(
+    target: 'player' | string,
+    kind: StatusKind,
+    stacks: number,
+  ): void {
+    const overlay = this.overlay
+    if (!overlay) return
+    const at = this.statusApplyAnchor(target, kind)
+    if (!at) return
+    const look = STATUS_TRAIL[kind]
+    const primary = look.palette[0] ?? look.core
+    const count = Math.max(6, particleCountForImpact(stacks) * 2)
+    overlay.spawnBurst(at, primary, {
+      count,
+      speedMin: 95,
+      speedMax: 200,
+      radiusMin: 2,
+      radiusMax: 4.2,
+      lifeMs: 440,
+      gravity: 75,
+      spread: 0.9,
+    })
+    overlay.spawnBurst(at, look.core, {
+      count: Math.max(4, Math.round(count * 0.5)),
+      speedMin: 45,
+      speedMax: 115,
+      radiusMin: 1.4,
+      radiusMax: 2.8,
+      lifeMs: 380,
+      gravity: 35,
+      spread: 0.75,
+    })
+    if (kind === 'burn') {
+      overlay.spawnBurst(at, FLAME_CORE_HEX, {
+        count: 6,
+        speedMin: 30,
+        speedMax: 90,
+        radiusMin: 1.2,
+        radiusMax: 2.4,
+        lifeMs: 540,
+        gravity: -85,
+        spread: 1,
+      })
+    }
+  }
+
   private spawnStatusTrail(event: GameEvent & { kind: 'status-applied' }): void {
     const overlay = this.overlay
     if (!overlay) return
     const source = event.source
     if (!source) return
 
-    let from: { x: number; y: number } | null = null
+    let from: ScreenPoint | null = null
     if (source.kind === 'enemy') {
       const el = this.findEl(`[data-enemy-id="${source.enemyId}"]`)
       from = el ? elementCenter(el) : null
@@ -1479,27 +1719,13 @@ export class AnimationController {
     }
     if (!from) return
 
-    const target = event.target
     const statusKind = event.status.kind
-    const parentSel =
-      target === 'player'
-        ? '[data-player-hud]'
-        : `[data-enemy-id="${target}"]`
-    // Aim at chip > status-bar > parent frame (avoid HP bar — apply ≠ damage).
-    const chipEl = this.findEl(
-      `${parentSel} [data-status-chip="${statusKind}"]`,
-    )
-    const statusBarEl = this.findEl(`${parentSel} .status-bar`)
-    const parentEl = this.findEl(parentSel)
-    const lockedTarget =
-      (chipEl ? elementCenter(chipEl) : null) ??
-      (statusBarEl ? elementCenter(statusBarEl) : null) ??
-      (parentEl ? elementCenter(parentEl) : null)
+    const lockedTarget = this.statusApplyAnchor(event.target, statusKind)
     if (!lockedTarget) return
     const attractor: Attractor = () => lockedTarget
     const look = STATUS_TRAIL[statusKind]!
-    const count = particleCountForImpact(event.status.stacks)
-    overlay.spawnTrail(from, attractor, look.palette, count, look.core)
+    const trailCount = particleCountForImpact(event.status.stacks)
+    overlay.spawnTrail(from, attractor, look.palette, trailCount, look.core)
   }
 
   private spawnDamagePopup(

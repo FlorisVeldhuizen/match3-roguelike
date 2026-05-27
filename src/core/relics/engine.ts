@@ -17,6 +17,43 @@ import type {
   RelicDef,
 } from './types'
 
+const MATCH_DELTA_COLORS = [
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'purple',
+  'gold',
+] as const
+
+function matchDeltasEqual(
+  a: MatchPayload['deltas'],
+  b: MatchPayload['deltas'],
+): boolean {
+  return MATCH_DELTA_COLORS.every((c) => a[c] === b[c])
+}
+
+function describeMatchDeltaChange(
+  before: MatchPayload['deltas'],
+  after: MatchPayload['deltas'],
+): string {
+  const parts: string[] = []
+  for (const color of MATCH_DELTA_COLORS) {
+    const diff = after[color] - before[color]
+    if (diff > 0) parts.push(`+${diff} ${color}`)
+  }
+  return parts.join(', ') || 'bonus applied'
+}
+
+function relicTriggeredThisPass(
+  events: GameEvent[],
+  relicId: string,
+): boolean {
+  return events.some(
+    (e) => e.kind === 'relic-triggered' && e.relicId === relicId,
+  )
+}
+
 function buildCtx(
   inst: RelicInstance,
   snapshot: FightSnapshot,
@@ -62,7 +99,18 @@ export function runOnMatch(
     const hook = getHook(def, 'onMatch')
     if (!hook) continue
     const ctx = buildCtx(inst, snapshot, (e) => events.push(e))
+    const before = p.deltas
     p = hook(p, ctx)
+    if (
+      !matchDeltasEqual(before, p.deltas) &&
+      !relicTriggeredThisPass(events, inst.id)
+    ) {
+      events.push({
+        kind: 'relic-triggered',
+        relicId: inst.id,
+        effect: describeMatchDeltaChange(before, p.deltas),
+      })
+    }
   }
   return { payload: p, events }
 }
@@ -79,7 +127,19 @@ export function runOnDamageDealt(
     const hook = getHook(def, 'onDamageDealt')
     if (!hook) continue
     const ctx = buildCtx(inst, snapshot, (e) => events.push(e))
+    const before = p.amount
     p = hook(p, ctx)
+    if (
+      p.amount !== before &&
+      !relicTriggeredThisPass(events, inst.id)
+    ) {
+      const diff = p.amount - before
+      events.push({
+        kind: 'relic-triggered',
+        relicId: inst.id,
+        effect: diff > 0 ? `+${diff} damage` : `${diff} damage`,
+      })
+    }
   }
   return { payload: p, events }
 }
@@ -226,6 +286,21 @@ export function snapshotOf(
   cascadeLevel = 0,
 ): FightSnapshot {
   return { player, enemies, targetEnemyId, cascadeLevel }
+}
+
+/**
+ * Writable relic copies for hook side effects.
+ * Zustand+Immer freezes objects from get(); relic hooks must not mutate those
+ * snapshots. Clone before relic engine runners (runOn…, interceptFatalDamage),
+ * assign the returned array back onto player.relics when hooks may call
+ * setRunFlag or setFightFlag.
+ */
+export function cloneRelicsForHooks(relics: readonly RelicInstance[]): RelicInstance[] {
+  return relics.map((r) => ({
+    ...r,
+    runFlags: { ...r.runFlags },
+    fightFlags: { ...r.fightFlags },
+  }))
 }
 
 export function acquireRelic(relics: RelicInstance[], id: string): RelicInstance[] {

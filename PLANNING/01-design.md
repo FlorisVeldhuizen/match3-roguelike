@@ -264,7 +264,9 @@ Already aligned with the "Enemies share the board" direction above — but the c
 
 These belong in the relic/spell pool, not the class baseline — but the slice should ship at least one player-side board verb so the asymmetry isn't load-bearing on enemies alone.
 
-> **Update (2026-05-26):** the original H4 plan filled this with a Knight hero power. After H4a/H4b shipped, the hero-power slot was **dropped** (see `04-roadmap.md` §H4c). The verb candidates — Shatter Color, Detonator/Mark, Petrify (player-side), Transmute, Sweep, Banish — are too impactful to be free + cooldown; they move to the **discoverable spell pool**, acquired via shop / post-fight reward (Phase I onward). The "ship at least one player-side board verb" requirement is now pinned on the discoverable pool: at least one of these verbs must be in the slice's reward pool before the slice ships. The Knight's class identity locks to **starter kit (Bulwark + Reinforce + Ignite) + discoverable pool (remaining H4a spells, drawn via shop / post-fight rewards) + Riposte ultimate + Resolute passive**; no third hero-power button slot.
+> **Update (2026-05-26):** the original H4 plan filled this with a Knight hero power. After H4a/H4b shipped, the hero-power slot was **dropped** (see `04-roadmap.md` §H4c). The verb candidates move to the **discoverable spell pool** (shop / post-fight reward).
+>
+> **Update (2026-05-27):** player-side board verbs are **shipped** in the discoverable pool — Shatter, Transmute, Blessed Ground, Frozen Wall, plus Chain Lightning (AOE red). Starters remain Bulwark + Reinforce + Ignite. Full roster: **`10-shipped-content-catalog.md`**. Knight identity: **starters + discoverable pool + Riposte + Resolute**; no hero-power button.
 
 ### "Save up reds, cash in at the perfect moment"
 > *"a cool moment will be like oh i saved up all the red gems on the board for a specific point for when the enemy is ready, now i pop everything do a massive combo and they explode"* — pawfessor
