@@ -175,8 +175,8 @@ const SLICE_SEED = newSliceSeed()
 export const useGameStore = create<GameStore>()(
   immer((set, get) => ({
     ...initialState(SLICE_SEED),
-    selectCell: makeSelectCell(set, get),
-    setTargetEnemy: makeSetTargetEnemy(set, get),
+    selectCell: makeSelectCell(set),
+    setTargetEnemy: makeSetTargetEnemy(set),
     attemptSwap: makeAttemptSwap(set, get),
     castSpell: makeCastSpell(set, get),
     castPurify: makeCastPurify(set, get),
