@@ -1,7 +1,16 @@
 import { getKeyword, type KeywordId } from '../../content/keywords'
 import { HoverTooltip, KEYWORD_SUBTOOLTIP_DELAY_MS } from './HoverTooltip'
 
-export function Keyword({ id, children }: { id: KeywordId; children?: React.ReactNode }) {
+export function Keyword({
+  id,
+  children,
+  standalone,
+}: {
+  id: KeywordId
+  children?: React.ReactNode
+  /** Direct hover tooltip (e.g. enemy badges), not nested inside another tooltip. */
+  standalone?: boolean
+}) {
   const def = getKeyword(id)
   return (
     <HoverTooltip
@@ -10,8 +19,8 @@ export function Keyword({ id, children }: { id: KeywordId; children?: React.Reac
       variant={`kw-${def.variant}`}
       className={`kw kw-${def.variant}`}
       ariaLabel={`${def.name} — ${def.body}`}
-      autoShow
-      autoShowDelayMs={KEYWORD_SUBTOOLTIP_DELAY_MS}
+      autoShow={!standalone}
+      autoShowDelayMs={standalone ? 0 : KEYWORD_SUBTOOLTIP_DELAY_MS}
     >
       {children ?? def.name}
     </HoverTooltip>

@@ -192,22 +192,33 @@
   0% {
     opacity: 0;
     transform: scale(0.6);
-    letter-spacing: 0.08em;
   }
   20% {
     opacity: 1;
     transform: scale(1.05);
-    letter-spacing: 0.22em;
   }
   70% {
     opacity: 1;
     transform: scale(1);
-    letter-spacing: 0.24em;
   }
   100% {
     opacity: 0;
     transform: scale(1);
-    letter-spacing: 0.28em;
+  }
+}
+
+@keyframes phase-banner-text-in {
+  0% {
+    letter-spacing: 0.08em;
+  }
+  20% {
+    letter-spacing: 0.16em;
+  }
+  70% {
+    letter-spacing: 0.18em;
+  }
+  100% {
+    letter-spacing: 0.2em;
   }
 }
 
@@ -237,23 +248,28 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Size the banner from the board box, not the viewport — on medium
+     widths the board is much narrower than 100vw. */
+  container-type: inline-size;
+  padding-inline: 0.35rem;
   /* .board-mount sets line-height: 0 for the canvas; don't inherit that here. */
   line-height: normal;
 }
 
 .phase-banner {
   position: relative;
+  flex-shrink: 0;
   pointer-events: none;
   line-height: 1.15;
-  padding: clamp(0.6rem, 2vw, 1rem) clamp(1.1rem, 4.5vw, 2.8rem);
+  padding: clamp(0.55rem, 2.5cqi, 1rem) clamp(0.75rem, 5cqi, 2.8rem);
   border-radius: 0.4rem;
   font-family: 'MedievalSharp', cursive;
-  font-size: clamp(1.4rem, 6vw, 2.4rem);
+  font-size: clamp(1.1rem, 10cqi, 2.4rem);
   font-weight: 900;
-  letter-spacing: clamp(0.1em, 0.6vw, 0.2em);
+  letter-spacing: clamp(0.05em, 0.55cqi, 0.16em);
   text-transform: uppercase;
   text-align: center;
-  max-width: calc(100vw - 1rem);
+  max-width: 100%;
   white-space: nowrap;
   color: var(--parchment);
   text-shadow:
@@ -267,7 +283,7 @@
   backdrop-filter: blur(2px);
   overflow: hidden;
   animation: phase-banner-in 1.05s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
-  will-change: transform, opacity, letter-spacing;
+  will-change: transform, opacity;
 }
 
 .phase-banner::before {
@@ -327,7 +343,7 @@
     0 0 50px rgba(154, 125, 82, 0.36),
     0 10px 30px rgba(0, 0, 0, 0.55);
   color: var(--gold-2);
-  font-size: clamp(1.25rem, 5.4vw, 2.1rem);
+  font-size: clamp(1rem, 9cqi, 2.1rem);
 }
 
 /* Player broke the enemy's shield — the enemy's turn is spent recovering.
@@ -345,4 +361,7 @@
 .phase-banner-text {
   position: relative;
   z-index: 1;
+  display: inline-block;
+  animation: phase-banner-text-in 1.05s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  will-change: letter-spacing;
 }

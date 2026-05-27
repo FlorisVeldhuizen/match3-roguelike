@@ -4,7 +4,9 @@ import { useTooltipReveal } from '../useTooltipReveal'
 import { useGameStore } from '../../core/state/store'
 import { getReachableFrom } from '../../core/map/paths'
 import { tryGetRelic } from '../../core/relics/registry'
-import type { MapNode, NodeKind } from '../../types'
+import type { RelicDef } from '../../core/relics/types'
+import type { MapNode, NodeKind, RelicInstance } from '../../types'
+import { HoverTooltip } from './HoverTooltip'
 
 const FLOOR_GAP_PX = 96
 const SLOT_GAP_PX = 76
@@ -58,6 +60,18 @@ function floorLabel(column: number, lastColumn: number): string {
   return ROMAN[column + 1] ?? String(column + 1)
 }
 
+function relicTooltipBody(def: RelicDef, inst: RelicInstance) {
+  const description =
+    inst.upgraded && def.upgradedDescription ? def.upgradedDescription : def.description
+  return (
+    <>
+      <div className="relic-tooltip-rarity">{def.rarity}</div>
+      <div className="relic-tooltip-desc">{description}</div>
+      {def.orderHint ? <div className="relic-tooltip-hint">{def.orderHint}</div> : null}
+    </>
+  )
+}
+
 export function MapScreen() {
   const map = useGameStore((s) => s.map)
   const runPhase = useGameStore((s) => s.runPhase)
@@ -73,13 +87,27 @@ export function MapScreen() {
     if (runPhase !== 'map') return
     const el = scrollerRef.current
     if (!el) return
-    const current = el.querySelector('.map-node-current') as SVGGraphicsElement | null
-    if (current?.scrollIntoView) {
-      current.scrollIntoView({ block: 'center', behavior: 'auto' })
-    } else {
-      el.scrollTop = el.scrollHeight
+
+    const focusMap = () => {
+      const mobile = window.matchMedia('(max-width: 760px)').matches
+      const block: ScrollLogicalPosition = mobile ? 'end' : 'center'
+      const target =
+        el.querySelector('.map-node-current') ??
+        el.querySelector('.map-anchor') ??
+        el.querySelector('.map-canvas-wrap')
+      if (target) {
+        target.scrollIntoView({ block, behavior: 'auto' })
+        return
+      }
+      el.scrollTop = mobile ? el.scrollHeight : 0
     }
-  }, [runPhase])
+
+    // Wait for flex layout + SVG dimensions before scrolling.
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(focusMap)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [runPhase, map.currentNodeId])
 
   const hoveredNode = hovered ? map.nodes.find((n) => n.id === hovered) : null
   const [stagedTipNode, setStagedTipNode] = useState<MapNode | null>(null)
@@ -142,53 +170,57 @@ export function MapScreen() {
   return (
     <div className="map-screen" role="region" aria-label="Run map" ref={scrollerRef}>
       <div className="map-screen-inner">
-        <div className="map-brand">
-          <span className="map-brand-rule" aria-hidden />
-          <span className="map-brand-glyph" aria-hidden>
-            ☘
-          </span>
-          <h1 className="map-wordmark">Renzadora</h1>
-          <span className="map-brand-glyph" aria-hidden>
-            ☘
-          </span>
-          <span className="map-brand-rule" aria-hidden />
-        </div>
-        <p className="map-sub">
-          {anchorVisible
-            ? 'Pick an entrance to begin the climb.'
-            : 'Pick a connected node to continue.'}
-        </p>
-        <div className="map-run-sigil" aria-label="Run status">
-          <div className="map-run-hp" title={`HP ${player.hp} / ${player.maxHp}`}>
-            <span className="map-run-hp-icon" aria-hidden>
-              ♥
+        <header className="map-header">
+          <div className="map-brand">
+            <span className="map-brand-rule" aria-hidden />
+            <span className="map-brand-glyph" aria-hidden>
+              ☘
             </span>
-            <span className="map-run-hp-text">
-              <span className="map-run-hp-cur">{player.hp}</span>
-              <span className="map-run-hp-sep">/</span>
-              <span className="map-run-hp-max">{player.maxHp}</span>
+            <h1 className="map-wordmark">Renzadora</h1>
+            <span className="map-brand-glyph" aria-hidden>
+              ☘
             </span>
+            <span className="map-brand-rule" aria-hidden />
           </div>
-          {player.relics.length > 0 ? (
-            <div className="map-run-relics" aria-label="Relics carried">
-              {player.relics.map((inst) => {
-                const def = tryGetRelic(inst.id)
-                if (!def) return null
-                return (
-                  <span
-                    key={inst.id}
-                    className={`map-run-relic rarity-${def.rarity}`}
-                    title={def.name}
-                  >
-                    {def.icon}
-                  </span>
-                )
-              })}
+          <p className="map-sub">
+            {anchorVisible
+              ? 'Pick an entrance to begin the climb.'
+              : 'Pick a connected node to continue.'}
+          </p>
+          <div className="map-run-sigil" aria-label="Run status">
+            <div className="map-run-hp" title={`HP ${player.hp} / ${player.maxHp}`}>
+              <span className="map-run-hp-icon" aria-hidden>
+                ♥
+              </span>
+              <span className="map-run-hp-text">
+                <span className="map-run-hp-cur">{player.hp}</span>
+                <span className="map-run-hp-sep">/</span>
+                <span className="map-run-hp-max">{player.maxHp}</span>
+              </span>
             </div>
-          ) : (
-            <div className="map-run-relics-empty">No relics yet</div>
-          )}
-        </div>
+            {player.relics.length > 0 ? (
+              <div className="map-run-relics" aria-label="Relics carried">
+                {player.relics.map((inst) => {
+                  const def = tryGetRelic(inst.id)
+                  if (!def) return null
+                  return (
+                    <HoverTooltip
+                      key={inst.id}
+                      className={`map-run-relic rarity-${def.rarity}`}
+                      title={def.name}
+                      body={relicTooltipBody(def, inst)}
+                      ariaLabel={def.name}
+                    >
+                      {def.icon}
+                    </HoverTooltip>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="map-run-relics-empty">No relics yet</div>
+            )}
+          </div>
+        </header>
         <div className="map-canvas-wrap">
           <svg
             className="map-canvas"

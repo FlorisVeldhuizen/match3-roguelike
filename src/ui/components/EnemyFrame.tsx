@@ -506,12 +506,12 @@ export function EnemyFrame() {
             <div className="enemy-name" title={traitHint}>
               {enemy.name}
               {isEnraged && (
-                <Keyword id="enrage">
+                <Keyword id="enrage" standalone>
                   <span className="enemy-enraged-badge">ENRAGED</span>
                 </Keyword>
               )}
               {isElite && (
-                <Keyword id="elite">
+                <Keyword id="elite" standalone>
                   <span className="enemy-elite-badge">ELITE</span>
                 </Keyword>
               )}
