@@ -1,6 +1,5 @@
 import { type RngState } from '../rng/mulberry32'
 import {
-  BOARD_WIDTH,
   MANA_CAPS,
   type Cell,
   type DrainedColor,
@@ -19,6 +18,7 @@ import {
 import { nextInt } from '../rng/mulberry32'
 import { applyStatusToList } from './statuses'
 import { runCascade } from '../board/cascade'
+import { detectMatches } from '../board/detectMatches'
 import { processCascadeEvents } from './cascadeProcessor'
 
 export const IGNITE_BURN_STACKS = 3
@@ -289,7 +289,7 @@ export function resolveTransmute(
       cell.gemColor === fromColor ? { ...cell, gemColor: toColor } : cell,
     ),
   )
-  const cascadeResult = runCascade(nextBoard, rng)
+  const cascadeResult = runCascade(nextBoard, rng, detectMatches(nextBoard))
   nextBoard = cascadeResult.board
   const processed = processCascadeEvents(
     cascadeResult.events,
@@ -339,7 +339,7 @@ export function resolveBlessedGround(
     const row = nextBoard[pos.y]!.slice()
     row[pos.x] = {
       ...row[pos.x]!,
-      flags: { ...row[pos.x]!.flags, blessed: 3 },
+      flags: { ...row[pos.x]!.flags, blessed: true },
     }
     const b = nextBoard.slice()
     b[pos.y] = row
@@ -365,9 +365,9 @@ export function resolveFrozenWall(
     petrifiedRows: next,
     events: [
       {
-        kind: 'petrify-row-placed',
+        kind: 'petrify-fired',
+        enemyId: 'frozen-wall',
         row,
-        cells: Array.from({ length: BOARD_WIDTH }, (_, x) => ({ x, y: row })),
         duration: 2,
       },
     ],

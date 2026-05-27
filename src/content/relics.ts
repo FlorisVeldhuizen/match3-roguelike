@@ -133,6 +133,7 @@ const harvester: RelicDef = {
       )
       if (others.length === 0) return
       const target = others[Math.floor(Math.random() * others.length)]
+      if (!target) return
       const dmg = ctx.upgraded ? 3 : 2
       ctx.emit({
         kind: 'relic-triggered',

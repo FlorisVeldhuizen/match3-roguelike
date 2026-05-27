@@ -16,7 +16,7 @@ import {
   runOnMatch,
   snapshotOf,
 } from '../relics/engine'
-import { applyMatchRedDamage, pickNextTarget } from './aoe'
+import { applyMatchRedDamage } from './aoe'
 import { applyStatusToList } from './statuses'
 import { getStatusTemplate, BURN_FROM_TILE_BONUS } from './statuses'
 

@@ -25,7 +25,6 @@ import { canAffordSpell, consumeSpellCost } from '../../combat/mana'
 import {
   resolveBlessedGround,
   resolveBrittle,
-  resolveChainLightning,
   resolveCinderLash,
   resolveFocus,
   resolveFrozenWall,

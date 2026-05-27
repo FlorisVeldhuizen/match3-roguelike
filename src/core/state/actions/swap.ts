@@ -9,7 +9,6 @@ import { processCascadeEvents } from '../../combat/cascadeProcessor'
 import { rollPostFightReward } from '../../relics/reward'
 import { rollGoldDrop } from '../../map/goldDrop'
 import {
-  runOnBlockBroken,
   runOnBlockGained,
   runOnPhaseStart,
   runOnPhaseEnd,
