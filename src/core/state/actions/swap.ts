@@ -1,6 +1,7 @@
 import { generateBoard, hasValidSwap } from '../../board/generation'
 import { resolveSwap, type SwapResolution } from '../../board/cascade'
 import { beginPlayerPhase, resolveEndOfPhase } from '../../combat/turn'
+import { applyCombatEvents } from '../../combat/applyCombatEvents'
 import { executeEnemyTurn } from '../../combat/enemyTurn'
 import { pickNextTarget } from '../../combat/aoe'
 import { hasExtraTurnMatch } from '../../combat/pools'
@@ -8,6 +9,7 @@ import { processCascadeEvents } from '../../combat/cascadeProcessor'
 import { rollPostFightReward } from '../../relics/reward'
 import { rollGoldDrop } from '../../map/goldDrop'
 import {
+  runOnBlockBroken,
   runOnBlockGained,
   runOnPhaseStart,
   runOnPhaseEnd,
@@ -151,6 +153,17 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
         snapshotOf(player, enemies, targetEnemyId, 0),
       )
       tailEvents.push(...phaseEndEvents)
+      const phaseEndApplied = applyCombatEvents(
+        phaseEndEvents,
+        player,
+        enemies,
+        targetEnemyId,
+      )
+      player = phaseEndApplied.player
+      enemies = phaseEndApplied.enemies
+      targetEnemyId = phaseEndApplied.targetEnemyId
+      tailEvents.push(...phaseEndApplied.derived)
+
       const playerBlockGained = resolved.events.find(
         (e) => e.kind === 'block-gained',
       )
@@ -161,6 +174,16 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
           snapshotOf(player, enemies, targetEnemyId, 0),
         )
         tailEvents.push(...blockEvents)
+        const blockApplied = applyCombatEvents(
+          blockEvents,
+          player,
+          enemies,
+          targetEnemyId,
+        )
+        player = blockApplied.player
+        enemies = blockApplied.enemies
+        targetEnemyId = blockApplied.targetEnemyId
+        tailEvents.push(...blockApplied.derived)
       }
 
       if (phase === 'enemy-acting') {
@@ -215,6 +238,16 @@ export function makeAttemptSwap(set: StoreSet, get: StoreGet) {
               snapshotOf(player, enemies, targetEnemyId, 0),
             )
             tailEvents.push(...startEvents)
+            const startApplied = applyCombatEvents(
+              startEvents,
+              player,
+              enemies,
+              targetEnemyId,
+            )
+            player = startApplied.player
+            enemies = startApplied.enemies
+            targetEnemyId = startApplied.targetEnemyId
+            tailEvents.push(...startApplied.derived)
           }
           tailEvents.push({ kind: 'phase-changed', phase })
         }

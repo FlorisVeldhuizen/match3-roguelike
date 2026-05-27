@@ -6,6 +6,7 @@ import {
   type HexedColor,
   type Player,
 } from '../../types'
+import { applyCombatEvents } from './applyCombatEvents'
 import { getArchetype } from './archetypeRegistry'
 import { applyMultiplier } from './math'
 import { getCascadeMultiplier } from './multipliers'
@@ -81,6 +82,16 @@ export function processCascadeEvents(
         snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
       )
       stream.push(...onCascade)
+      const cascadeApplied = applyCombatEvents(
+        onCascade,
+        player,
+        enemies,
+        targetEnemyId,
+      )
+      player = cascadeApplied.player
+      enemies = cascadeApplied.enemies
+      targetEnemyId = cascadeApplied.targetEnemyId
+      stream.push(...cascadeApplied.derived)
       continue
     }
 
@@ -207,9 +218,16 @@ export function processCascadeEvents(
             snapshotOf(player, enemies, targetEnemyId, cascadeLevel),
           )
           stream.push(...killEvents)
-          if (killedId === targetEnemyId) {
-            targetEnemyId = pickNextTarget(enemies, null)
-          }
+          const killApplied = applyCombatEvents(
+            killEvents,
+            player,
+            enemies,
+            targetEnemyId,
+          )
+          player = killApplied.player
+          enemies = killApplied.enemies
+          targetEnemyId = killApplied.targetEnemyId
+          stream.push(...killApplied.derived)
         }
       } else if (color === 'green') {
         const before = player.hp

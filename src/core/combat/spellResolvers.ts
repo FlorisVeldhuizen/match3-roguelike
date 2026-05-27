@@ -176,6 +176,7 @@ export function resolveShatter(
   color: GemColor,
   targetEnemyId: string | null,
   hexedColors: readonly HexedColor[] = [],
+  drainedColors: readonly DrainedColor[] = [],
 ): {
   player: Player
   enemies: Enemy[]
@@ -219,6 +220,7 @@ export function resolveShatter(
     enemies,
     targetEnemyId,
     hexedColors,
+    drainedColors,
   )
 
   return {

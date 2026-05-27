@@ -113,7 +113,13 @@ export function executeEnemyTurn(
     let updatedEnemy: Enemy = workingEnemy
 
     if (intent.kind === 'attack') {
-      const r = resolveAttackIntent(intent, updatedEnemy, nextPlayer, nextEnemies)
+      const r = resolveAttackIntent(
+        intent,
+        updatedEnemy,
+        nextPlayer,
+        nextEnemies,
+        nextTargetEnemyId,
+      )
       updatedEnemy = r.source
       nextPlayer = r.player
       events.push(...r.events)
@@ -169,7 +175,13 @@ export function executeEnemyTurn(
       })
       const inner = intent.resolved
       if (inner.kind === 'attack') {
-        const r = resolveAttackIntent(inner, updatedEnemy, nextPlayer, nextEnemies)
+        const r = resolveAttackIntent(
+          inner,
+          updatedEnemy,
+          nextPlayer,
+          nextEnemies,
+          nextTargetEnemyId,
+        )
         updatedEnemy = r.source
         nextPlayer = r.player
         events.push(...r.events)
