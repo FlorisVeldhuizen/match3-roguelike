@@ -30,7 +30,6 @@ import { shoveHueAtIndex, shoveHueFor } from '../core/combat/shoveHues'
 import {
   TRAIL_ARRIVAL_MS,
   scheduleAtTrailArrival,
-  trailDurationBetween,
   type TrailPoint,
   SWAP_MS,
   DROP_PER_CELL_MS,

@@ -88,7 +88,7 @@ export function useHudEventChannel(): HudEventChannel {
     purple: 0,
     gold: 0,
   })
-  const bumpSpendPulse = (colors: GemColor[]) => {
+  const bumpSpendPulse = (colors: readonly GemColor[]) => {
     for (const color of colors) {
       setSpendPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
       window.setTimeout(() => {
@@ -155,8 +155,6 @@ export function useHudEventChannel(): HudEventChannel {
           const amount = trail.amount ?? 0
           if (amount <= 0) return
           const dest = trail.earnDest ?? 'effect'
-          const splitMana =
-            color !== 'purple' && color !== 'yellow' && color !== 'gold'
           const bumpPulse = () => {
             setPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
             window.setTimeout(() => {
@@ -185,17 +183,11 @@ export function useHudEventChannel(): HudEventChannel {
           if (color === 'blue') setStagedBlue((s) => s + amount)
           else if (color === 'purple') setDisplayedCharge((c) => c + amount)
           else if (color === 'gold') setDisplayedGold((g) => g + amount)
-          else if (!splitMana) {
-            if (
-              color === 'red' ||
-              color === 'green' ||
-              color === 'yellow'
-            ) {
-              setDisplayedMana((m) => ({
-                ...m,
-                [color]: Math.min(MANA_CAPS[color], m[color] + amount),
-              }))
-            }
+          else if (color === 'yellow') {
+            setDisplayedMana((m) => ({
+              ...m,
+              yellow: Math.min(MANA_CAPS.yellow, m.yellow + amount),
+            }))
           }
           return
         }

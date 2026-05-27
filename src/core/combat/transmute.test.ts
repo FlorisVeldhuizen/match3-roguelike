@@ -28,7 +28,7 @@ function boardWithRow(colors: Cell['gemColor'][]): Cell[][] {
 describe('resolveTransmute', () => {
   it('emits gems-transmuted before cascade events', () => {
     const board = boardWithRow(['red', 'red', 'red', 'blue', 'blue', 'blue', 'green', 'green'])
-    const rng: RngState = { seed: 42, state: 42 }
+    const rng: RngState = { seed: 42 }
     const r = resolveTransmute(
       board,
       'red',

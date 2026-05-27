@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  TRAIL_ARRIVAL_MS,
   TRAIL_MAX_MS,
   TRAIL_MIN_MS,
   TRAIL_SHORT_HOP_MIN_MS,

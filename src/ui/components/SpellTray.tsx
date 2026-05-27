@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { useGameStore } from '../../core/state/store'
 import {
   getPendingMeta,
+  getSpell,
   isUltimateId,
   listSpellsForTray,
   listUltimates,

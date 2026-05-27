@@ -20,7 +20,7 @@ export function manaCostEntries(
 export function spellManaClassName(cost: ManaCost): string {
   const entries = manaCostEntries(cost)
   if (entries.length === 0) return 'spell-mana-free'
-  if (entries.length === 1) return `spell-mana-${entries[0].color}`
+  if (entries.length === 1) return `spell-mana-${entries[0]!.color}`
   return 'spell-mana-mixed'
 }
 
@@ -35,5 +35,5 @@ export const MANA_THEME_RGB: Record<ManaThemeColor, string> = {
 export function primaryManaRgb(cost: ManaCost): string {
   const entries = manaCostEntries(cost)
   if (entries.length === 0) return '201, 168, 108'
-  return MANA_THEME_RGB[entries[0].color]
+  return MANA_THEME_RGB[entries[0]!.color]
 }
