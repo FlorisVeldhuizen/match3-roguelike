@@ -1,13 +1,9 @@
 import {
-  Children,
-  cloneElement,
-  isValidElement,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type MouseEvent,
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -144,7 +140,9 @@ export function HoverTooltip({
   const displayPos = tipMounted ? pos : null
   const tipRevealed = useTooltipReveal(displayPos !== null, tipVisible)
 
-  anchorOpenRef.current = anchorHovered
+  useLayoutEffect(() => {
+    anchorOpenRef.current = anchorHovered
+  }, [anchorHovered])
 
   useTooltipTouchAnchor(anchorHovered, setAnchorHovered, anchorRef, tipRef, {
     dismissOnOutside: !autoShow,
@@ -171,24 +169,19 @@ export function HoverTooltip({
     return () => el.removeEventListener('touchstart', onTouchStart)
   }, [touchGateCast])
 
-  let trigger: ReactNode = children
-  if (touchGateCast) {
-    const only = Children.toArray(children)
-    const child = only.length === 1 && isValidElement(only[0]) ? only[0] : null
-    if (child) {
-      trigger = cloneElement(child, {
-        onClick: (e: MouseEvent<HTMLElement>) => {
-          const orig = child.props.onClick as ((e: MouseEvent<HTMLElement>) => void) | undefined
-          if (pendingTouchClickRef.current) {
-            pendingTouchClickRef.current = false
-            // First touch: touchend opens tooltip; synthetic click must not cast.
-            if (!touchWasOpenRef.current) return
-          }
-          orig?.(e)
-        },
-      })
-    }
-  }
+  const gateTouchCastClick = useCallback(
+    (e: { preventDefault: () => void; stopPropagation: () => void }) => {
+      if (!touchGateCast) return
+      if (!pendingTouchClickRef.current) return
+      pendingTouchClickRef.current = false
+      // First touch: touchend opens tooltip; synthetic click must not cast.
+      if (!touchWasOpenRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    },
+    [touchGateCast],
+  )
 
   useLayoutEffect(() => {
     if (!tipMounted) return
@@ -255,9 +248,10 @@ export function HoverTooltip({
         onBlur={() => {
           if (canOpenFromMouse()) setAnchorHovered(false)
         }}
+        onClickCapture={gateTouchCastClick}
         aria-label={ariaLabel}
       >
-        {trigger}
+        {children}
       </span>
       {tipMounted &&
         createPortal(

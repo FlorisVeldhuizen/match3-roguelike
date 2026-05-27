@@ -192,7 +192,7 @@ export function SpellTray() {
   const traySpells = listSpellsForTray(ownedSpellIds, unlockAll)
   const trayUltimates = listUltimates()
   const { ref: trayScrollRef, canScrollStart, canScrollEnd, hasOverflow, scrollByDirection } =
-    useHorizontalScrollHints([traySpells.length, trayUltimates.length, unlockAll])
+    useHorizontalScrollHints(traySpells.length, trayUltimates.length, unlockAll)
 
   const chevronScrollStart = useHoldRepeat(() => scrollByDirection(-1), !canScrollStart, {
     onRepeat: () => scrollByDirection(-1, { behavior: 'auto' }),

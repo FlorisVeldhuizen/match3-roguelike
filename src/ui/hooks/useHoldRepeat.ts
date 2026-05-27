@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type PointerEventHandler } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, type PointerEventHandler } from 'react'
 
 const DEFAULT_HOLD_DELAY_MS = 400
 const DEFAULT_REPEAT_MS = 320
@@ -17,9 +17,11 @@ export function useHoldRepeat(
   opts?: { onRepeat?: () => void; holdDelayMs?: number; repeatMs?: number },
 ): HoldRepeatHandlers {
   const tapRef = useRef(onTap)
-  tapRef.current = onTap
   const repeatRef = useRef(opts?.onRepeat ?? onTap)
-  repeatRef.current = opts?.onRepeat ?? onTap
+  useLayoutEffect(() => {
+    tapRef.current = onTap
+    repeatRef.current = opts?.onRepeat ?? onTap
+  })
 
   const holdDelayMs = opts?.holdDelayMs ?? DEFAULT_HOLD_DELAY_MS
   const repeatMs = opts?.repeatMs ?? DEFAULT_REPEAT_MS

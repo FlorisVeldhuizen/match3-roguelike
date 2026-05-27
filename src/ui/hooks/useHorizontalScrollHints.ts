@@ -12,7 +12,11 @@ export type HorizontalScrollHints = {
 }
 
 /** Tracks horizontal overflow and scroll position for fade / rivet affordances. */
-export function useHorizontalScrollHints(deps: readonly unknown[] = []): HorizontalScrollHints {
+export function useHorizontalScrollHints(
+  spellCount: number,
+  ultimateCount: number,
+  unlockAll: boolean,
+): HorizontalScrollHints {
   const ref = useRef<HTMLDivElement | null>(null)
   const [hints, setHints] = useState({
     canScrollStart: false,
@@ -47,12 +51,12 @@ export function useHorizontalScrollHints(deps: readonly unknown[] = []): Horizon
       el.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
     }
-  }, [update, ...deps])
+  }, [update, spellCount, ultimateCount, unlockAll])
 
   useEffect(() => {
     const id = requestAnimationFrame(update)
     return () => cancelAnimationFrame(id)
-  }, [update, ...deps])
+  }, [update, spellCount, ultimateCount, unlockAll])
 
   const scrollByDirection = useCallback((direction: -1 | 1, opts?: { behavior?: ScrollBehavior }) => {
     const el = ref.current

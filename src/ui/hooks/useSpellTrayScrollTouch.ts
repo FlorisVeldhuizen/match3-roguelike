@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { SPELL_TRAY_SCROLL_GESTURE } from '../spellTrayScrollGesture'
 
 const DRAG_THRESHOLD_PX = 12
@@ -10,7 +10,9 @@ export function useSpellTrayScrollTouch(
 ): { didDragRef: RefObject<boolean> } {
   const didDragRef = useRef(false)
   const onGestureRef = useRef(onScrollGesture)
-  onGestureRef.current = onScrollGesture
+  useLayoutEffect(() => {
+    onGestureRef.current = onScrollGesture
+  })
 
   const fireGesture = useCallback(() => {
     onGestureRef.current()
