@@ -50,7 +50,26 @@ export function subscribeTimeScale(cb: (value: number) => void): () => void {
 
 let stepModeOn = readStored(STORAGE_KEYS.stepMode, (raw) => raw === 'true') ?? false
 let pendingStepResolve: (() => void) | null = null
+let pendingStepLabel: string | null = null
+let stepCount = 0
 const stepModeListeners = new Set<(on: boolean) => void>()
+
+export type StepStatus = {
+  pending: boolean
+  label: string | null
+  count: number
+}
+const stepStatusListeners = new Set<(status: StepStatus) => void>()
+
+function emitStepStatus(): void {
+  if (stepStatusListeners.size === 0) return
+  const status: StepStatus = {
+    pending: pendingStepResolve !== null,
+    label: pendingStepLabel,
+    count: stepCount,
+  }
+  for (const cb of stepStatusListeners) cb(status)
+}
 
 export function isStepMode(): boolean {
   return stepModeOn
@@ -60,11 +79,15 @@ export function setStepMode(on: boolean): void {
   if (on === stepModeOn) return
   stepModeOn = on
   writeStored(STORAGE_KEYS.stepMode, on ? 'true' : 'false')
-  // Release pending gate so AC queue doesn't stall.
-  if (!on && pendingStepResolve) {
-    const resolve = pendingStepResolve
-    pendingStepResolve = null
-    resolve()
+  if (!on) {
+    stepCount = 0
+    if (pendingStepResolve) {
+      const resolve = pendingStepResolve
+      pendingStepResolve = null
+      pendingStepLabel = null
+      resolve()
+    }
+    emitStepStatus()
   }
   for (const cb of stepModeListeners) cb(on)
 }
@@ -74,10 +97,25 @@ export function subscribeStepMode(cb: (on: boolean) => void): () => void {
   return () => stepModeListeners.delete(cb)
 }
 
-export function awaitStep(): Promise<void> {
+export function getStepStatus(): StepStatus {
+  return {
+    pending: pendingStepResolve !== null,
+    label: pendingStepLabel,
+    count: stepCount,
+  }
+}
+
+export function subscribeStepStatus(cb: (status: StepStatus) => void): () => void {
+  stepStatusListeners.add(cb)
+  return () => stepStatusListeners.delete(cb)
+}
+
+export function awaitStep(label?: string): Promise<void> {
   if (!stepModeOn) return Promise.resolve()
   return new Promise<void>((resolve) => {
     pendingStepResolve = resolve
+    pendingStepLabel = label ?? null
+    emitStepStatus()
   })
 }
 
@@ -85,6 +123,9 @@ export function advanceStep(): void {
   if (!pendingStepResolve) return
   const resolve = pendingStepResolve
   pendingStepResolve = null
+  pendingStepLabel = null
+  stepCount += 1
+  emitStepStatus()
   resolve()
 }
 

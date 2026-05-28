@@ -898,7 +898,7 @@
   background: rgba(8, 6, 4, 0.78);
   display: grid;
   place-items: center;
-  z-index: 12;
+  z-index: 120;
   backdrop-filter: blur(3px);
   padding: 1rem;
   overflow-y: auto;

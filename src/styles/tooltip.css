@@ -142,9 +142,11 @@
 body:has(.reward-overlay) .hover-tooltip,
 body:has(.victory-overlay) .hover-tooltip,
 body:has(.game-over-overlay) .hover-tooltip,
+body:has(.spell-picker-overlay) .hover-tooltip,
 body:has(.reward-overlay) .intent-tooltip,
 body:has(.victory-overlay) .intent-tooltip,
-body:has(.game-over-overlay) .intent-tooltip {
+body:has(.game-over-overlay) .intent-tooltip,
+body:has(.spell-picker-overlay) .intent-tooltip {
   display: none;
 }
 

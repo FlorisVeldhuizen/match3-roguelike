@@ -26,7 +26,6 @@ import {
 import { useGameStore } from '../../core/state/store'
 import type { EnemyArchetype } from '../../types'
 import {
-  advanceStep,
   emitDebugSwap,
   getTimeScale,
   isStepMode,
@@ -272,22 +271,20 @@ export function SettingsPanel() {
                   ))}
                 </div>
               </div>
-              <label className="settings-row">
+              <label
+                className="settings-row"
+                title="Pauses between game events. A floating stepper appears in the corner to advance them."
+              >
                 <input
                   type="checkbox"
                   checked={stepOn}
-                  onChange={(e) => setStepMode(e.target.checked)}
+                  onChange={(e) => {
+                    setStepMode(e.target.checked)
+                    if (e.target.checked) setOpen(false)
+                  }}
                 />
                 <span className="settings-label">Step mode</span>
               </label>
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={advanceStep}
-                disabled={!stepOn}
-              >
-                Step ▶
-              </button>
               <label
                 className="settings-row"
                 title="Show the full spell pool in the tray. Off = starter kit only (baseline kit + ultimate); rest are treated as discoverable."

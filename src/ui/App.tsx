@@ -6,6 +6,7 @@ import { VictoryOverlay } from './components/VictoryOverlay'
 import { GameOverOverlay } from './components/GameOverOverlay'
 import { PhaseBanner } from './components/PhaseBanner'
 import { SettingsPanel } from './components/SettingsPanel'
+import { StepperOverlay } from './components/StepperOverlay'
 import { ArcaneBackground } from './components/ArcaneBackground'
 import { AriaLiveAnnouncer } from './components/AriaLiveAnnouncer'
 import { CRTOverlay } from './components/CRTOverlay'
@@ -93,6 +94,7 @@ export function App() {
       <MapScreen />
       <AriaLiveAnnouncer />
       <CRTOverlay />
+      {import.meta.env.DEV ? <StepperOverlay /> : null}
     </>
   )
 }

@@ -104,9 +104,9 @@
     line-height: 12px;
   }
   .spell-tray-shell {
-    /* Slim rim; chevrons float in the padding, viewport stays full width. */
+    /* Slim rim; chevrons float over the viewport edges, viewport stays full width. */
     --spell-tray-edge: 0.4rem;
-    --spell-tray-chevron-hit: 1.75rem;
+    --spell-tray-chevron-hit: 2.75rem;
     --spell-tray-chevron-gap: 0.12rem;
     padding: 0.42rem var(--spell-tray-edge) 0.38rem;
     column-gap: 0;
@@ -118,11 +118,12 @@
     bottom: 0;
     z-index: 6;
     width: var(--spell-tray-chevron-hit);
-    min-width: 0;
+    min-width: var(--spell-tray-chevron-hit);
     max-width: var(--spell-tray-chevron-hit);
     min-height: 44px;
     height: auto;
     transform: none;
+    touch-action: none;
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron-start {
     left: var(--spell-tray-edge);
@@ -155,9 +156,9 @@
     margin-inline: 0;
     padding-block: 0.4rem;
   }
-  /* Peek room at scroll ends so cards are not trapped under rim chevrons. */
+  /* Match .spell-tray padding-inline so resting state and chevron-snap land at the same 0.15rem inset */
   .spell-tray-shell.has-overflow .spell-tray-scroll {
-    scroll-padding-inline: calc(var(--spell-tray-chevron-hit) + var(--spell-tray-chevron-gap));
+    scroll-padding-inline: 0.15rem;
   }
   .spell-tray-viewport::before,
   .spell-tray-viewport::after {

@@ -72,4 +72,28 @@ describe('scrollHorizontalSnap', () => {
     // Leading card sits at scroll-padding; second card is the first past the edge.
     expect(scrolledTo).toBe(next)
   })
+
+  it('scrolls to the previous card before the leading edge (scroll left)', () => {
+    const prev = mockItem(26)
+    const leading = mockItem(130)
+    const items = [prev, leading, mockItem(238)]
+    const scrollEl = {
+      scrollLeft: 78,
+      clientWidth: 300,
+      scrollWidth: 600,
+      getBoundingClientRect: () => mockRect(100, 300),
+      querySelectorAll: () => items,
+      scrollTo: vi.fn(),
+    } as unknown as HTMLElement
+
+    let scrolledTo: HTMLElement | undefined
+    prev.scrollIntoView = () => {
+      scrolledTo = prev
+    }
+
+    scrollHorizontalSnap(scrollEl, -1, { behavior: 'auto' })
+
+    expect(scrolledTo).toBe(prev)
+    expect(scrollEl.scrollTo).not.toHaveBeenCalled()
+  })
 })

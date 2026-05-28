@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { useGameStore } from '../../core/state/store'
 import {
   getPendingMeta,
@@ -315,6 +316,7 @@ export function SpellTray() {
                   return
                 }
                 if (PICKER_SPELLS.has(def.id)) {
+                  bumpTooltipClose(def.id)
                   setPickerOpen(def.id)
                   return
                 }
@@ -417,10 +419,6 @@ export function SpellTray() {
           </HoverTooltip>
         )
       })}
-      {pickerOpen === 'purify' && <PurifyPickerModal onClose={() => setPickerOpen(null)} />}
-      {pickerOpen === 'focus' && <FocusPickerModal onClose={() => setPickerOpen(null)} />}
-      {pickerOpen === 'transmute' && <TransmutePickerModal onClose={() => setPickerOpen(null)} />}
-      {pickerOpen === 'volley' && <VolleyTargetModal onClose={() => setPickerOpen(null)} />}
           </div>
         </div>
         {hasOverflow ? (
@@ -437,6 +435,20 @@ export function SpellTray() {
         onContextMenu={(e) => e.preventDefault()}
         {...chevronScrollEnd}
       />
+      {pickerOpen != null &&
+        createPortal(
+          <>
+            {pickerOpen === 'purify' && (
+              <PurifyPickerModal onClose={() => setPickerOpen(null)} />
+            )}
+            {pickerOpen === 'focus' && <FocusPickerModal onClose={() => setPickerOpen(null)} />}
+            {pickerOpen === 'transmute' && (
+              <TransmutePickerModal onClose={() => setPickerOpen(null)} />
+            )}
+            {pickerOpen === 'volley' && <VolleyTargetModal onClose={() => setPickerOpen(null)} />}
+          </>,
+          document.body,
+        )}
     </div>
   )
 }

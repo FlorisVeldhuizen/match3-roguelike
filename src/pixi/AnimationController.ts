@@ -453,7 +453,7 @@ export class AnimationController {
       this.busy = true
       try {
         for (let i = 0; i < events.length; i++) {
-          if (i > 0) await awaitStep()
+          if (i > 0) await awaitStep(events[i]?.kind)
           const event = events[i]
           if (!event) continue
           // Coalesce back-to-back fall+spawn into one waterfall animation.
