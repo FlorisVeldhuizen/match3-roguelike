@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 import { generateBoard } from '../board/generation'
 import { forkStreams, type RngStreams } from '../rng/streams'
 import {
+  MANA_CAPS,
   type Cell,
   type EnemyArchetype,
   type FightState,
@@ -19,6 +20,7 @@ import {
   type StatusKind,
   type UltimateId,
 } from '../../types'
+import { emitGameEvent } from '../events/emitter'
 import { generateMap } from '../map/generate'
 import { getSpell, listUltimates } from '../combat/spellRegistry'
 import { canAffordSpell } from '../combat/mana'
@@ -278,10 +280,12 @@ export const useGameStore = create<GameStore>()(
     },
     debugFillManaPools: () => {
       const maxCharge = listUltimates().reduce((m, u) => Math.max(m, u.chargeCost), 0)
+      const mana = { ...MANA_CAPS }
       set((s) => {
-        s.fight.player.mana = { ...MANA_CAPS }
+        s.fight.player.mana = mana
         s.fight.player.skillCharge = maxCharge
       })
+      emitGameEvent({ kind: 'hud-resources-sync', mana, skillCharge: maxCharge })
     },
     debugForceFight: makeDebugForceFight(set, get),
   })),

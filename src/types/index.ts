@@ -304,6 +304,8 @@ export type GameEvent =
       telegraphed: IntentKind
       actual: IntentKind
     }
+  /** Store mana/charge changed without combat trails (e.g. debug fill). */
+  | { kind: 'hud-resources-sync'; mana: ManaPools; skillCharge: number }
   | TrailScheduledEvent
 
 export type CombatPhase = 'player-acting' | 'enemy-acting' | 'victory' | 'game-over'

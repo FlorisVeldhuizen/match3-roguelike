@@ -82,6 +82,15 @@ export function useHudEventChannel(): HudEventChannel {
       }, SPEND_PULSE_MS)
     }
   }
+  const bumpEarnPulse = (color: GemColor) => {
+    setPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
+    window.setTimeout(() => {
+      setPulse((prev) => ({
+        ...prev,
+        [color]: Math.max(0, prev[color] - 1),
+      }))
+    }, PULSE_MS)
+  }
   const shakeTimerRef = useRef<number | null>(null)
   const triggerShake = (magnitude: number, durationMs: number) => {
     const el = document.querySelector('.game-scene') as HTMLElement | null
@@ -136,17 +145,8 @@ export function useHudEventChannel(): HudEventChannel {
           const amount = trail.amount ?? 0
           if (amount <= 0) return
           const dest = trail.earnDest ?? 'effect'
-          const bumpPulse = () => {
-            setPulse((prev) => ({ ...prev, [color]: prev[color] + 1 }))
-            window.setTimeout(() => {
-              setPulse((prev) => ({
-                ...prev,
-                [color]: Math.max(0, prev[color] - 1),
-              }))
-            }, PULSE_MS)
-          }
           if (dest === 'mana') {
-            bumpPulse()
+            bumpEarnPulse(color)
             if (color === 'red' || color === 'blue' || color === 'green' || color === 'yellow') {
               setDisplayedMana((m) => ({
                 ...m,
@@ -155,7 +155,7 @@ export function useHudEventChannel(): HudEventChannel {
             }
             return
           }
-          bumpPulse()
+          bumpEarnPulse(color)
           if (color === 'blue') setStagedBlue((s) => s + amount)
           else if (color === 'purple') setDisplayedCharge((c) => c + amount)
           else if (color === 'gold') setDisplayedGold((g) => g + amount)
@@ -329,6 +329,17 @@ export function useHudEventChannel(): HudEventChannel {
             }
           }
         }
+      } else if (event.kind === 'hud-resources-sync') {
+        setDisplayedMana((prev) => {
+          for (const color of ['red', 'blue', 'green', 'yellow'] as const) {
+            if (event.mana[color] > prev[color]) bumpEarnPulse(color)
+          }
+          return event.mana
+        })
+        setDisplayedCharge((prev) => {
+          if (event.skillCharge > prev) bumpEarnPulse('purple')
+          return event.skillCharge
+        })
       } else if (event.kind === 'spell-cast') {
         const spentColors = event.spentColors
         window.setTimeout(() => {
