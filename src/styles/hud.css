@@ -428,23 +428,25 @@
 .spell-cost-pips {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem;
+  flex-wrap: nowrap;
   /* Push pips to the bottom of the spell card, like the ultimate's charge cost. */
   margin-top: auto;
 }
 .spell-cost-pip {
   display: inline-flex;
   align-items: center;
-  gap: 0.12rem;
-  padding: 0.02rem 0.18rem;
-  border-radius: 0.25rem;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(154, 125, 82, 0.18);
+  gap: 0.18rem;
+  padding: 0.1rem 0.28rem 0.1rem 0.22rem;
+  border-radius: 0.3rem;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(154, 125, 82, 0.22);
   font-size: 0.78em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .spell-cost-pip.pip-red {
   border-color: rgba(238, 94, 87, 0.5);
@@ -462,8 +464,9 @@
   border-color: rgba(130, 100, 180, 0.55);
 }
 .spell-cost-dot {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
   display: inline-block;
   background-position: center;
   background-size: contain;

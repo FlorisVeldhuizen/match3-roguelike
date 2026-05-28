@@ -6,8 +6,8 @@
    when the spell kit overflows (desktop + mobile). */
 .spell-tray-shell {
   --spell-tray-edge: 0.55rem;
-  --spell-tray-chevron-track: 2.5rem;
-  --spell-tray-chevron-gap: 0.2rem;
+  --spell-tray-chevron-track: 2.1rem;
+  --spell-tray-chevron-gap: 0.35rem;
   position: relative;
   display: grid;
   /* Fixed chevron columns (match 40px touch target) so layout stays symmetric. */
@@ -62,50 +62,6 @@
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 
-/* Side rails — mirrored [ and ] brackets; spells scroll underneath. */
-.spell-tray-viewport::before,
-.spell-tray-viewport::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 5px;
-  z-index: 2;
-  pointer-events: none;
-  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
-  box-sizing: border-box;
-}
-
-.spell-tray-viewport::before {
-  left: 0;
-  border: 2px solid var(--gold-3);
-  border-left: none;
-  box-shadow: inset -1px 0 0 rgba(154, 125, 82, 0.2);
-}
-
-.spell-tray-viewport::after {
-  right: 0;
-  border: 2px solid var(--gold-3);
-  border-right: none;
-  box-shadow: inset 1px 0 0 rgba(154, 125, 82, 0.2);
-}
-
-.spell-tray-shell.can-scroll-start .spell-tray-viewport::before {
-  border-color: var(--gold-2);
-  border-left: none;
-  box-shadow:
-    inset -1px 0 0 rgba(201, 168, 108, 0.35),
-    2px 0 8px -2px rgba(201, 168, 108, 0.25);
-}
-
-.spell-tray-shell.can-scroll-end .spell-tray-viewport::after {
-  border-color: var(--gold-2);
-  border-right: none;
-  box-shadow:
-    inset 1px 0 0 rgba(201, 168, 108, 0.35),
-    -2px 0 8px -2px rgba(201, 168, 108, 0.25);
-}
-
 .spell-tray-scroll {
   width: 100%;
   max-width: 100%;
@@ -119,6 +75,10 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
+  /* Match .spell-tray's inner padding-inline so the first card's snap
+     target lands at scrollLeft=0 instead of partway in — otherwise the
+     rest state nudges and the left chevron stays falsely enabled. */
+  scroll-padding-inline: 0.45rem;
   scroll-behavior: smooth;
   scrollbar-width: none;
 }
@@ -140,30 +100,56 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  /* Pill-button sized — does NOT span full tray height so the panel area
+     above and below the chevron stays clickable / not intercepted by the
+     button's hit target. */
+  width: 1.85rem;
+  height: 2.6rem;
   min-width: 0;
-  max-width: var(--spell-tray-chevron-track);
-  min-height: 44px;
-  align-self: stretch;
+  align-self: center;
   box-sizing: border-box;
   padding: 0;
   margin: 0;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-touch-callout: none;
-  background: transparent;
-  border: none;
+  background:
+    linear-gradient(180deg, rgba(154, 125, 82, 0.08), transparent 55%),
+    linear-gradient(180deg, var(--stone-2), var(--ink-2));
+  border: 1px solid var(--gold-3);
+  border-radius: 999px;
   color: inherit;
   font: inherit;
   -webkit-appearance: none;
   appearance: none;
-  transition: transform 80ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 5px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 80ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
 }
 
 .spell-tray-chevron:disabled {
-  visibility: hidden;
+  /* Ghosted — visible but reads as inactive, so the affordance stays in
+     place at the scroll edges instead of popping in/out. The :not(.has-overflow)
+     rule below still fully collapses the chevron for kits that fit entirely. */
+  opacity: 0.28;
+  filter: saturate(0.55);
   pointer-events: none;
   cursor: default;
+  box-shadow: none;
+}
+
+.spell-tray-chevron:hover:not(:disabled) {
+  border-color: var(--gold-2);
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 10px rgba(201, 168, 108, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .spell-tray-shell:not(.has-overflow) .spell-tray-chevron {
@@ -182,63 +168,55 @@
 
 .spell-tray-chevron-start {
   grid-column: 1;
-  justify-content: flex-end;
-  padding-inline: 0 var(--spell-tray-chevron-gap);
+  justify-self: end;
 }
 
 .spell-tray-chevron-end {
   grid-column: 3;
-  justify-content: flex-start;
-  padding-inline: var(--spell-tray-chevron-gap) 0;
+  justify-self: start;
 }
 
-/* One triangle shape; end chevron mirrors it. */
+/* Stroked chevron glyph — two short lines from a single `>` rotation,
+   drawn with borders so it inherits the gold palette and crisp at any
+   resolution. End chevron mirrors via scaleX. */
 .spell-tray-chevron::before {
   content: '';
   display: block;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 8px 10px 8px 0;
-  border-color: transparent var(--gold-2) transparent transparent;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--gold-2);
+  border-top: 2px solid var(--gold-2);
+  transform: rotate(-135deg);
+  margin-left: 3px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
   transition:
     filter 120ms ease,
+    border-color 120ms ease,
     transform 80ms ease;
 }
 
 .spell-tray-chevron-end::before {
-  transform: scaleX(-1);
+  transform: rotate(45deg);
+  margin-left: 0;
+  margin-right: 3px;
 }
 
 .spell-tray-chevron:hover:not(:disabled)::before {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65)) brightness(1.2);
-}
-
-.spell-tray-chevron-start:hover:not(:disabled)::before {
-  transform: translateX(-1px);
-}
-
-.spell-tray-chevron-end:hover:not(:disabled)::before {
-  transform: scaleX(-1) translateX(1px);
+  border-color: var(--gold-1);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55)) brightness(1.15);
 }
 
 .spell-tray-chevron:active:not(:disabled) {
   transform: scale(0.92);
-}
-
-.spell-tray-chevron:active:not(:disabled)::before {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65)) brightness(0.88);
-}
-
-.spell-tray-chevron-end:active:not(:disabled)::before {
-  transform: scaleX(-1);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+  filter: brightness(0.92);
 }
 
 .spell-tray-chevron:focus-visible {
   outline: 2px solid var(--gold-2);
   outline-offset: 2px;
-  border-radius: 0.2rem;
 }
 
 .spell-tray {
@@ -247,8 +225,9 @@
   flex-wrap: nowrap;
   justify-content: flex-start;
   min-height: 88px;
-  /* Inset from viewport side rails so cards slide under the border, not behind it. */
-  padding-inline: 0.15rem;
+  /* Matches .spell-tray-scroll padding-block so the first/last card has
+     the same gap from the gold inset rim as the top/bottom. */
+  padding-inline: 0.45rem;
   width: max-content;
 }
 
@@ -262,13 +241,14 @@
   /* Card layout: vertical stack, FIXED dimensions so every spell takes
      the same UI space regardless of cost shape, label length, or cast
      state. Consistent silhouette = the row reads as a kit of equal
-     slots. */
+     slots. Icon top, label below, cost pinned to bottom via
+     margin-top: auto (set on .spell-cost / .spell-cost-pips). */
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.3rem;
-  padding: 0.5rem 0.55rem 0.45rem;
+  justify-content: flex-start;
+  gap: 0.28rem;
+  padding: 0.5rem 0.5rem 0.42rem;
   width: 104px;
   height: 88px;
   flex: 0 0 104px;
@@ -507,8 +487,14 @@
   opacity: 1;
 }
 
-/* Icon stays top, bigger than before to anchor the card visually. */
+/* Icon stays top, bigger than before to anchor the card visually.
+   Fixed line-box so the label below starts at the same y across every
+   card regardless of the emoji's intrinsic glyph height. */
 .spell-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.45rem;
   font-size: 1.3rem;
   line-height: 1;
 }
@@ -516,7 +502,7 @@
 .spell-label {
   font-size: 0.72rem;
   letter-spacing: 0.1em;
-  line-height: 1;
+  line-height: 1.05;
   /* Allow names to wrap on narrow widths instead of overflowing the
      card. Most spell names are one word; multi-word names get two
      lines. */

@@ -104,65 +104,51 @@
     line-height: 12px;
   }
   .spell-tray-shell {
-    /* Slim rim; chevrons float over the viewport edges, viewport stays full width. */
+    /* Slim rim; viewport spans the full shell, chevrons float over the
+       leading/trailing card edges so 4+ cards stay fully visible in the
+       middle. */
     --spell-tray-edge: 0.4rem;
-    --spell-tray-chevron-hit: 2.75rem;
-    --spell-tray-chevron-gap: 0.12rem;
     padding: 0.42rem var(--spell-tray-edge) 0.38rem;
-    column-gap: 0;
     grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron {
     position: absolute;
-    top: 0;
-    bottom: 0;
+    top: 50%;
+    transform: translateY(-50%);
     z-index: 6;
-    width: var(--spell-tray-chevron-hit);
-    min-width: var(--spell-tray-chevron-hit);
-    max-width: var(--spell-tray-chevron-hit);
-    min-height: 44px;
-    height: auto;
-    transform: none;
-    touch-action: none;
+    width: 1.65rem;
+    height: 2.3rem;
+    touch-action: manipulation;
+    /* Solid opaque pill (stronger backdrop) so the chevron reads cleanly
+       against any card it overlaps. */
+    background:
+      linear-gradient(180deg, rgba(154, 125, 82, 0.1), transparent 55%),
+      linear-gradient(180deg, var(--stone-2), var(--ink-1));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 2px 6px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(0, 0, 0, 0.35);
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron-start {
     left: var(--spell-tray-edge);
-    justify-content: flex-end;
-    padding-inline: 0 var(--spell-tray-chevron-gap);
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron-end {
     right: var(--spell-tray-edge);
-    justify-content: flex-start;
-    padding-inline: var(--spell-tray-chevron-gap) 0;
-  }
-  .spell-tray-chevron::before {
-    border-width: 9px 11px 9px 0;
-  }
-  .spell-tray-chevron:hover:not(:disabled) {
-    transform: none;
   }
   .spell-tray-chevron:active:not(:disabled) {
-    transform: scale(0.92);
+    transform: translateY(-50%) scale(0.92);
   }
   .spell-tray-viewport {
     grid-column: 1;
     width: 100%;
     max-width: none;
-    justify-self: stretch;
   }
   .spell-tray-scroll {
     width: 100%;
     max-width: 100%;
     margin-inline: 0;
     padding-block: 0.4rem;
-  }
-  /* Match .spell-tray padding-inline so resting state and chevron-snap land at the same 0.15rem inset */
-  .spell-tray-shell.has-overflow .spell-tray-scroll {
-    scroll-padding-inline: 0.15rem;
-  }
-  .spell-tray-viewport::before,
-  .spell-tray-viewport::after {
-    width: 4px;
   }
   .spell-tray {
     gap: 0.4rem;
