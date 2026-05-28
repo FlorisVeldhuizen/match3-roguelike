@@ -94,11 +94,34 @@
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
-  padding: 0.3rem 0.55rem;
+  position: relative;
+  padding: 0.25rem 0.55rem;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
   transition:
     border-color 120ms ease,
     background 120ms ease,
     color 120ms ease;
+}
+
+.settings-button-badge {
+  padding: 0.1rem 0.32rem;
+  border-radius: 999px;
+  border: 1px solid rgba(154, 125, 82, 0.55);
+  background: rgba(26, 29, 33, 0.9);
+  color: #f0c878;
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(240, 200, 120, 0.1);
+  user-select: none;
+  pointer-events: none;
 }
 
 .settings-button:hover,

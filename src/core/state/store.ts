@@ -20,7 +20,7 @@ import {
   type UltimateId,
 } from '../../types'
 import { generateMap } from '../map/generate'
-import { getSpell } from '../combat/spellRegistry'
+import { getSpell, listUltimates } from '../combat/spellRegistry'
 import { canAffordSpell } from '../combat/mana'
 import { makeDebugForceFight } from './actions/debug'
 import { makeAcquireRelic, makeAcquireSpellReward, makeSkipReward } from './actions/rewards'
@@ -104,6 +104,7 @@ export type GameStore = {
   debugForceMatch5: () => { from: Pos; to: Pos } | null
   debugForceMatchT: () => { from: Pos; to: Pos } | null
   debugForceMatchL: () => { from: Pos; to: Pos } | null
+  debugFillManaPools: () => void
   debugForceFight: (archetypes: EnemyArchetype | EnemyArchetype[]) => void
 }
 
@@ -274,6 +275,13 @@ export const useGameStore = create<GameStore>()(
         s.fightCounter += 1
       })
       return { from: { x: 3, y: 2 }, to: { x: 3, y: 3 } }
+    },
+    debugFillManaPools: () => {
+      const maxCharge = listUltimates().reduce((m, u) => Math.max(m, u.chargeCost), 0)
+      set((s) => {
+        s.fight.player.mana = { ...MANA_CAPS }
+        s.fight.player.skillCharge = maxCharge
+      })
     },
     debugForceFight: makeDebugForceFight(set, get),
   })),

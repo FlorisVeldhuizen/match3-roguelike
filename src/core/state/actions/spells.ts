@@ -540,7 +540,7 @@ export function makeCastVolley(set: StoreSet, get: StoreGet) {
     const nextMana = consumeSpellCost(current.fight.player.mana, def.cost)
     set((s) => {
       s.fight.player.mana = nextMana
-      s.fight.player.pendingSpells.push('volley')
+      s.fight.player.pendingSpells = [...s.fight.player.pendingSpells, 'volley']
       s.fight.player.relics = writeRelics
       s.fight.player.volleyTargets = [...targets]
       s.fight.player.phasePools.red = 0
@@ -584,7 +584,7 @@ export function makeCastUltimate(set: StoreSet, get: StoreGet) {
       s.fight.player = player
       s.fight.enemies = enemies
       s.fight.targetEnemyId = fightTargetId
-      s.fight.player.pendingSpells.push(id)
+      s.fight.player.pendingSpells = [...player.pendingSpells, id]
     })
     return { ok: true, events: [event, ...hooks.events] }
   }

@@ -138,6 +138,10 @@ export function SettingsPanel() {
     setOpen(false)
   }
 
+  const fillManaPools = () => {
+    useGameStore.getState().debugFillManaPools()
+  }
+
   return (
     <div className="settings-panel" ref={rootRef}>
       <button
@@ -148,6 +152,11 @@ export function SettingsPanel() {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
+        {import.meta.env.DEV && stepOn ? (
+          <span className="settings-button-badge" title="Step mode is ON" aria-hidden>
+            STEP
+          </span>
+        ) : null}
         <span aria-hidden>⚙</span>
       </button>
       {open ? (
@@ -290,6 +299,9 @@ export function SettingsPanel() {
                 />
                 <span className="settings-label">Unlock all spells</span>
               </label>
+              <button type="button" className="settings-btn" onClick={fillManaPools}>
+                Fill mana pools
+              </button>
             </section>
           ) : null}
         </div>
