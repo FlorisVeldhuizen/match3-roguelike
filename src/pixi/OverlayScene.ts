@@ -85,15 +85,24 @@ export class OverlayScene {
   private unsubscribeFX: (() => void) | null = null
 
   async init(): Promise<void> {
+    // Pixi.Text bakes glyphs at construction — if Paytone One isn't ready
+    // by the time the first popup spawns, the fallback gets baked in for
+    // that popup's whole life. Gate overlay readiness on the font load.
+    const fontReady = document.fonts
+      ? document.fonts.load('1em "Paytone One"').catch(() => undefined)
+      : Promise.resolve()
     const app = new Application()
-    await app.init({
-      width: window.innerWidth,
-      height: window.innerHeight,
-      backgroundAlpha: 0,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-    })
+    await Promise.all([
+      app.init({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        backgroundAlpha: 0,
+        antialias: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+      }),
+      fontReady,
+    ])
     if (this.disposed) {
       app.destroy(true, { children: true, texture: false })
       return

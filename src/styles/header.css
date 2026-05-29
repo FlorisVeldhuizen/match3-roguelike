@@ -202,6 +202,83 @@
   padding-bottom: 0.15rem;
 }
 
+.settings-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.1rem 0 0.15rem;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.settings-section-toggle:hover,
+.settings-section-toggle:focus-visible {
+  opacity: 1;
+  color: var(--gold-1);
+  outline: none;
+}
+
+.settings-section-chevron {
+  display: inline-block;
+  width: 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--gold-2);
+  opacity: 0.75;
+}
+
+.settings-section.is-collapsed {
+  gap: 0;
+}
+
+.settings-subsection {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.1rem 0 0.1rem 0.85rem;
+}
+
+.settings-subsection.is-collapsed {
+  gap: 0;
+}
+
+.settings-subsection + .settings-subsection {
+  margin-top: 0.05rem;
+}
+
+.settings-subsection-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0 0 0 -0.15rem;
+  padding: 0.05rem 0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.74rem;
+  color: var(--parchment);
+  opacity: 0.8;
+}
+
+.settings-subsection-toggle:hover,
+.settings-subsection-toggle:focus-visible {
+  opacity: 1;
+  color: var(--gold-2);
+  outline: none;
+}
+
+.settings-subsection-toggle .settings-section-chevron {
+  width: 0.65rem;
+  font-size: 0.6rem;
+  opacity: 0.6;
+}
+
 .settings-row {
   display: flex;
   align-items: center;

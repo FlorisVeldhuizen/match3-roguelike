@@ -148,6 +148,7 @@ export function subscribeUnlockAllSpells(cb: (on: boolean) => void): () => void 
   return () => unlockAllSpellsListeners.delete(cb)
 }
 
+
 type SwapRequest = { from: Pos; to: Pos }
 const debugSwapListeners = new Set<(req: SwapRequest) => void>()
 

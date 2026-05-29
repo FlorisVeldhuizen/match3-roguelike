@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { scrollHorizontalSnap } from '../scrollHorizontalSnap'
+import { scrollHorizontalSnap, snapHorizontalToNearest } from '../scrollHorizontalSnap'
 
 const SCROLL_EDGE_PX = 2
 
@@ -9,6 +9,7 @@ export type HorizontalScrollHints = {
   canScrollEnd: boolean
   hasOverflow: boolean
   scrollByDirection: (direction: -1 | 1, opts?: { behavior?: ScrollBehavior }) => void
+  snapToNearest: () => void
 }
 
 /** Tracks horizontal overflow and scroll position for fade / rivet affordances. */
@@ -64,5 +65,11 @@ export function useHorizontalScrollHints(
     scrollHorizontalSnap(el, direction, opts)
   }, [])
 
-  return { ref, scrollByDirection, ...hints }
+  const snapToNearest = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    snapHorizontalToNearest(el)
+  }, [])
+
+  return { ref, scrollByDirection, snapToNearest, ...hints }
 }

@@ -108,12 +108,14 @@
        leading/trailing card edges so 4+ cards stay fully visible in the
        middle. */
     --spell-tray-edge: 0.4rem;
+    --chevron-edge: 1.1rem;
     padding: 0.42rem var(--spell-tray-edge) 0.38rem;
     grid-template-columns: minmax(0, 1fr);
     column-gap: 0;
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron {
     position: absolute;
+    grid-column: auto;
     top: 50%;
     transform: translateY(-50%);
     z-index: 6;
@@ -131,10 +133,10 @@
       0 0 0 1px rgba(0, 0, 0, 0.35);
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron-start {
-    left: var(--spell-tray-edge);
+    left: var(--chevron-edge);
   }
   .spell-tray-shell.has-overflow .spell-tray-chevron-end {
-    right: var(--spell-tray-edge);
+    right: var(--chevron-edge);
   }
   .spell-tray-chevron:active:not(:disabled) {
     transform: translateY(-50%) scale(0.92);

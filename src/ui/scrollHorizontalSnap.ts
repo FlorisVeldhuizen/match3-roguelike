@@ -36,6 +36,30 @@ function findPrevSnapItem(items: HTMLElement[], scrollEl: HTMLElement): HTMLElem
   return prev
 }
 
+/** Snap a horizontal snap container to the item whose left edge is closest
+ *  to the leading edge. Use to settle a free-scrolled container onto a card. */
+export function snapHorizontalToNearest(
+  scrollEl: HTMLElement,
+  opts?: { behavior?: ScrollBehavior },
+): void {
+  const behavior = opts?.behavior ?? scrollBehavior()
+  const items = Array.from(
+    scrollEl.querySelectorAll<HTMLElement>('.spell-tray > .tooltip-anchor'),
+  )
+  if (items.length === 0) return
+  const lead = snapLeadingEdge(scrollEl)
+  let nearest: HTMLElement | undefined
+  let bestDist = Infinity
+  for (const item of items) {
+    const dist = Math.abs(item.getBoundingClientRect().left - lead)
+    if (dist < bestDist) {
+      bestDist = dist
+      nearest = item
+    }
+  }
+  if (nearest) nearest.scrollIntoView({ behavior, inline: 'start', block: 'nearest' })
+}
+
 /** Scroll a horizontal snap container one snap target left or right. */
 export function scrollHorizontalSnap(
   scrollEl: HTMLElement,

@@ -27,7 +27,7 @@ import { FocusPickerModal } from './FocusPickerModal'
 import { TransmutePickerModal } from './TransmutePickerModal'
 import { VolleyTargetModal } from './VolleyTargetModal'
 import { useBoardSettled } from '../hooks/useBoardSettled'
-import { useHoldRepeat } from '../hooks/useHoldRepeat'
+import { useHoldSmoothScroll } from '../hooks/useHoldSmoothScroll'
 import { useHorizontalScrollHints } from '../hooks/useHorizontalScrollHints'
 import { useSpellTrayScrollTouch } from '../hooks/useSpellTrayScrollTouch'
 import { primaryManaRgb, spellManaClassName } from '../spellManaTheme'
@@ -192,15 +192,29 @@ export function SpellTray() {
   const [pickerOpen, setPickerOpen] = useState<SpellId | null>(null)
   const traySpells = listSpellsForTray(ownedSpellIds, unlockAll)
   const trayUltimates = listUltimates()
-  const { ref: trayScrollRef, canScrollStart, canScrollEnd, hasOverflow, scrollByDirection } =
-    useHorizontalScrollHints(traySpells.length, trayUltimates.length, unlockAll)
+  const {
+    ref: trayScrollRef,
+    canScrollStart,
+    canScrollEnd,
+    hasOverflow,
+    scrollByDirection,
+    snapToNearest,
+  } = useHorizontalScrollHints(traySpells.length, trayUltimates.length, unlockAll)
 
-  const chevronScrollStart = useHoldRepeat(() => scrollByDirection(-1), !canScrollStart, {
-    onRepeat: () => scrollByDirection(-1, { behavior: 'auto' }),
-  })
-  const chevronScrollEnd = useHoldRepeat(() => scrollByDirection(1), !canScrollEnd, {
-    onRepeat: () => scrollByDirection(1, { behavior: 'auto' }),
-  })
+  const chevronScrollStart = useHoldSmoothScroll(
+    trayScrollRef,
+    -1,
+    () => scrollByDirection(-1),
+    !canScrollStart,
+    { onHoldEnd: snapToNearest },
+  )
+  const chevronScrollEnd = useHoldSmoothScroll(
+    trayScrollRef,
+    1,
+    () => scrollByDirection(1),
+    !canScrollEnd,
+    { onHoldEnd: snapToNearest },
+  )
 
   const [trayDismissTick, setTrayDismissTick] = useState(0)
   const bumpTrayDismiss = useCallback(() => setTrayDismissTick((t) => t + 1), [])
